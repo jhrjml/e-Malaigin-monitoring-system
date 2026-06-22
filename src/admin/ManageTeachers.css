@@ -1,0 +1,466 @@
+/* --- MODERN COLOR PALETTE --- */
+:root {
+  --primary: #2c3e50;
+  --accent: #3498db;
+  --success: #2ecc71;
+  --danger: #e74c3c;
+  --warning: #f1c40f;
+  --light: #f8f9fa;
+  --white: #ffffff;
+  --gray: #95a5a6;
+  --dark-gray: #34495e;
+  --sidebar-bg: #1a252f;
+  --black: black;
+  --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+/* --- TOOLBAR --- */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+/* ── Download Template Button (mirrors btn-import-ms from students) ── */
+.btn-import-mt {
+  background: #3498db;
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 30px;
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 10px rgba(26, 188, 156, 0.3);
+  transition: all 0.2s;
+  font-size: 0.875rem;
+}
+.btn-import-mt:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+/* ── Add Teacher Button ── */
+.btn-add-mt {
+  background: var(--success);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 30px;
+  cursor: pointer;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 10px rgba(46, 204, 113, 0.3);
+  transition: all 0.2s;
+}
+.btn-add-mt:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+/* ── Add Menu Popup (identical to student style) ── */
+.add-menu-popup {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: #1a252f;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  min-width: 230px;
+  z-index: 999;
+  overflow: hidden;
+  animation: add-menu-pop 0.15s ease;
+}
+@keyframes add-menu-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.add-menu-item {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 13px 18px;
+  text-align: left;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.15s;
+}
+.add-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.add-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* --- TABLE DESIGN --- */
+.table-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th,
+.data-table td {
+  padding: 18px 20px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+.data-table th {
+  background: #f8f9fa;
+  color: var(--gray);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
+}
+.data-table tr:hover {
+  background: #fcfcfc;
+}
+
+/* Status Pills */
+.status-pill {
+  padding: 6px 12px;
+  border-radius: 30px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  display: inline-block;
+}
+.status-pill.active {
+  background: rgba(46, 204, 113, 0.15);
+  color: var(--success);
+}
+.status-pill.leave {
+  background: rgba(241, 196, 15, 0.15);
+  color: #d35400;
+}
+
+/* Action Buttons */
+.btn-view-teacher {
+  background: #3498db;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-right: 5px;
+  transition: opacity 0.2s;
+}
+.btn-view-teacher:hover {
+  opacity: 0.85;
+}
+
+.btn-edit-teacher {
+  background: #fff3cd;
+  color: #856404;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 5px;
+  transition: 0.2s;
+}
+.btn-edit-teacher:hover {
+  background: #ffeeba;
+}
+
+.btn-archive-teacher {
+  background-color: #f39c12;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-left: 4px;
+}
+.btn-archive-teacher:hover {
+  background-color: #d68910;
+}
+
+/* --- MODAL STYLES --- */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 2000;
+  justify-content: center;
+  align-items: center;
+}
+.modal-content-teacher {
+  background: white;
+  width: 600px;
+  max-width: 90%;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  animation: slideDown 0.3s;
+}
+@keyframes slideDown {
+  from {
+    transform: translateY(-30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.add-teacher-modal .modal-header {
+  background: var(--dark-gray);
+  color: white;
+  padding: 15px 25px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.add-teacher-modal .close-modal {
+  cursor: pointer;
+  font-size: 1.5rem;
+  transition: 0.2s;
+}
+.add-teacher-modal .close-modal:hover {
+  color: var(--danger);
+}
+.add-teacher-modal .modal-body {
+  padding: 30px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.add-teacher-modal .modal-footer {
+  padding: 15px 25px;
+  background: white;
+  text-align: right;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Form Elements */
+.add-teacher-modal .grid-form {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+.span-3 {
+  grid-column: span 3;
+}
+.add-teacher-modal .form-group {
+  display: flex;
+  flex-direction: column;
+}
+.add-teacher-modal .form-group label {
+  font-size: 0.85rem;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: var(--black);
+}
+.add-teacher-modal .form-group input,
+.form-group select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+.add-teacher-modal .form-group input:focus,
+.form-group select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.add-teacher-modal .btn-save {
+  background: var(--success);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-left: 10px;
+  font-weight: 600;
+  font-size: large;
+}
+.add-teacher-modal .btn-save:hover {
+  background: #2ab564;
+}
+
+.add-teacher-modal .btn-cancel {
+  background: var(--gray);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: large;
+}
+.add-teacher-modal .btn-cancel:hover {
+  background: #707c7d;
+}
+
+.empID-auto {
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #3498db;
+}
+
+/* ── Import Styles (identical to ManageStudents) ── */
+.import-step {
+  margin-bottom: 18px;
+  padding: 14px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #eee;
+}
+.import-step-label {
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.import-step-num {
+  width: 24px;
+  height: 24px;
+  background: #3498db;
+  color: white;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.btn-template {
+  background: #3498db;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.2s;
+}
+.btn-template:hover {
+  opacity: 0.85;
+}
+
+.btn-file-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #8e44ad;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: opacity 0.2s;
+}
+.btn-file-upload:hover {
+  opacity: 0.85;
+}
+
+.import-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.import-badge-ok {
+  background: #eafaf1;
+  color: #27ae60;
+}
+.import-badge-err {
+  background: #fdf2f2;
+  color: #e74c3c;
+}
+
+.import-error-box {
+  background: #fdf2f2;
+  border: 1px solid #f5c6cb;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  color: #e74c3c;
+  margin-top: 10px;
+  line-height: 1.8;
+}
+.import-result-ok {
+  background: #eafaf1;
+  border: 1px solid #a9dfbf;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  color: #27ae60;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .grid-form {
+    grid-template-columns: 1fr;
+  }
+  .span-3 {
+    grid-column: span 1;
+  }
+  .header-title {
+    font-size: 1.1rem;
+  }
+}
+@media (max-width: 600px) {
+  .modal-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+  .btn-save,
+  .btn-cancel {
+    width: 100%;
+    margin: 4px 0;
+  }
+}

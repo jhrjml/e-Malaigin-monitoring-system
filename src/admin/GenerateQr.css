@@ -1,0 +1,335 @@
+:root {
+  --primary: #2c3e50; /* Deep Blue */
+  --accent: #3498db; /* Bright Blue */
+  --success: #2ecc71; /* Green */
+  --danger: #e74c3c; /* Red */
+  --warning: #f1c40f; /* Yellow */
+  --light: #f8f9fa; /* Light Gray Background */
+  --white: #ffffff;
+  --gray: #95a5a6; /* Text Gray */
+  --dark-gray: #34495e; /* Darker Text */
+  --sidebar-bg: #1a252f; /* Darker sidebar */
+  --black: black;
+  --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+/* --- QR LAYOUT --- */
+.qr-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 30px;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.card {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: var(--shadow);
+}
+.card-header-qr h3 {
+  color: var(--black);
+  font-size: 1.2rem;
+  margin-bottom: 5px;
+}
+.card-header-qr p {
+  color: var(--gray);
+  font-size: 0.9rem;
+  margin-bottom: 25px;
+}
+
+/* FORM ELEMENTS */
+.form-group-qr {
+  margin-bottom: 20px;
+}
+.form-group-qr label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: var(--black);
+}
+.form-group-qr input,
+.form-group-qr select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  outline: none;
+  transition: 0.2s;
+}
+.form-group-qr input:focus {
+  border-color: var(--accent);
+}
+
+.btn-generate {
+  width: 100%;
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 12px 25px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: 0.2s;
+  font-size: large;
+}
+.btn-generate:hover {
+  background: #2980b9;
+}
+
+.tips {
+  background: #fffbe6;
+  padding: 15px;
+  border-radius: 8px;
+  border-left: 4px solid #f1c40f;
+  margin-top: 20px;
+}
+.tips h4 {
+  color: #f39c12;
+  margin-bottom: 5px;
+  font-size: 0.9rem;
+}
+.tips ul {
+  padding-left: 20px;
+  color: #7f8c8d;
+  font-size: 0.85rem;
+}
+
+/* --- PREVIEW CARD --- */
+.preview-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #f8f9fa;
+}
+
+.id-sides-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.id-side-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.side-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--gray);
+  margin-bottom: 8px;
+}
+
+/* The ID card is sized to 4.5in x 2.75in at exactly 100px per inch, so the
+   on-screen preview stays in the same proportion as the printed PDF and the
+   2x2in photo guide box below renders at its true physical size. */
+.id-card {
+  width: 450px;
+  height: 275px;
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  border: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+}
+
+.id-card-topbar {
+  background: var(--primary);
+  color: white;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.id-card-topbar.small {
+  padding: 5px 10px;
+  justify-content: center;
+}
+
+/* Logo is masked into a perfect circle so none of the source image's
+   square background shows around the mark. */
+.id-card-logo {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  background: white;
+}
+
+.id-card-titles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.id-card-school {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.id-card-type {
+  display: block;
+  font-size: 0.55rem;
+  color: #cfd9e3;
+  margin-top: 2px;
+}
+
+/* FRONT */
+.id-card-body-front {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 12px 15px;
+  gap: 15px;
+}
+
+/* Exactly 2in x 2in at the card's 100px-per-inch scale — a placement guide
+   for the printed 2x2 photo, pasted on by hand after printing. Square
+   corners match the edges of an actual photo print. */
+.id-photo-box {
+  width: 200px;
+  height: 200px;
+  flex-shrink: 0;
+  border: 2px dashed var(--accent);
+  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: #f5f9fc;
+  gap: 4px;
+}
+.id-photo-box-label {
+  font-size: 1.1rem;
+  color: var(--accent);
+  font-weight: 700;
+}
+.id-photo-box-sublabel {
+  font-size: 0.6rem;
+  color: var(--gray);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.id-info-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.id-info-row {
+  display: flex;
+  flex-direction: column;
+}
+.id-info-row label {
+  font-size: 0.6rem;
+  color: var(--gray);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.id-info-row span {
+  font-size: 0.85rem;
+  color: var(--primary);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+/* BACK */
+.id-card-body-back {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 15px 18px;
+  gap: 15px;
+}
+
+.id-emergency-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.id-emergency-left h4 {
+  font-size: 0.75rem;
+  color: var(--danger);
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.id-qr-right {
+  width: 150px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-download {
+  margin-top: 20px;
+  background: var(--success);
+  color: white;
+  border: none;
+  padding: 12px 25px;
+  border-radius: 30px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: 0.2s;
+  box-shadow: 0 4px 10px rgba(46, 204, 113, 0.3);
+}
+.btn-download:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--gray);
+}
+.empty-state i {
+  font-size: 4rem;
+  margin-bottom: 20px;
+  opacity: 0.3;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    margin-left: -260px;
+    position: fixed;
+    height: 100%;
+    z-index: 100;
+  }
+  .sidebar.open {
+    margin-left: 0;
+  }
+  .qr-layout {
+    grid-template-columns: 1fr;
+  }
+}

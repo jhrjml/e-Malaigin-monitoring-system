@@ -1,0 +1,478 @@
+/* Archive.css */
+/* Place in: src/admin/Archive.css */
+
+.archive-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 30px;
+  background: #f4f6f8;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.archive-content {
+  max-width: 1200px;
+  width: 100%;
+}
+
+/* ── Toast ─────────────────────────────────────────────────────────────────── */
+.archive-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 22px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  z-index: 99999;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  min-width: 300px;
+  max-width: 500px;
+  animation: toast-slide-in 0.25s ease-out;
+  white-space: nowrap;
+}
+.archive-toast.success {
+  background: #eafaf1;
+  color: #1e8449;
+  border: 1.5px solid #a9dfbf;
+}
+.archive-toast.error {
+  background: #fdedec;
+  color: #c0392b;
+  border: 1.5px solid #f5b7b1;
+}
+.archive-toast i {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+@keyframes toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* ── Page header ───────────────────────────────────────────────────────────── */
+.archive-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+.archive-header h2 {
+  font-size: 1.4rem;
+  color: #2c3e50;
+  margin: 0 0 4px;
+}
+.archive-header p {
+  color: #95a5a6;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* ── Controls bar ──────────────────────────────────────────────────────────── */
+.archive-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.archive-filter-group {
+  display: flex;
+  gap: 8px;
+}
+.archive-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border: 1.5px solid #dde1e7;
+  border-radius: 8px;
+  background: #fff;
+  color: #555;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.archive-filter-btn:hover {
+  border-color: #3498db;
+  color: #3498db;
+}
+.archive-filter-btn.active {
+  background: #3498db;
+  border-color: #3498db;
+  color: #fff;
+}
+.archive-badge {
+  background: rgba(255, 255, 255, 0.3);
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 20px;
+  min-width: 20px;
+  text-align: center;
+}
+.archive-filter-btn:not(.active) .archive-badge {
+  background: #e8ecf0;
+  color: #555;
+}
+
+.archive-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 220px;
+  max-width: 420px;
+}
+.archive-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #aaa;
+  font-size: 0.85rem;
+}
+.archive-search {
+  width: 100%;
+  padding: 10px 36px 10px 36px;
+  border: 1.5px solid #dde1e7;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.18s;
+  box-sizing: border-box;
+}
+.archive-search:focus {
+  border-color: #3498db;
+}
+.archive-search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+.archive-search-clear:hover {
+  color: #555;
+}
+
+/* ── Self-contained confirm modal ──────────────────────────────────────────── */
+.archive-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9998;
+  animation: overlay-in 0.18s ease-out;
+}
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.archive-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 28px 32px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  animation: modal-in 0.2s ease-out;
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.archive-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.archive-modal-header i {
+  color: #2ecc71;
+  font-size: 1.1rem;
+}
+.archive-modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #2c3e50;
+}
+
+.archive-modal-message {
+  color: #555;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 0 0 24px;
+}
+
+.archive-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.archive-modal-cancel {
+  padding: 9px 20px;
+  border: 1.5px solid #dde1e7;
+  border-radius: 7px;
+  background: #fff;
+  color: #555;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.archive-modal-cancel:hover:not(:disabled) {
+  border-color: #aaa;
+  background: #f5f5f5;
+}
+.archive-modal-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.archive-modal-confirm {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 20px;
+  border: none;
+  border-radius: 7px;
+  background: #2ecc71;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.archive-modal-confirm:hover:not(:disabled) {
+  background: #27ae60;
+}
+.archive-modal-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.archive-loading,
+.archive-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #bdc3c7;
+  font-size: 1rem;
+  gap: 14px;
+  text-align: center;
+}
+.archive-loading i,
+.archive-empty i {
+  font-size: 2.5rem;
+}
+.archive-empty p {
+  margin: 0;
+}
+
+/* ── Table ─────────────────────────────────────────────────────────────────── */
+.archive-table-wrap {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  overflow-x: auto;
+}
+.archive-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  min-width: 700px;
+}
+.archive-table thead {
+  background: #f4f6f8;
+}
+.archive-table th {
+  text-align: left;
+  padding: 13px 16px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.archive-table td {
+  padding: 14px 16px;
+  border-top: 1px solid #f0f2f5;
+  vertical-align: middle;
+  color: #34495e;
+}
+.archive-table tbody tr:hover {
+  background: #fafbfc;
+}
+
+/* Name cell */
+.archive-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.archive-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #fff;
+  flex-shrink: 0;
+}
+.archive-avatar.student {
+  background: #8e44ad;
+}
+.archive-avatar.teacher {
+  background: #16a085;
+}
+
+.archive-fullname {
+  display: block;
+  font-weight: 600;
+  color: #2c3e50;
+  line-height: 1.3;
+}
+.archive-sub {
+  display: block;
+  font-size: 0.78rem;
+  color: #95a5a6;
+  margin-top: 2px;
+}
+
+/* Misc cells */
+.archive-mono {
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: #555;
+}
+.archive-date {
+  font-size: 0.82rem;
+  color: #7f8c8d;
+  white-space: nowrap;
+}
+.archive-grade-badge {
+  background: #eaf4fb;
+  color: #2980b9;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.archive-advisory {
+  font-size: 0.82rem;
+  color: #16a085;
+  font-weight: 600;
+}
+.archive-account-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: #2c3e50;
+}
+.archive-account-info i {
+  color: #3498db;
+}
+.archive-no-account {
+  font-size: 0.78rem;
+  color: #bdc3c7;
+}
+
+/* Status badges */
+.archive-status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.archive-status-badge.active {
+  background: #eafaf1;
+  color: #1e8449;
+}
+.archive-status-badge.inactive {
+  background: #fef9e7;
+  color: #b7950b;
+}
+.archive-status-badge.archived {
+  background: #fdedec;
+  color: #c0392b;
+}
+.archive-status-badge.none {
+  color: #bdc3c7;
+}
+
+/* Unarchive button */
+.archive-unarchive-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: #eafaf1;
+  color: #1e8449;
+  border: 1.5px solid #a9dfbf;
+  border-radius: 7px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.archive-unarchive-btn:hover {
+  background: #2ecc71;
+  color: #fff;
+  border-color: #2ecc71;
+}
+
+@media (max-width: 768px) {
+  .archive-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .archive-search-wrap {
+    max-width: 100%;
+  }
+}

@@ -1,0 +1,78 @@
+/* NetworkToast.css */
+/* Matches the Archive page toast style: light background, colored border,
+   colored text and icon, slide-down entrance animation. */
+
+.network-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 22px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  z-index: 99999;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  min-width: 300px;
+  max-width: 460px;
+  animation: network-toast-in 0.25s ease-out;
+}
+
+/* Offline */
+.network-toast.error {
+  background: #fdedec;
+  color: #c0392b;
+  border: 1.5px solid #f5b7b1;
+}
+
+/* Slow connection */
+.network-toast.warning {
+  background: #fef9e7;
+  color: #b7950b;
+  border: 1.5px solid #f9e79f;
+}
+
+/* Connection restored */
+.network-toast.success {
+  background: #eafaf1;
+  color: #1e8449;
+  border: 1.5px solid #a9dfbf;
+}
+
+.network-toast-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.network-toast-message {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.network-toast-close {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  opacity: 0.7;
+}
+.network-toast-close:hover {
+  opacity: 1;
+}
+
+@keyframes network-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}

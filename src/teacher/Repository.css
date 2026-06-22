@@ -1,0 +1,328 @@
+/* --- CORE VARIABLES --- */
+:root {
+  --primary: #2c3e50; /* Deep Blue */
+  --accent: #3498db; /* Bright Blue */
+  --success: #2ecc71; /* Green */
+  --danger: #e74c3c; /* Red */
+  --warning: #f1c40f; /* Yellow */
+  --purple: #9b59b6; /* Purple */
+  --light: #f8f9fa; /* Light Gray Background */
+  --white: #ffffff;
+  --gray: #95a5a6; /* Text Gray */
+  --sidebar-bg: #1a252f; /* Darker sidebar */
+  --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+/* --- PAGE CONTAINER & GRIDS --- */
+
+/* Grid for Classes and Months */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 25px;
+}
+
+.grid-container-rep {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 20px;
+}
+
+/* Card Styles */
+.card-link-rep {
+  background: var(--white);
+  padding: 30px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.card-link:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  border-color: var(--accent);
+}
+
+.card-link-rep h3 {
+  color: var(--primary);
+  font-size: 1.2rem;
+  margin-bottom: 5px;
+}
+.card-link-rep p {
+  color: var(--gray);
+  font-size: 0.9rem;
+}
+
+/* Icon Boxes inside Cards */
+.icon-box {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: white;
+  margin-bottom: 15px;
+  transition: 0.3s;
+}
+
+.card-link:hover .icon-box {
+  transform: scale(1.1);
+}
+
+/* Background Colors for Icons */
+.bg-blue {
+  background: var(--accent);
+  box-shadow: 0 4px 10px rgba(52, 152, 219, 0.4);
+}
+.bg-green {
+  background: var(--success);
+  box-shadow: 0 4px 10px rgba(46, 204, 113, 0.4);
+}
+.bg-purple {
+  background: var(--purple);
+  box-shadow: 0 4px 10px rgba(155, 89, 182, 0.4);
+}
+
+/* --- TOOLBAR & BUTTONS --- */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.section-title {
+  color: var(--primary);
+}
+
+.btn-back {
+  background: var(--gray);
+  color: white;
+  border: none;
+  padding: 8px 25px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+}
+.btn-back i {
+  margin-right: 5px;
+}
+
+/* Download PDF button, sits top-right of the toolbar on the list view */
+.btn-download {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3);
+  transition: 0.2s;
+}
+.btn-download:hover:not(:disabled) {
+  background: #2d83b8;
+  transform: translateY(-2px);
+}
+.btn-download:disabled {
+  background: var(--gray);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* --- TABLE STYLES --- */
+.table-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th,
+.data-table td {
+  padding: 18px 20px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+.data-table th {
+  background: #f8f9fa;
+  color: var(--gray);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+
+/* Center Status Column */
+.data-table th:last-child,
+.data-table td:last-child {
+  text-align: center;
+}
+
+/* --- ATTENDANCE MATRIX (DepEd-style daily attendance sheet) --- */
+.matrix-container {
+  overflow-x: auto;
+  background: var(--white);
+  border: 1px solid #000;
+  border-radius: 0;
+}
+.matrix-table {
+  border-collapse: collapse;
+  background: var(--white);
+}
+.matrix-table th,
+.matrix-table td {
+  border: 1px solid #000;
+  padding: 6px 8px;
+  text-align: center;
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+.matrix-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f1f1f1;
+  color: #000;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.2px;
+  z-index: 2;
+}
+.matrix-table .group-label {
+  font-size: 0.78rem;
+  text-transform: none;
+}
+.matrix-table .name-sub {
+  display: inline-block;
+  margin-top: 2px;
+  font-weight: 400;
+  font-size: 0.65rem;
+  text-transform: none;
+  color: #444;
+}
+
+/* Sticky # and Learner's Name columns so they stay put while scrolling
+   through the day columns */
+.matrix-table .sticky-col {
+  position: sticky;
+  background: var(--white);
+  z-index: 1;
+}
+.matrix-table th.sticky-col {
+  z-index: 3;
+  background: #f1f1f1;
+}
+.matrix-table .num-col {
+  left: 0;
+  min-width: 30px;
+  width: 30px;
+}
+.matrix-table .name-col {
+  left: 30px;
+  min-width: 150px;
+  max-width: 170px;
+  white-space: normal;
+  word-break: break-word;
+  text-align: left;
+  vertical-align: middle;
+  border-right: 2px solid #000;
+}
+.matrix-table td.name-col {
+  font-weight: 500;
+}
+.learner-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--primary);
+}
+
+.matrix-table .day-col {
+  min-width: 28px;
+  width: 28px;
+  padding: 4px 2px;
+}
+.matrix-table .day-num,
+.matrix-table .day-letter {
+  display: block;
+  line-height: 1.3;
+}
+.matrix-table .day-num {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #000;
+}
+.matrix-table .day-letter {
+  font-size: 0.62rem;
+  font-weight: 500;
+  color: #555;
+  text-transform: none;
+}
+
+.status-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+.status-mark.present {
+  color: var(--primary);
+}
+.status-mark.absent {
+  color: var(--danger);
+}
+
+.matrix-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--gray);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.matrix-legend .status-mark {
+  margin-left: 10px;
+  width: auto;
+  height: auto;
+}
+.matrix-legend .status-mark:first-child {
+  margin-left: 0;
+}
+
+.rep-card-time {
+  font-size: 0.78rem;
+  color: var(--am-accent);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .sidebar {
+    margin-left: -260px;
+    position: fixed;
+    height: 100%;
+  }
+  .sidebar.open {
+    margin-left: 0;
+  }
+}

@@ -1,0 +1,234 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+}
+body {
+  height: 100vh;
+  background-color: #ffffff;
+  font-size: 14px;
+}
+
+/* --- APP CONTAINER --- */
+.app-container {
+  display: flex;
+  /* width: 100vw;*/ /* Coment for the parent card be display properly */
+  height: 100vh;
+  background-color: var(--light);
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  font-size: 14px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* ADD THIS */
+}
+
+/* --- SIDEBAR --- */
+.app-container .sidebar {
+  width: 250px;
+  background: #1a252f;
+  color: var(--white);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  transition: margin-left 0.3s ease;
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.sidebar.closed {
+  margin-left: -260px;
+}
+.sidebar.open {
+  margin-left: 0;
+}
+
+.brand {
+  padding: 30px 20px;
+  text-align: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--accent);
+}
+
+.brand small {
+  font-size: 0.7rem;
+  color: var(--gray);
+  font-weight: 400;
+  letter-spacing: 2px;
+  display: block;
+  margin-top: 5px;
+}
+
+.menu {
+  list-style: none;
+  margin-top: 20px;
+  padding: 0 10px;
+}
+
+.menu li {
+  padding: 12px 20px;
+  cursor: pointer;
+  color: #bdc3c7;
+  border-radius: 8px;
+  margin-bottom: 5px;
+  transition: all 0.2s ease-in-out;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+}
+
+.menu li:hover,
+.menu li.active {
+  background: var(--accent);
+  color: var(--white);
+  box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3);
+}
+
+.menu li i {
+  width: 25px;
+  margin-right: 10px;
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+/* --- MAIN CONTENT & HEADER --- */
+.main-content {
+  /* FIX: subtract sidebar width so content never bleeds past it */
+  width: 100%;
+  min-width: 0; /* critical: stops flex children from forcing overflow */
+  /*height: 100vh;*/
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* When sidebar is hidden, reclaim the full width */
+.sidebar.closed ~ .main-content {
+  width: 100vw;
+}
+
+header {
+  background: var(--white);
+  padding: 15px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid #eee;
+  position: relative;
+  z-index: 200;
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Specificity override for the menu icon */
+header #menu-toggle {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  color: #000000 !important;
+  cursor: pointer;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+}
+
+/* Specificity override for the header title */
+header .header-left .header-title {
+  font-size: 1.4rem;
+  color: #000000 !important;
+  font-weight: 700;
+}
+
+/* Specificity override for the user profile section */
+header .user-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  color: #000000 !important;
+}
+
+header .user-profile i {
+  color: #000000 !important;
+}
+
+/* --- PAGE CONTAINER (shared scroll area) --- */
+.page-container {
+  flex: 1;
+  padding: 30px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* --- RESPONSIVE --- */
+@media (max-width: 768px) {
+  .main-content {
+    width: 100vw;
+  }
+
+  .sidebar {
+    position: fixed;
+    height: 100%;
+  }
+
+  .page-container {
+    padding: 20px;
+  }
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center; /* Vertically aligns logo and text group */
+  gap: 12px; /* Slightly reduced gap so everything fits nicely */
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.1);
+  color: var(--accent);
+  padding: 30px 20px;
+}
+
+.brand-logo-img {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+  mix-blend-mode: normal;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  flex-shrink: 0; /* Prevents the logo from squeezing if the sidebar narrows */
+}
+
+/* New vertical layout for the text block */
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start; /* Aligns text neatly to the left */
+  text-align: left;
+}
+
+.brand-title {
+  font-family: "DM Sans", sans-serif;
+  font-size: 22px; /* Slightly smaller to prevent text wrapping on narrow sidebars */
+  font-weight: bolder;
+  letter-spacing: -0.5px;
+  color: var(--lp-primary);
+  line-height: 1.1;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.brand-subtitle {
+  font-size: 0.7rem;
+  color: var(--gray);
+  font-weight: 400;
+  letter-spacing: 2px;
+  display: block;
+  margin-top: 5px;
+}

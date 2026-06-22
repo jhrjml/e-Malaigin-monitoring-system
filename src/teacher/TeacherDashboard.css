@@ -1,0 +1,481 @@
+/* --- CORE VARIABLES --- */
+:root {
+  --primary: #2c3e50;
+  --accent: #3498db;
+  --success: #2ecc71;
+  --danger: #e74c3c;
+  --warning: #f1c40f;
+  --purple: #9b59b6;
+  --light: #f8f9fa;
+  --white: #ffffff;
+  --gray: #95a5a6;
+  --sidebar-bg: #1a252f;
+  --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+/* --- WELCOME BANNER --- */
+.welcome-banner {
+  background: linear-gradient(135deg, #2c3e50, #3498db);
+  color: white;
+  padding: 30px;
+  border-radius: 12px;
+  margin-bottom: 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 15px rgba(52, 152, 219, 0.2);
+}
+.welcome-text h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+.welcome-text p {
+  margin: 5px 0 0;
+  opacity: 0.9;
+}
+.date-badge-t {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   OVERVIEW — Reminder panel (left) + Attendance/Classwork charts (right)
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.th-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.th-charts-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.th-panel {
+  background: var(--white);
+  border-radius: 14px;
+  padding: 22px 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.th-panel-header {
+  margin-bottom: 14px;
+}
+.th-panel-header h3 {
+  font-size: 1.05rem;
+  color: var(--primary);
+  margin: 0 0 3px;
+}
+.th-panel-header p {
+  font-size: 0.8rem;
+  color: var(--gray);
+  margin: 0;
+}
+
+.th-panel-status {
+  text-align: center;
+  color: var(--gray);
+  font-size: 0.85rem;
+  padding: 24px 0;
+}
+
+/* ── Reminder list ──────────────────────────────────────────────────────── */
+.th-reminder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 480px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.th-reminder-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--light);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+.th-reminder-card:hover {
+  border-color: var(--accent);
+  transform: translateX(3px);
+}
+
+.th-reminder-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+.th-reminder-icon--announcement {
+  background: var(--warning);
+  color: #6d5400;
+}
+
+.th-reminder-body {
+  flex: 1;
+  min-width: 0;
+}
+.th-reminder-body h4 {
+  margin: 0 0 4px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.th-reminder-type-pill {
+  display: inline-block;
+  background: rgba(52, 152, 219, 0.12);
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 20px;
+  margin-bottom: 6px;
+}
+.th-reminder-type-pill--announcement {
+  background: rgba(241, 196, 15, 0.18);
+  color: #8a6d00;
+}
+
+.th-reminder-desc {
+  font-size: 0.78rem;
+  color: #666;
+  margin: 0 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.th-reminder-due {
+  font-size: 0.75rem;
+  color: var(--gray);
+  font-weight: 600;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Grouped bar charts (Attendance / Classwork) ───────────────────────── */
+
+.th-chart-canvas-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.th-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 10px;
+  font-size: 0.75rem;
+  color: var(--gray);
+}
+
+.th-chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.th-chart-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* --- LEGACY (kept in case anything else still references them) --- */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 25px;
+}
+
+.card-link-teacher {
+  background: var(--white);
+  padding: 30px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.card-link-teacher:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+  border-color: var(--accent);
+}
+
+.icon-box {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: white;
+  margin-bottom: 15px;
+  transition: 0.3s;
+}
+
+.card-link-teacher h3 {
+  color: var(--primary);
+  font-size: 1.2rem;
+  margin-bottom: 5px;
+}
+.card-link-teacher p {
+  color: var(--gray);
+  font-size: 0.9rem;
+}
+
+.bg-blue {
+  background: var(--accent);
+}
+.bg-green {
+  background: var(--success);
+}
+
+.icon-btn,
+.logout-icon-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--text-dark);
+}
+
+.modal-overlay-teacher {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.modal-teacher {
+  background: var(--white);
+  padding: 30px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.logout-modal .modal-header {
+  background: white;
+  color: rgb(0, 0, 0);
+  padding: 15px 25px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logout-modal p {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--black);
+}
+
+.modal-buttons {
+  margin-top: 25px;
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
+
+.logout-modal .btn-confirm {
+  background: #2c3e50;
+  color: #fff;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: large;
+}
+.logout-modal .btn-confirm:hover {
+  background: #1a252f;
+}
+
+.logout-modal .btn-cancel {
+  background: #ecf0f1;
+  color: #2c3e50;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: large;
+}
+.logout-modal .btn-cancel:hover {
+  background: #dce1e7;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   HEADER — profile dropdown
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.profile-menu-wrap {
+  position: relative;
+}
+
+.profile-avatar-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 10px;
+  transition: background 0.15s;
+  color: #2c3e50;
+}
+.profile-avatar-btn:hover {
+  background: #f1f3f5;
+}
+.profile-avatar-btn i.fa-user-circle {
+  color: var(--accent);
+}
+.profile-avatar-name {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #2c3e50;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.profile-avatar-caret {
+  font-size: 0.7rem;
+  color: #aaa;
+}
+
+.profile-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  padding: 6px;
+  z-index: 500;
+  animation: profile-dropdown-in 0.15s ease-out;
+}
+@keyframes profile-dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.profile-dropdown-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  background: none;
+  border-radius: 7px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #2c3e50;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+.profile-dropdown-item:hover {
+  background: #f1f3f5;
+}
+.profile-dropdown-item i {
+  width: 16px;
+  color: var(--accent);
+}
+.profile-dropdown-item--danger {
+  color: var(--danger);
+}
+.profile-dropdown-item--danger i {
+  color: var(--danger);
+}
+.profile-dropdown-divider {
+  height: 1px;
+  background: #eee;
+  margin: 4px 4px;
+}
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .th-overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    margin-left: -260px;
+    position: fixed;
+    height: 100%;
+  }
+  .sidebar.open {
+    margin-left: 0;
+  }
+
+  .welcome-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .profile-avatar-name {
+    display: none;
+  }
+}
