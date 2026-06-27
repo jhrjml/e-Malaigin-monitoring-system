@@ -52,13 +52,13 @@ export default defineConfig({
             purpose: "any ",
           },
           {
-            src: "/logo-512x512.png",
+            src: "/school-logo-512x512.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
           },
           {
-            src: "/logo-512x512.png",
+            src: "/school-logo-512x512.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "any maskable", // Works beautifully on both Desktop and Android!
