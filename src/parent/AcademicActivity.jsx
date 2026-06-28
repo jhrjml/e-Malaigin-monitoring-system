@@ -2,8 +2,13 @@
 // Parent views their child's classwork/assignments, subject by subject.
 // If the parent has more than one child, a filter bar at the top lets
 // them switch between children — same UI pattern as admin Archive.jsx.
+//
+// Can also be "jumped into" from the Dashboard's reminder panel via the
+// `focusClasswork` prop: { studentId, subject, classworkId }. When that
+// prop is set, this component switches to the matching child + subject,
+// opens the classwork list, and briefly highlights the matching item.
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "../api/firebase";
 import {
   doc,
@@ -33,7 +38,7 @@ const iconFor = (subject) => {
   return map[subject] || "fa-book-open";
 };
 
-function AcademicActivity() {
+function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
   // children / filter
   const [children, setChildren] = useState([]);
   const [selectedChild, setSelectedChild] = useState(null);
@@ -45,6 +50,13 @@ function AcademicActivity() {
   const [currentSubject, setCurrentSubject] = useState("");
   const [classworkList, setClassworkList] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // highlight for an item opened via a reminder click
+  const [highlightId, setHighlightId] = useState(null);
+
+  // guards the child-switch effect below from resetting the view back to
+  // "select-subject" when the switch was triggered by a reminder jump
+  const isJumpingRef = useRef(false);
 
   // ── load children linked to this parent ──────────────────────────────
   useEffect(() => {
@@ -127,6 +139,12 @@ function AcademicActivity() {
 
   useEffect(() => {
     if (!selectedChild) return;
+    // Skip the reset when this child was selected as part of a reminder
+    // jump — that flow drives its own view/subject/classwork state below.
+    if (isJumpingRef.current) {
+      isJumpingRef.current = false;
+      return;
+    }
     setCurrentView("select-subject");
     setCurrentSubject("");
     setClassworkList([]);
@@ -164,6 +182,75 @@ function AcademicActivity() {
       setLoading(false);
     }
   };
+
+  // ── jump straight to a reminder's child + subject + item ─────────────
+  useEffect(() => {
+    if (!focusClasswork || childrenLoading) return;
+    if (children.length === 0) {
+      onFocusConsumed?.();
+      return;
+    }
+
+    const target = children.find((c) => c.id === focusClasswork.studentId);
+    if (!target) {
+      onFocusConsumed?.();
+      return;
+    }
+
+    let cancelled = false;
+
+    const jump = async () => {
+      setLoading(true);
+      try {
+        if (target.id !== selectedChild?.id) {
+          isJumpingRef.current = true;
+          setSelectedChild(target);
+        }
+        setCurrentSubject(focusClasswork.subject);
+
+        const snap = await getDocs(
+          query(
+            col("Classwork"),
+            where("grade", "==", target.enrolledGrade),
+            where("section", "==", target.enrolledSection),
+            where("subject", "==", focusClasswork.subject),
+          ),
+        );
+        const cws = snap.docs.map((d) => {
+          const data = d.data();
+          const status = data.studentStatus?.[target.id] ?? null;
+          return { id: d.id, ...data, myStatus: status };
+        });
+
+        if (cancelled) return;
+        setClassworkList(cws);
+        setCurrentView("academic");
+        setHighlightId(focusClasswork.classworkId || null);
+      } catch (e) {
+        console.error("Failed to open reminder:", e);
+      } finally {
+        if (!cancelled) setLoading(false);
+        onFocusConsumed?.();
+      }
+    };
+
+    jump();
+    return () => {
+      cancelled = true;
+    };
+    // selectedChild intentionally omitted — only re-run when a *new*
+    // reminder is clicked or the children list finishes loading.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusClasswork, childrenLoading, children]);
+
+  // scroll the highlighted card into view, then clear the highlight
+  useEffect(() => {
+    if (!highlightId) return;
+    const el = document.getElementById(`cw-${highlightId}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const t = setTimeout(() => setHighlightId(null), 4000);
+    return () => clearTimeout(t);
+  }, [highlightId, classworkList]);
 
   if (childrenLoading) {
     return (
@@ -262,6 +349,7 @@ function AcademicActivity() {
                       classworkList.map((cw) => (
                         <div
                           key={cw.id}
+                          id={`cw-${cw.id}`}
                           className={`cw-card-aa ${
                             cw.myStatus === "Submitted"
                               ? "cw-submitted-aa"
@@ -269,6 +357,15 @@ function AcademicActivity() {
                                 ? "cw-missed-aa"
                                 : "cw-pending-aa"
                           }`}
+                          style={
+                            highlightId === cw.id
+                              ? {
+                                  outline: "2px solid #a65f81",
+                                  boxShadow:
+                                    "0 0 0 4px rgba(52, 152, 219, 0.18)",
+                                }
+                              : undefined
+                          }
                         >
                           <div className="cw-header-aa">
                             <span className="cw-title-aa">

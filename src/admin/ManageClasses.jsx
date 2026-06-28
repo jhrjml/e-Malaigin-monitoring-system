@@ -701,7 +701,7 @@ const ManageClasses = () => {
           <div className="view-section active">
             <div className="toolbar">
               <button
-                className="btn-back"
+                className="btn-back-mc"
                 onClick={() => setCurrentView("view-grade")}
               >
                 <i className="fas fa-arrow-left" />
@@ -745,7 +745,7 @@ const ManageClasses = () => {
           <div className="view-section active">
             <div className="toolbar">
               <button
-                className="btn-back"
+                className="btn-back-mc"
                 onClick={() => setCurrentView("view-action")}
               >
                 <i className="fas fa-arrow-left" />
@@ -801,7 +801,7 @@ const ManageClasses = () => {
                       >
                         <i
                           className="fas fa-user-plus"
-                          style={{ color: "#3498db" }}
+                          style={{ color: "#a65f81" }}
                         ></i>
                         Add Student Manually
                       </button>
@@ -884,7 +884,7 @@ const ManageClasses = () => {
           <div className="view-section active">
             <div className="toolbar">
               <button
-                className="btn-back"
+                className="btn-back-mc"
                 onClick={() => setCurrentView("view-action")}
               >
                 <i className="fas fa-arrow-left" /> Back

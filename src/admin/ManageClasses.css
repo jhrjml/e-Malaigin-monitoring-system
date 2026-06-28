@@ -1,6 +1,6 @@
 :root {
   --primary: #2c3e50;
-  --accent: #3498db;
+  --accent: #a65f81;
   --success: #2ecc71;
   --danger: #e74c3c;
   --warning: #f1c40f;
@@ -89,7 +89,7 @@
   justify-content: center;
   font-size: 1.5rem;
   color: var(--black);
-  background-color: var(--white);
+  background-color: var(--accent);
 }
 
 /* --- TABLES & BUTTONS --- */
@@ -105,7 +105,7 @@
   color: black;
 }
 
-.btn-back {
+.btn-back-mc {
   background: transparent;
   color: rgb(0, 0, 0);
   border: none;
@@ -390,7 +390,7 @@
 }
 
 .section-card {
-  background: var(--accent);
+  background: var(--white);
   border-radius: 12px;
   padding: 10px;
   text-align: center;

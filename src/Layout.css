@@ -164,7 +164,7 @@ header .user-profile i {
 /* --- PAGE CONTAINER (shared scroll area) --- */
 .page-container {
   flex: 1;
-  padding: 30px;
+  padding: 15px;
   overflow-y: auto;
   overflow-x: hidden;
   width: 100%;
@@ -182,7 +182,7 @@ header .user-profile i {
   }
 
   .page-container {
-    padding: 20px;
+    padding: 10px;
   }
 }
 

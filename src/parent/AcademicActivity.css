@@ -1,6 +1,6 @@
 :root {
   --primary: #2c3e50;
-  --accent: #3498db;
+  --accent: #a65f81;
   --success: #2ecc71;
   --danger: #e74c3c;
   --purple: #8e44ad;
@@ -142,6 +142,7 @@
   border-bottom: 1px solid #eee;
   padding-bottom: 15px;
 }
+
 .btn-back-aa {
   background: transparent;
   color: rgb(0, 0, 0);

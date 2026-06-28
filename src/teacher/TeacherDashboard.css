@@ -1,7 +1,7 @@
-/* --- CORE VARIABLES --- */
 :root {
   --primary: #2c3e50;
-  --accent: #3498db;
+  /* --accent: #3498db;*/
+  --accent: #a65f81;
   --success: #2ecc71;
   --danger: #e74c3c;
   --warning: #f1c40f;
@@ -13,9 +13,8 @@
   --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 
-/* --- WELCOME BANNER --- */
 .welcome-banner {
-  background: linear-gradient(135deg, #2c3e50, #3498db);
+  background: #a65f81;
   color: white;
   padding: 30px;
   border-radius: 12px;
@@ -44,31 +43,24 @@
   gap: 10px;
 }
 
-/* ═════════════════════════════════════════════════════════════════════════
-   OVERVIEW — Reminder panel (left) + Attendance/Classwork charts (right)
-   ═════════════════════════════════════════════════════════════════════════ */
-
 .th-overview-grid {
   display: grid;
   grid-template-columns: minmax(280px, 360px) 1fr;
   gap: 20px;
   align-items: start;
 }
-
 .th-charts-col {
   display: flex;
   flex-direction: column;
   gap: 20px;
   min-width: 0;
 }
-
 .th-panel {
   background: var(--white);
   border-radius: 14px;
   padding: 22px 24px;
   box-shadow: var(--shadow-sm);
 }
-
 .th-panel-header {
   margin-bottom: 14px;
 }
@@ -82,7 +74,6 @@
   color: var(--gray);
   margin: 0;
 }
-
 .th-panel-status {
   text-align: center;
   color: var(--gray);
@@ -90,7 +81,6 @@
   padding: 24px 0;
 }
 
-/* ── Reminder list ──────────────────────────────────────────────────────── */
 .th-reminder-list {
   display: flex;
   flex-direction: column;
@@ -99,7 +89,6 @@
   overflow-y: auto;
   padding-right: 4px;
 }
-
 .th-reminder-card {
   display: flex;
   align-items: flex-start;
@@ -115,7 +104,6 @@
   border-color: var(--accent);
   transform: translateX(3px);
 }
-
 .th-reminder-icon {
   width: 38px;
   height: 38px;
@@ -132,7 +120,6 @@
   background: var(--warning);
   color: #6d5400;
 }
-
 .th-reminder-body {
   flex: 1;
   min-width: 0;
@@ -146,7 +133,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .th-reminder-type-pill {
   display: inline-block;
   background: rgba(52, 152, 219, 0.12);
@@ -161,7 +147,6 @@
   background: rgba(241, 196, 15, 0.18);
   color: #8a6d00;
 }
-
 .th-reminder-desc {
   font-size: 0.78rem;
   color: #666;
@@ -170,7 +155,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .th-reminder-due {
   font-size: 0.75rem;
   color: var(--gray);
@@ -181,13 +165,10 @@
   gap: 6px;
 }
 
-/* ── Grouped bar charts (Attendance / Classwork) ───────────────────────── */
-
 .th-chart-canvas-wrap {
   position: relative;
   width: 100%;
 }
-
 .th-chart-legend {
   display: flex;
   flex-wrap: wrap;
@@ -196,13 +177,11 @@
   font-size: 0.75rem;
   color: var(--gray);
 }
-
 .th-chart-legend-item {
   display: flex;
   align-items: center;
   gap: 5px;
 }
-
 .th-chart-legend-dot {
   width: 10px;
   height: 10px;
@@ -210,13 +189,34 @@
   flex-shrink: 0;
 }
 
-/* --- LEGACY (kept in case anything else still references them) --- */
+/* ── Month filter row (above charts) ──────────────────────────────────── */
+.th-filter-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+.th-month-select {
+  padding: 7px 12px;
+  border: 1px solid #dde1e7;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #2c3e50;
+  background: #fff;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.th-month-select:hover,
+.th-month-select:focus {
+  border-color: #a65f81;
+}
+
+/* --- LEGACY --- */
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 25px;
 }
-
 .card-link-teacher {
   background: var(--white);
   padding: 30px;
@@ -232,13 +232,11 @@
   justify-content: center;
   height: 100%;
 }
-
 .card-link-teacher:hover {
   transform: translateY(-5px);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
   border-color: var(--accent);
 }
-
 .icon-box {
   width: 70px;
   height: 70px;
@@ -251,7 +249,6 @@
   margin-bottom: 15px;
   transition: 0.3s;
 }
-
 .card-link-teacher h3 {
   color: var(--primary);
   font-size: 1.2rem;
@@ -261,14 +258,12 @@
   color: var(--gray);
   font-size: 0.9rem;
 }
-
 .bg-blue {
   background: var(--accent);
 }
 .bg-green {
   background: var(--success);
 }
-
 .icon-btn,
 .logout-icon-btn {
   background: none;
@@ -287,7 +282,6 @@
   align-items: center;
   z-index: 9999;
 }
-
 .modal-teacher {
   background: var(--white);
   padding: 30px;
@@ -297,7 +291,6 @@
   text-align: center;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
 }
-
 .logout-modal .modal-header {
   background: white;
   color: rgb(0, 0, 0);
@@ -306,20 +299,17 @@
   justify-content: space-between;
   align-items: center;
 }
-
 .logout-modal p {
   font-size: 18px;
   font-weight: 500;
   color: var(--black);
 }
-
 .modal-buttons {
   margin-top: 25px;
   display: flex;
   justify-content: center;
   gap: 15px;
 }
-
 .logout-modal .btn-confirm {
   background: #2c3e50;
   color: #fff;
@@ -333,7 +323,6 @@
 .logout-modal .btn-confirm:hover {
   background: #1a252f;
 }
-
 .logout-modal .btn-cancel {
   background: #ecf0f1;
   color: #2c3e50;
@@ -348,20 +337,14 @@
   background: #dce1e7;
 }
 
-/* ═════════════════════════════════════════════════════════════════════════
-   HEADER — profile dropdown
-   ═════════════════════════════════════════════════════════════════════════ */
-
 .header-right {
   display: flex;
   align-items: center;
   gap: 18px;
 }
-
 .profile-menu-wrap {
   position: relative;
 }
-
 .profile-avatar-btn {
   display: flex;
   align-items: center;
@@ -393,7 +376,6 @@
   font-size: 0.7rem;
   color: #aaa;
 }
-
 .profile-dropdown {
   position: absolute;
   top: calc(100% + 8px);
@@ -416,7 +398,6 @@
     transform: translateY(0);
   }
 }
-
 .profile-dropdown-item {
   width: 100%;
   display: flex;
@@ -452,13 +433,11 @@
   margin: 4px 4px;
 }
 
-/* RESPONSIVE */
 @media (max-width: 900px) {
   .th-overview-grid {
     grid-template-columns: 1fr;
   }
 }
-
 @media (max-width: 768px) {
   .sidebar {
     margin-left: -260px;
@@ -468,13 +447,11 @@
   .sidebar.open {
     margin-left: 0;
   }
-
   .welcome-banner {
     flex-direction: column;
     align-items: flex-start;
     gap: 10px;
   }
-
   .profile-avatar-name {
     display: none;
   }

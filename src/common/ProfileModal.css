@@ -47,7 +47,7 @@
 
 .pm-role {
   font-size: 0.78rem;
-  color: #3498db;
+  color: #a65f81;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1.2px;
@@ -61,7 +61,7 @@
 }
 
 .pm-loading {
-  color: #3498db;
+  color: #a65f81;
   font-size: 0.9rem;
   padding: 10px 0;
 }
@@ -143,7 +143,7 @@
 }
 
 .pm-toggle-inline:hover {
-  color: #3498db;
+  color: #a65f81;
 }
 
 /* Editable input */
@@ -162,7 +162,7 @@
 }
 
 .pm-field input:focus {
-  border-color: #3498db;
+  border-color: #a65f81;
   box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.12);
 }
 
@@ -199,7 +199,7 @@
 }
 
 .pm-toggle:hover {
-  color: #3498db;
+  color: #a65f81;
 }
 
 /* Action buttons */
@@ -234,7 +234,7 @@
 }
 
 .pm-edit {
-  background: #3498db;
+  background: #a65f81;
   color: #fff;
   display: flex;
   align-items: center;

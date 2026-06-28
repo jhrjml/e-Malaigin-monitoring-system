@@ -1,7 +1,7 @@
 /* ── ClassworkReminding.css ── */
 :root {
   --cwr-primary: #2c3e50;
-  --cwr-accent: #3498db;
+  --cwr-accent: #a65f81;
   --cwr-success: #2ecc71;
   --cwr-danger: #e74c3c;
   --cwr-warning: #f39c12;
@@ -24,7 +24,6 @@
 }
 .cwr-container {
   max-width: 1100px;
-  margin: 0 auto;
 }
 .cwr-view {
   animation: cwrFade 0.25s ease;
@@ -76,22 +75,19 @@
 }
 
 /* Buttons */
-.cwr-btn-back {
-  background: var(--gray);
-  color: white;
+.btn-back-cwr {
+  background: transparent;
+  color: rgb(0, 0, 0);
   border: none;
-  padding: 8px 25px;
+  padding: 8px 20px;
   border-radius: 5px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-weight: 500;
+  gap: 12px;
+  font-size: x-large;
+  font-weight: bold;
 }
-.cwr-btn-back:hover {
-  background: #7f8c8d;
-}
-
 .cwr-btn-add {
   margin-left: auto;
   background: var(--cwr-purple);

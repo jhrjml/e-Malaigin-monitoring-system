@@ -17,22 +17,41 @@ import "./AttendanceMonitoring.css";
 const col = (name) => collection(db, name);
 
 // ── Mobile detection ──────────────────────────────────────────────────────────
-// QR scanning is only allowed on phones/tablets.
 const IS_MOBILE =
   /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
     navigator.userAgent,
   ) ||
   ("ontouchstart" in window && window.innerWidth <= 1024);
 
-// ── Weekend check (this school runs Sun–Thu; Fri=5, Sat=6 are off) ───────────
+// ── Weekend check (Sun–Thu school; Fri=5, Sat=6 are off) ─────────────────────
 const isWeekend = (date) => {
   const dow = date.getDay();
-  return dow === 5 || dow === 6; // Friday or Saturday
+  return dow === 5 || dow === 6;
 };
 
+// ── Convert "HH:MM" to minutes since midnight ─────────────────────────────────
+const toMin = (t) => {
+  if (!t) return 0;
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+};
+
+// ── Get current time as minutes since midnight ────────────────────────────────
+const nowMin = () => {
+  const n = new Date();
+  return n.getHours() * 60 + n.getMinutes();
+};
+
+// ── 16:00 (4 PM) scan-lock threshold ─────────────────────────────────────────
+const LOCK_AFTER_MIN = 16 * 60; // 4:00 PM — scanning closes
+
+// ── 19:00 (7 PM) daily-reset threshold ───────────────────────────────────────
+// After this time the local display is wiped so the roster shows all-Pending,
+// ready for the next school day. Firestore records are NOT deleted — this is
+// UI-only. The one-shot reset timer fires exactly at 19:00.
+const RESET_AFTER_MIN = 19 * 60; // 7:00 PM
+
 function AttendanceMonitoring() {
-  // "load"       → combined Grade-Section-Subject picker
-  // "attendance" → live attendance sheet for chosen class
   const [currentView, setCurrentView] = useState("load");
 
   const [classGrade, setClassGrade] = useState(null);
@@ -41,27 +60,41 @@ function AttendanceMonitoring() {
 
   const [teacherLoads, setTeacherLoads] = useState([]);
   const [students, setStudents] = useState([]);
-  const [holidays, setHolidays] = useState([]); // ["YYYY-MM-DD", ...]
+  const [holidays, setHolidays] = useState([]);
 
-  const [attendanceRecords, setAttendanceRecords] = useState({}); // { studentId: { time, status } }
+  // attendanceRecords: { studentId: { time, status } }
+  // Populated from Firestore when a class is opened, then updated live on scan.
+  const [attendanceRecords, setAttendanceRecords] = useState({});
+
   const [scheduleEnded, setScheduleEnded] = useState(false);
-  const [todayBlocked, setTodayBlocked] = useState(null); // null | "weekend" | "holiday:<name>"
+  const [todayBlocked, setTodayBlocked] = useState(null); // null | "weekend" | "holiday"
+
+  // ── time-window state ─────────────────────────────────────────────────────
+  // "before"  → before the subject's start time (scanning not yet allowed)
+  // "open"    → within start–end window (scanning allowed)
+  // "after"   → past end time (scanning locked; records visible read-only)
+  const [timeWindow, setTimeWindow] = useState("open");
 
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanMessage, setScanMessage] = useState("");
-  const [scanStatus, setScanStatus] = useState(""); // "success" | "error" | "warning"
+  const [scanStatus, setScanStatus] = useState("");
 
   const [loading, setLoading] = useState(true);
+  const [loadingRecords, setLoadingRecords] = useState(false);
   const [error, setError] = useState("");
 
   const videoRef = useRef(null);
   const readerRef = useRef(null);
+  // scannedRef holds LRNs already recorded THIS session (and pre-loaded from DB)
   const scannedRef = useRef(new Set());
   const autoCloseTimerRef = useRef(null);
+  const timeWindowTimerRef = useRef(null);
+  // One-shot timer that fires at 19:00 to wipe the local display
+  const resetTimerRef = useRef(null);
 
-  const today = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
+  const today = new Date().toISOString().split("T")[0];
 
-  // ── 1. Load teacher's schedules + active school-year holidays ────────────────
+  // ── 1. Load teacher's schedules + holidays ────────────────────────────────
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (!userId) {
@@ -74,7 +107,6 @@ function AttendanceMonitoring() {
       setLoading(true);
       setError("");
       try {
-        // Resolve User → teacherId
         const userSnap = await getDoc(doc(db, "User", userId));
         if (!userSnap.exists()) {
           setError("User account not found.");
@@ -86,13 +118,11 @@ function AttendanceMonitoring() {
           return;
         }
 
-        // Load schedules
         const schedSnap = await getDocs(
           query(col("Schedule"), where("teacherId", "==", teacherDocId)),
         );
         setTeacherLoads(schedSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
 
-        // Load holidays from the active school year
         const sySnap = await getDocs(
           query(col("SchoolYear"), where("isActive", "==", true)),
         );
@@ -110,7 +140,7 @@ function AttendanceMonitoring() {
     load();
   }, []);
 
-  // ── 2. Load enrolled students when grade + section is chosen ────────────────
+  // ── 2. Load enrolled students when grade+section changes ─────────────────
   useEffect(() => {
     if (!classGrade || !classSection) return;
     const load = async () => {
@@ -139,7 +169,129 @@ function AttendanceMonitoring() {
     load();
   }, [classGrade, classSection]);
 
-  // ── Combined load options (one card per Grade-Section-Subject) ────────────
+  // ── 3. Load today's existing attendance from Firestore ────────────────────
+  // Called whenever a class is selected. This is what makes records persist
+  // across navigation — we always re-hydrate from the DB when opening a class.
+  // If it is already past 19:00 (the daily reset time), we skip loading so
+  // the roster shows all-Pending, ready for the next school day.
+  const loadTodayAttendance = useCallback(
+    async (grade, section, subject) => {
+      // Past 7 PM — show clean slate; Firestore records remain untouched
+      if (nowMin() >= RESET_AFTER_MIN) {
+        setAttendanceRecords({});
+        scannedRef.current = new Set();
+        return;
+      }
+
+      setLoadingRecords(true);
+      try {
+        const snap = await getDocs(
+          query(
+            col("Attendance"),
+            where("grade", "==", grade),
+            where("section", "==", section),
+            where("subject", "==", subject),
+            where("date", "==", today),
+          ),
+        );
+
+        const records = {};
+        const lrnsAlreadyRecorded = new Set();
+
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          records[data.studentId] = { time: data.time, status: data.status };
+          if (data.lrn) lrnsAlreadyRecorded.add(data.lrn);
+        });
+
+        setAttendanceRecords(records);
+        // Pre-populate scannedRef so duplicate scans are blocked correctly
+        scannedRef.current = lrnsAlreadyRecorded;
+      } catch (e) {
+        console.error("Failed to load today's attendance:", e);
+      } finally {
+        setLoadingRecords(false);
+      }
+    },
+    [today],
+  );
+
+  // ── 4. Compute and watch the time window for the active schedule ──────────
+  // Returns:
+  //   "reset"  → ≥ 19:00 — display wiped, ready for next day
+  //   "after"  → past schedule end OR ≥ 16:00 — scanning locked, records shown
+  //   "before" → before schedule start — scanning not yet open
+  //   "open"   → within start–end and before 16:00 — scanning allowed
+  const computeTimeWindow = useCallback((schedule) => {
+    const now = nowMin();
+    if (now >= RESET_AFTER_MIN) return "reset";
+    if (!schedule?.start || !schedule?.end) return "open";
+    const start = toMin(schedule.start);
+    const end = toMin(schedule.end);
+    if (now < start) return "before";
+    if (now >= end || now >= LOCK_AFTER_MIN) return "after";
+    return "open";
+  }, []);
+
+  // Re-evaluate every 30 seconds while in attendance view
+  useEffect(() => {
+    if (currentView !== "attendance") {
+      clearInterval(timeWindowTimerRef.current);
+      clearTimeout(resetTimerRef.current);
+      return;
+    }
+
+    const tick = () => {
+      const window = computeTimeWindow(currentSchedule);
+      setTimeWindow(window);
+      // Close scanner if we've moved out of the open window
+      if (window !== "open" && scannerOpen) closeScanner();
+      // Wipe local display when the reset threshold is crossed
+      if (window === "reset") {
+        setAttendanceRecords({});
+        scannedRef.current = new Set();
+        setScheduleEnded(false);
+      }
+    };
+
+    tick(); // immediate evaluation
+    timeWindowTimerRef.current = setInterval(tick, 30_000);
+
+    // ── One-shot reset timer: fires exactly at 19:00 today ──────────────
+    const scheduleResetTimer = () => {
+      clearTimeout(resetTimerRef.current);
+      const now = new Date();
+      const resetAt = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+        19,
+        0,
+        0,
+        0,
+      );
+      const msUntilReset = resetAt.getTime() - now.getTime();
+      if (msUntilReset > 0) {
+        resetTimerRef.current = setTimeout(() => {
+          // Wipe local display — Firestore records are untouched
+          setAttendanceRecords({});
+          scannedRef.current = new Set();
+          setScheduleEnded(false);
+          setTimeWindow("reset");
+          closeScanner();
+        }, msUntilReset);
+      }
+    };
+    scheduleResetTimer();
+
+    return () => {
+      clearInterval(timeWindowTimerRef.current);
+      clearTimeout(resetTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView, classGrade, classSection, classSubject, teacherLoads]);
+
+  // ── Combined load options ─────────────────────────────────────────────────
   const loadOptions = Object.values(
     teacherLoads.reduce((acc, l) => {
       const key = `${l.grade}|${l.section}|${l.subject}`;
@@ -160,7 +312,6 @@ function AttendanceMonitoring() {
     return a.subject.localeCompare(b.subject);
   });
 
-  // Find the schedule entry for the currently active class
   const currentSchedule = teacherLoads.find(
     (l) =>
       l.grade === classGrade &&
@@ -168,31 +319,36 @@ function AttendanceMonitoring() {
       l.subject === classSubject,
   );
 
-  // ── Select a class card ──────────────────────────────────────────────────
+  // ── Select a class card ───────────────────────────────────────────────────
   const selectLoad = (l) => {
     setClassGrade(l.grade);
     setClassSection(l.section);
     setClassSubject(l.subject);
-    scannedRef.current = new Set();
-    setAttendanceRecords({});
     setScheduleEnded(false);
     setScanMessage("");
     setScanStatus("");
 
-    // Check if today is a holiday or weekend BEFORE opening attendance
+    // Weekend / holiday check
     const now = new Date();
     if (isWeekend(now)) {
       setTodayBlocked("weekend");
     } else if (holidays.includes(today)) {
-      setTodayBlocked(`holiday`);
+      setTodayBlocked("holiday");
     } else {
       setTodayBlocked(null);
     }
 
+    // Evaluate time window immediately using this specific load's schedule
+    const fakeSchedule = { start: l.start, end: l.end };
+    setTimeWindow(computeTimeWindow(fakeSchedule));
+
+    // Load existing records from Firestore — this restores persisted state
+    loadTodayAttendance(l.grade, l.section, l.subject);
+
     setCurrentView("attendance");
   };
 
-  // ── Auto-close timer: fires at schedule end time ─────────────────────────
+  // ── Auto-close timer at schedule end time ─────────────────────────────────
   useEffect(() => {
     if (currentView !== "attendance" || scheduleEnded || !currentSchedule?.end)
       return;
@@ -209,7 +365,7 @@ function AttendanceMonitoring() {
         0,
       ).getTime() - now.getTime();
 
-    if (endMs <= 0) return; // already past end time
+    if (endMs <= 0) return;
 
     autoCloseTimerRef.current = setTimeout(() => {
       handleCloseAttendance();
@@ -219,11 +375,10 @@ function AttendanceMonitoring() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentView, scheduleEnded, currentSchedule]);
 
-  // ── Close attendance & mark absents (skips holidays/weekends) ────────────
+  // ── Close attendance & mark absents ──────────────────────────────────────
   const handleCloseAttendance = useCallback(async () => {
     clearTimeout(autoCloseTimerRef.current);
 
-    // If today is a holiday or weekend, close session without saving absents
     const now = new Date();
     if (isWeekend(now) || holidays.includes(today)) {
       setScheduleEnded(true);
@@ -231,11 +386,11 @@ function AttendanceMonitoring() {
       return;
     }
 
+    // Only mark absent students who have NO record yet today for this subject
     const absentStudents = students.filter(
       (s) => !scannedRef.current.has(s.lrn),
     );
 
-    // Update local state
     const absentRecords = {};
     absentStudents.forEach((s) => {
       absentRecords[s.id] = { time: "--", status: "Absent" };
@@ -244,7 +399,7 @@ function AttendanceMonitoring() {
     setScheduleEnded(true);
     closeScanner();
 
-    // Persist to Firestore
+    // Persist only students who don't already have a record
     await Promise.all(
       absentStudents.map((s) =>
         addDoc(col("Attendance"), {
@@ -286,21 +441,44 @@ function AttendanceMonitoring() {
 
   const handleQRResult = useCallback(
     async (lrn) => {
+      // ── Guard: time window must be "open" ───────────────────────────────
+      const currentWindow = computeTimeWindow(currentSchedule);
+      if (currentWindow === "before") {
+        setScanMessage(
+          `Scanning not yet allowed. Class starts at ${currentSchedule?.start}.`,
+        );
+        setScanStatus("error");
+        return;
+      }
+      if (currentWindow === "after") {
+        setScanMessage(
+          "Scanning is closed. The class period has already ended.",
+        );
+        setScanStatus("error");
+        return;
+      }
+
+      // ── Guard: one scan per day ─────────────────────────────────────────
       if (scannedRef.current.has(lrn)) {
-        setScanMessage(`Already scanned (LRN ${lrn}). Duplicate ignored.`);
+        setScanMessage(
+          `Already recorded today (LRN ${lrn}). Duplicate ignored.`,
+        );
         setScanStatus("warning");
         return;
       }
+
       const student = students.find((s) => s.lrn === lrn);
       if (!student) {
         setScanMessage(`LRN ${lrn} is not enrolled in this class.`);
         setScanStatus("error");
         return;
       }
+
       const time = new Date().toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
       });
+
       setAttendanceRecords((prev) => ({
         ...prev,
         [student.id]: { time, status: "Present" },
@@ -310,6 +488,7 @@ function AttendanceMonitoring() {
         `✓ ${student.lastName}, ${student.firstName} — Present at ${time}`,
       );
       setScanStatus("success");
+
       try {
         await addDoc(col("Attendance"), {
           studentId: student.id,
@@ -326,7 +505,15 @@ function AttendanceMonitoring() {
         console.error("Failed to save attendance:", e);
       }
     },
-    [students, classGrade, classSection, classSubject, today],
+    [
+      students,
+      classGrade,
+      classSection,
+      classSubject,
+      today,
+      currentSchedule,
+      computeTimeWindow,
+    ],
   );
 
   const closeScanner = useCallback(() => {
@@ -336,7 +523,11 @@ function AttendanceMonitoring() {
     setScannerOpen(false);
   }, []);
 
-  // ── Loading / Error states ────────────────────────────────────────────────
+  // ── Derived: can scanning happen right now? ───────────────────────────────
+  // True only when: not blocked, not ended, time window is exactly "open"
+  const canScan = !todayBlocked && !scheduleEnded && timeWindow === "open";
+
+  // ── Loading state ─────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="am-wrapper">
@@ -404,11 +595,15 @@ function AttendanceMonitoring() {
                   className="btn-back"
                   onClick={() => {
                     clearTimeout(autoCloseTimerRef.current);
+                    clearInterval(timeWindowTimerRef.current);
+                    clearTimeout(resetTimerRef.current);
+                    closeScanner();
                     setCurrentView("load");
                   }}
                 >
                   <i className="fas fa-arrow-left"></i> Back
                 </button>
+
                 <div className="am-title-block">
                   <h3>{classSubject} Attendance</h3>
                   <small>
@@ -424,7 +619,9 @@ function AttendanceMonitoring() {
                       ` | ${currentSchedule.start} – ${currentSchedule.end}`}
                   </small>
                 </div>
+
                 <div className="am-actions">
+                  {/* Holiday / Weekend badge */}
                   {todayBlocked && (
                     <span className="am-badge am-badge-holiday">
                       <i className="fas fa-calendar-times"></i>{" "}
@@ -433,7 +630,36 @@ function AttendanceMonitoring() {
                         : "Holiday — No attendance"}
                     </span>
                   )}
-                  {!todayBlocked && !scheduleEnded && (
+
+                  {/* Time-window badges (only shown when not blocked) */}
+                  {!todayBlocked &&
+                    !scheduleEnded &&
+                    timeWindow === "before" && (
+                      <span className="am-badge am-badge-warning">
+                        <i className="fas fa-hourglass-start"></i> Class starts
+                        at {currentSchedule?.start} — scanning not yet open
+                      </span>
+                    )}
+
+                  {!todayBlocked &&
+                    !scheduleEnded &&
+                    timeWindow === "after" && (
+                      <span className="am-badge am-badge-closed">
+                        <i className="fas fa-lock"></i> Past class time —
+                        scanning closed
+                      </span>
+                    )}
+
+                  {/* 7 PM reset badge — overrides all other non-blocked states */}
+                  {!todayBlocked && timeWindow === "reset" && (
+                    <span className="am-badge am-badge-reset">
+                      <i className="fas fa-moon"></i> Reset at 7 PM — ready for
+                      next day
+                    </span>
+                  )}
+
+                  {/* Scan + Close buttons (only when window is open) */}
+                  {canScan && (
                     <>
                       {IS_MOBILE ? (
                         <button className="am-btn-scan" onClick={openScanner}>
@@ -453,6 +679,8 @@ function AttendanceMonitoring() {
                       </button>
                     </>
                   )}
+
+                  {/* Closed badge */}
                   {!todayBlocked && scheduleEnded && (
                     <span className="am-badge am-badge-closed">
                       <i className="fas fa-lock"></i> Attendance Closed
@@ -461,7 +689,7 @@ function AttendanceMonitoring() {
                 </div>
               </div>
 
-              {/* Today is holiday/weekend — info banner */}
+              {/* Info banners */}
               {todayBlocked && (
                 <div className="am-alert am-alert-info">
                   <i className="fas fa-info-circle"></i>{" "}
@@ -471,79 +699,124 @@ function AttendanceMonitoring() {
                 </div>
               )}
 
-              <div className="am-table-wrap">
-                <table className="am-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Student Name</th>
-                      <th>Time In</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {students.length === 0 ? (
-                      <tr>
-                        <td colSpan="4" className="am-td-empty">
-                          No students enrolled in this section.
-                        </td>
-                      </tr>
-                    ) : (
-                      students.map((s, idx) => {
-                        const rec = attendanceRecords[s.id];
-                        return (
-                          <tr key={s.id}>
-                            <td className="am-td-num">{idx + 1}</td>
-                            <td className="am-td-name">
-                              {s.lastName}, {s.firstName}
-                              {s.middleName ? ` ${s.middleName}` : ""}
-                            </td>
-                            <td className="am-td-center">{rec?.time ?? "—"}</td>
-                            <td className="am-td-center">
-                              {rec ? (
-                                <span
-                                  className={`am-status-pill ${rec.status === "Present" ? "am-present" : "am-absent"}`}
-                                >
-                                  {rec.status}
-                                </span>
-                              ) : (
-                                <span className="am-status-pending">
-                                  Pending
-                                </span>
-                              )}
+              {!todayBlocked && !scheduleEnded && timeWindow === "before" && (
+                <div className="am-alert am-alert-info">
+                  <i className="fas fa-info-circle"></i> QR scanning will be
+                  enabled when the class period begins at{" "}
+                  <strong>{currentSchedule?.start}</strong>. You can view the
+                  roster while you wait.
+                </div>
+              )}
+
+              {!todayBlocked && !scheduleEnded && timeWindow === "after" && (
+                <div className="am-alert am-alert-warning">
+                  <i className="fas fa-exclamation-triangle"></i> The class
+                  period has ended. Scanning is locked. Use{" "}
+                  <strong>Close Attendance</strong> to finalise and mark absent
+                  students.
+                </div>
+              )}
+
+              {/* 7 PM daily-reset banner */}
+              {!todayBlocked && timeWindow === "reset" && (
+                <div className="am-alert am-alert-reset">
+                  <i className="fas fa-moon"></i> It's past 7:00 PM. Today's
+                  attendance records have been cleared from the display to
+                  prepare for the next school day. All records are safely saved
+                  in the system.
+                </div>
+              )}
+
+              {/* Loading records spinner */}
+              {loadingRecords ? (
+                <div className="am-loading" style={{ padding: "30px" }}>
+                  <i className="fas fa-spinner fa-spin"></i> Loading today's
+                  attendance records…
+                </div>
+              ) : (
+                <>
+                  <div className="am-table-wrap">
+                    <table className="am-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Student Name</th>
+                          <th>Time In</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {students.length === 0 ? (
+                          <tr>
+                            <td colSpan="4" className="am-td-empty">
+                              No students enrolled in this section.
                             </td>
                           </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                        ) : (
+                          students.map((s, idx) => {
+                            const rec = attendanceRecords[s.id];
+                            return (
+                              <tr key={s.id}>
+                                <td className="am-td-num">{idx + 1}</td>
+                                <td className="am-td-name">
+                                  {s.lastName}, {s.firstName}
+                                  {s.middleName ? ` ${s.middleName}` : ""}
+                                </td>
+                                <td className="am-td-center">
+                                  {rec?.time ?? "—"}
+                                </td>
+                                <td className="am-td-center">
+                                  {rec ? (
+                                    <span
+                                      className={`am-status-pill ${
+                                        rec.status === "Present"
+                                          ? "am-present"
+                                          : "am-absent"
+                                      }`}
+                                    >
+                                      {rec.status}
+                                    </span>
+                                  ) : (
+                                    <span className="am-status-pending">
+                                      Pending
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
 
-              {/* Summary bar */}
-              {students.length > 0 && (
-                <div className="am-summary">
-                  <span className="am-sum-present">
-                    <i className="fas fa-check-circle"></i> Present:{" "}
-                    {
-                      Object.values(attendanceRecords).filter(
-                        (r) => r.status === "Present",
-                      ).length
-                    }
-                  </span>
-                  <span className="am-sum-absent">
-                    <i className="fas fa-times-circle"></i> Absent:{" "}
-                    {
-                      Object.values(attendanceRecords).filter(
-                        (r) => r.status === "Absent",
-                      ).length
-                    }
-                  </span>
-                  <span className="am-sum-pending">
-                    <i className="fas fa-clock"></i> Pending:{" "}
-                    {students.length - Object.keys(attendanceRecords).length}
-                  </span>
-                </div>
+                  {/* Summary bar */}
+                  {students.length > 0 && (
+                    <div className="am-summary">
+                      <span className="am-sum-present">
+                        <i className="fas fa-check-circle"></i> Present:{" "}
+                        {
+                          Object.values(attendanceRecords).filter(
+                            (r) => r.status === "Present",
+                          ).length
+                        }
+                      </span>
+                      <span className="am-sum-absent">
+                        <i className="fas fa-times-circle"></i> Absent:{" "}
+                        {
+                          Object.values(attendanceRecords).filter(
+                            (r) => r.status === "Absent",
+                          ).length
+                        }
+                      </span>
+                      <span className="am-sum-pending">
+                        <i className="fas fa-clock"></i> Pending:{" "}
+                        {students.length -
+                          Object.keys(attendanceRecords).length}
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

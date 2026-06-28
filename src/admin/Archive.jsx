@@ -25,6 +25,8 @@ const formatDate = (val) => {
   return isNaN(d) ? "—" : d.toLocaleDateString();
 };
 
+const GRADE_LEVELS = [1, 2, 3, 4, 5, 6];
+
 // ── Toast component ───────────────────────────────────────────────────────────
 const Toast = ({ toast }) => {
   if (!toast) return null;
@@ -38,6 +40,79 @@ const Toast = ({ toast }) => {
   );
 };
 
+// ── Grade Picker Modal ────────────────────────────────────────────────────────
+const GradePickerModal = ({
+  open,
+  studentName,
+  currentGrade,
+  onSelect,
+  onCancel,
+}) => {
+  const [selected, setSelected] = useState(null);
+
+  // Reset selection whenever the modal opens for a new student
+  useEffect(() => {
+    if (open) setSelected(null);
+  }, [open, studentName]);
+
+  if (!open) return null;
+
+  return (
+    <div className="archive-modal-overlay" onClick={onCancel}>
+      <div
+        className="archive-modal archive-grade-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="archive-modal-header">
+          <i className="fas fa-user-graduate" style={{ color: "#8e44ad" }}></i>
+          <h3>Select Grade Level to Restore</h3>
+        </div>
+
+        <p className="archive-modal-message">
+          Choose the grade level <strong>{studentName}</strong> should be
+          restored to. The student was archived from{" "}
+          <strong>Grade {currentGrade}</strong>.
+        </p>
+
+        <div className="archive-grade-grid">
+          {GRADE_LEVELS.map((g) => (
+            <button
+              key={g}
+              className={`archive-grade-option${selected === g ? " selected" : ""}${g === currentGrade ? " original" : ""}`}
+              onClick={() => setSelected(g)}
+            >
+              <span className="archive-grade-num">Grade {g}</span>
+              {g === currentGrade && (
+                <span className="archive-grade-tag">Original</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {selected && (
+          <p className="archive-grade-confirm-hint">
+            <i className="fas fa-info-circle"></i> Student will be restored to{" "}
+            <strong>Grade {selected}</strong>.
+          </p>
+        )}
+
+        <div className="archive-modal-actions">
+          <button className="archive-modal-cancel" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            className="archive-modal-confirm"
+            disabled={selected === null}
+            onClick={() => onSelect(selected)}
+          >
+            <i className="fas fa-arrow-right"></i> Continue
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 const Archive = () => {
   const [filter, setFilter] = useState("students");
@@ -45,7 +120,16 @@ const Archive = () => {
   const [students, setStudents] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // For teachers: direct confirm modal target
   const [confirmTarget, setConfirmTarget] = useState(null); // { type, id, name }
+
+  // For students: two-step flow
+  // Step 1 — grade picker
+  const [gradePickerTarget, setGradePickerTarget] = useState(null); // { id, name, currentGrade }
+  // Step 2 — confirmation after grade is chosen
+  const [studentConfirmTarget, setStudentConfirmTarget] = useState(null); // { id, name, targetGrade }
+
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -76,35 +160,63 @@ const Archive = () => {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // ── unarchive ──────────────────────────────────────────────────────────────
-  const handleUnarchiveClick = (type, id, name) =>
-    setConfirmTarget({ type, id, name });
+  // ── unarchive: student — step 1: open grade picker ─────────────────────────
+  const handleStudentUnarchiveClick = (id, name, currentGrade) => {
+    setGradePickerTarget({ id, name, currentGrade });
+  };
 
-  const handleConfirm = async () => {
+  // ── unarchive: student — step 2: grade chosen → open confirm modal ─────────
+  const handleGradeSelected = (targetGrade) => {
+    if (!gradePickerTarget) return;
+    setStudentConfirmTarget({
+      id: gradePickerTarget.id,
+      name: gradePickerTarget.name,
+      targetGrade,
+    });
+    setGradePickerTarget(null);
+  };
+
+  // ── unarchive: student — step 3: confirmed → run API ──────────────────────
+  const handleStudentConfirm = async () => {
+    if (!studentConfirmTarget || processing) return;
+    setProcessing(true);
+    try {
+      await unarchiveStudent(
+        studentConfirmTarget.id,
+        studentConfirmTarget.targetGrade,
+      );
+      showToast(
+        `${studentConfirmTarget.name} has been restored to Grade ${studentConfirmTarget.targetGrade} in Manage Students.`,
+      );
+      setStudents((prev) =>
+        prev.filter((r) => r.student.id !== studentConfirmTarget.id),
+      );
+      setStudentConfirmTarget(null);
+    } catch (e) {
+      console.error("Unarchive error:", e);
+      showToast(e.message || "Failed to unarchive student.", true);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // ── unarchive: teacher ─────────────────────────────────────────────────────
+  const handleTeacherUnarchiveClick = (id, name) =>
+    setConfirmTarget({ type: "teacher", id, name });
+
+  const handleTeacherConfirm = async () => {
     if (!confirmTarget || processing) return;
     setProcessing(true);
     try {
-      if (confirmTarget.type === "student") {
-        await unarchiveStudent(confirmTarget.id);
-        showToast(
-          `${confirmTarget.name} has been restored to Manage Students.`,
-        );
-        setStudents((prev) =>
-          prev.filter((r) => r.student.id !== confirmTarget.id),
-        );
-      } else {
-        await unarchiveTeacher(confirmTarget.id);
-        showToast(
-          `${confirmTarget.name} has been restored to Manage Teachers.`,
-        );
-        setTeachers((prev) =>
-          prev.filter((r) => r.teacher.id !== confirmTarget.id),
-        );
-      }
+      await unarchiveTeacher(confirmTarget.id);
+      showToast(`${confirmTarget.name} has been restored to Manage Teachers.`);
+      setTeachers((prev) =>
+        prev.filter((r) => r.teacher.id !== confirmTarget.id),
+      );
       setConfirmTarget(null);
     } catch (e) {
       console.error("Unarchive error:", e);
-      showToast(e.message || "Failed to unarchive record.", true);
+      showToast(e.message || "Failed to unarchive teacher.", true);
     } finally {
       setProcessing(false);
     }
@@ -278,10 +390,10 @@ const Archive = () => {
                       <button
                         className="archive-unarchive-btn"
                         onClick={() =>
-                          handleUnarchiveClick(
-                            "student",
+                          handleStudentUnarchiveClick(
                             student.id,
                             fullStudentName(student),
+                            student.grade,
                           )
                         }
                       >
@@ -355,8 +467,7 @@ const Archive = () => {
                       <button
                         className="archive-unarchive-btn"
                         onClick={() =>
-                          handleUnarchiveClick(
-                            "teacher",
+                          handleTeacherUnarchiveClick(
                             teacher.id,
                             fullTeacherName(teacher),
                           )
@@ -373,22 +484,52 @@ const Archive = () => {
         )}
       </div>
 
-      {/* Confirm modal — uses real ConfirmModal now that we know the API */}
+      {/* ── Step 1: Grade picker for students ── */}
+      <GradePickerModal
+        open={!!gradePickerTarget}
+        studentName={gradePickerTarget?.name}
+        currentGrade={gradePickerTarget?.currentGrade}
+        onSelect={handleGradeSelected}
+        onCancel={() => setGradePickerTarget(null)}
+      />
+
+      {/* ── Step 2: Confirm unarchive for students (after grade chosen) ── */}
       <ConfirmModal
-        open={!!confirmTarget}
-        title={`Unarchive ${confirmTarget?.type === "student" ? "Student" : "Teacher"}`}
+        open={!!studentConfirmTarget}
+        title="Unarchive Student"
         titleIcon="fa-undo"
         titleColor="#2ecc71"
-        message={
-          confirmTarget?.type === "student"
-            ? `Restore ${confirmTarget?.name} back to Manage Students at their current grade level? Their parent account will also be reactivated if it exists.`
-            : `Restore ${confirmTarget?.name} back to Manage Teachers? Their teacher account will also be reactivated.`
-        }
+        message={`Restore ${studentConfirmTarget?.name} back to Manage Students at Grade ${studentConfirmTarget?.targetGrade}? Their parent account will also be reactivated if it exists.`}
+        confirmText={processing ? "Restoring…" : "Yes, Unarchive"}
+        cancelText="Back"
+        confirmColor="success"
+        disabled={processing}
+        onConfirm={handleStudentConfirm}
+        onCancel={() => {
+          if (!processing) {
+            // Go back to grade picker instead of fully closing
+            setGradePickerTarget({
+              id: studentConfirmTarget.id,
+              name: studentConfirmTarget.name,
+              currentGrade: studentConfirmTarget.targetGrade,
+            });
+            setStudentConfirmTarget(null);
+          }
+        }}
+      />
+
+      {/* ── Confirm unarchive for teachers ── */}
+      <ConfirmModal
+        open={!!confirmTarget}
+        title="Unarchive Teacher"
+        titleIcon="fa-undo"
+        titleColor="#2ecc71"
+        message={`Restore ${confirmTarget?.name} back to Manage Teachers? Their teacher account will also be reactivated.`}
         confirmText={processing ? "Restoring…" : "Yes, Unarchive"}
         cancelText="Cancel"
         confirmColor="success"
         disabled={processing}
-        onConfirm={handleConfirm}
+        onConfirm={handleTeacherConfirm}
         onCancel={() => {
           if (!processing) setConfirmTarget(null);
         }}

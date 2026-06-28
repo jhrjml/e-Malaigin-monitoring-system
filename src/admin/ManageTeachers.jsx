@@ -30,6 +30,22 @@ const TIME_SLOTS = [
   { value: "17:00-18:00", label: "5:00 PM – 6:00 PM" },
 ];
 
+// ── Advisory options (single source of truth) ─────────────────────────────────
+const ADVISORY_OPTIONS = [
+  "Grade 1 - Section A",
+  "Grade 1 - Section B",
+  "Grade 2 - Section A",
+  "Grade 2 - Section B",
+  "Grade 3 - Section A",
+  "Grade 3 - Section B",
+  "Grade 4 - Section A",
+  "Grade 4 - Section B",
+  "Grade 5 - Section A",
+  "Grade 5 - Section B",
+  "Grade 6 - Section A",
+  "Grade 6 - Section B",
+];
+
 const slotLabel = (value) =>
   TIME_SLOTS.find((s) => s.value === value)?.label ?? value ?? "—";
 
@@ -258,12 +274,15 @@ function ManageTeachers() {
   // ── BATCH IMPORT ─────────────────────────────────────────────────────────
 
   const downloadTemplate = () => {
+    const wb = XLSX.utils.book_new();
+
+    // ── Sheet 1: Template (data entry sheet) ──────────────────────────────
     const headers = [
       [
         "First Name",
         "Middle Name",
         "Last Name",
-        "Advisory Class (leave blank if Subject Teacher)",
+        "Advisory Class",
         "Contact (11 digits — format as Text)",
         "Email Address",
       ],
@@ -273,12 +292,41 @@ function ManageTeachers() {
       { wch: 16 },
       { wch: 16 },
       { wch: 16 },
-      { wch: 36 },
+      { wch: 28 },
       { wch: 30 },
       { wch: 28 },
     ];
-    const wb = XLSX.utils.book_new();
+
+    // ── Sheet 2: Hidden lookup list for the dropdown ───────────────────────
+    const lookupData = [
+      ["Advisory Options"],
+      ...ADVISORY_OPTIONS.map((o) => [o]),
+    ];
+    const wsLookup = XLSX.utils.aoa_to_sheet(lookupData);
+
     XLSX.utils.book_append_sheet(wb, ws, "Teachers");
+    XLSX.utils.book_append_sheet(wb, wsLookup, "_AdvisoryList");
+
+    // ── Data validation: dropdown on column D (Advisory Class) ────────────
+    // Rows 2–200 (index 1–199) → D2:D200
+    // Uses a formula reference to the hidden sheet so the list is dynamic.
+    if (!ws["!dataValidation"]) ws["!dataValidation"] = [];
+    ws["!dataValidation"].push({
+      sqref: "D2:D200",
+      type: "list",
+      formula1: "_AdvisoryList!$A$2:$A$13",
+      showDropDown: false, // false = show the arrow (Excel's counter-intuitive naming)
+      showErrorMessage: true,
+      errorTitle: "Invalid Advisory Class",
+      error:
+        "Please select a valid advisory class from the dropdown list, or leave blank for Subject Teacher.",
+      errorStyle: "warning",
+      showInputMessage: true,
+      promptTitle: "Advisory Class",
+      prompt:
+        "Select from the dropdown, or leave blank if this is a Subject Teacher.",
+    });
+
     XLSX.writeFile(wb, "Teachers_Template.xlsx");
   };
 
@@ -303,6 +351,17 @@ function ManageTeachers() {
 
         const baseCount = teachers.length;
 
+        // ── Collect advisories already taken in the existing DB list ────────
+        // (teachers state is already loaded; we use it for fast in-memory check)
+        const takenAdvisoriesInDb = new Set(
+          teachers
+            .map((t) => (t.advisory || "").trim().toLowerCase())
+            .filter(Boolean),
+        );
+
+        // ── Track advisories seen so far within this batch ──────────────────
+        const advisorySeenInBatch = new Map(); // normalised → row number (1-based)
+
         const parsed = rows.map((r, i) => {
           const fname = String(r[0] || "").trim();
           const mname = String(r[1] || "").trim();
@@ -324,6 +383,38 @@ function ManageTeachers() {
           if (!/^\d{11}$/.test(contact)) errs.push("Contact must be 11 digits");
           if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
             errs.push("Invalid email");
+
+          // Advisory validations (only when an advisory is provided)
+          if (advisory) {
+            const normAdvisory = advisory.toLowerCase();
+
+            // 1. Must be one of the recognised advisory options
+            const isValidOption = ADVISORY_OPTIONS.some(
+              (o) => o.toLowerCase() === normAdvisory,
+            );
+            if (!isValidOption) {
+              errs.push(`"${advisory}" is not a valid advisory class`);
+            } else {
+              // 2. Already assigned to an existing teacher in the DB
+              if (takenAdvisoriesInDb.has(normAdvisory)) {
+                errs.push(
+                  `${advisory} is already assigned to an existing teacher`,
+                );
+              }
+
+              // 3. Duplicate advisory within this import batch
+              if (advisorySeenInBatch.has(normAdvisory)) {
+                errs.push(
+                  `${advisory} is already used by Row ${advisorySeenInBatch.get(normAdvisory)} in this file`,
+                );
+              } else {
+                // Only register it if it passed the DB check (avoids cascading dup errors)
+                if (!takenAdvisoriesInDb.has(normAdvisory)) {
+                  advisorySeenInBatch.set(normAdvisory, i + 2); // row number (header = 1)
+                }
+              }
+            }
+          }
 
           return {
             row: i + 2,
@@ -467,7 +558,7 @@ function ManageTeachers() {
                     >
                       <i
                         className="fas fa-user-plus"
-                        style={{ color: "#3498db" }}
+                        style={{ color: "#a65f81" }}
                       ></i>
                       Add Teacher Manually
                     </button>
@@ -598,7 +689,7 @@ function ManageTeachers() {
                   <label>
                     Employee ID{" "}
                     {!isEditing && (
-                      <small style={{ color: "#3498db" }}>
+                      <small style={{ color: "#a65f81" }}>
                         (auto-generated)
                       </small>
                     )}
@@ -645,20 +736,7 @@ function ManageTeachers() {
                     onChange={handleChange}
                   >
                     <option value="">-- Subject Teacher --</option>
-                    {[
-                      "Grade 1 - Section A",
-                      "Grade 1 - Section B",
-                      "Grade 2 - Section A",
-                      "Grade 2 - Section B",
-                      "Grade 3 - Section A",
-                      "Grade 3 - Section B",
-                      "Grade 4 - Section A",
-                      "Grade 4 - Section B",
-                      "Grade 5 - Section A",
-                      "Grade 5 - Section B",
-                      "Grade 6 - Section A",
-                      "Grade 6 - Section B",
-                    ].map((o) => (
+                    {ADVISORY_OPTIONS.map((o) => (
                       <option key={o}>{o}</option>
                     ))}
                   </select>
@@ -861,8 +939,8 @@ function ManageTeachers() {
                           <th>Emp ID (Auto)</th>
                           <th>First Name</th>
                           <th>Last Name</th>
+                          <th>Advisory</th>
                           <th>Contact</th>
-                          <th>Email</th>
                           <th>Status</th>
                         </tr>
                       </thead>
@@ -875,13 +953,35 @@ function ManageTeachers() {
                             }}
                           >
                             <td>{r.row}</td>
-                            <td style={{ color: "#3498db", fontWeight: 600 }}>
+                            <td style={{ color: "#a65f81", fontWeight: 600 }}>
                               {r.empId}
                             </td>
                             <td>{r.fname}</td>
                             <td>{r.lname}</td>
+                            <td>
+                              {r.advisory ? (
+                                <span
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    background: "#eaf4fb",
+                                    color: "#2980b9",
+                                    padding: "2px 8px",
+                                    borderRadius: "12px",
+                                    fontWeight: 600,
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {r.advisory}
+                                </span>
+                              ) : (
+                                <span
+                                  style={{ color: "#aaa", fontSize: "0.75rem" }}
+                                >
+                                  Subject Teacher
+                                </span>
+                              )}
+                            </td>
                             <td>{r.contact}</td>
-                            <td>{r.email}</td>
                             <td>
                               {r.errs.length === 0 ? (
                                 <span
@@ -896,7 +996,7 @@ function ManageTeachers() {
                                     fontSize: "0.75rem",
                                   }}
                                 >
-                                  {r.errs.join(", ")}
+                                  {r.errs.join("; ")}
                                 </span>
                               )}
                             </td>

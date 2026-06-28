@@ -6,7 +6,6 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  padding: 30px;
   background: #f4f6f8;
   min-height: 100vh;
   box-sizing: border-box;
@@ -87,6 +86,7 @@
   gap: 16px;
   margin-bottom: 20px;
   flex-wrap: wrap;
+  justify-content: space-between;
 }
 
 .archive-filter-group {
@@ -108,12 +108,12 @@
   transition: all 0.18s;
 }
 .archive-filter-btn:hover {
-  border-color: #3498db;
-  color: #3498db;
+  border-color: #a65f81;
+  color: #a65f81;
 }
 .archive-filter-btn.active {
-  background: #3498db;
-  border-color: #3498db;
+  background: #a65f81;
+  border-color: #a65f81;
   color: #fff;
 }
 .archive-badge {
@@ -156,7 +156,7 @@
   box-sizing: border-box;
 }
 .archive-search:focus {
-  border-color: #3498db;
+  border-color: #a65f81;
 }
 .archive-search-clear {
   position: absolute;
@@ -413,7 +413,7 @@
   color: #2c3e50;
 }
 .archive-account-info i {
-  color: #3498db;
+  color: #a65f81;
 }
 .archive-no-account {
   font-size: 0.78rem;
@@ -475,4 +475,101 @@
   .archive-search-wrap {
     max-width: 100%;
   }
+}
+
+/* ── Grade Picker Modal ──────────────────────────────────────────────────────── */
+.archive-grade-modal {
+  width: 460px;
+}
+
+.archive-grade-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.archive-grade-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 14px 10px;
+  border: 2px solid #dde1e7;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.17s;
+  position: relative;
+}
+
+.archive-grade-option:hover {
+  border-color: #8e44ad;
+  background: #f9f0ff;
+}
+
+.archive-grade-option.selected {
+  border-color: #8e44ad;
+  background: #f3e5ff;
+  box-shadow: 0 0 0 3px rgba(142, 68, 173, 0.15);
+}
+
+.archive-grade-option.original {
+  border-color: #aab8c2;
+}
+
+.archive-grade-option.original.selected {
+  border-color: #8e44ad;
+}
+
+.archive-grade-num {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+.archive-grade-option.selected .archive-grade-num {
+  color: #6c2fa0;
+}
+
+.archive-grade-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #7f8c8d;
+  background: #eef0f2;
+  padding: 1px 7px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.archive-grade-option.selected .archive-grade-tag {
+  background: #e0c8f8;
+  color: #6c2fa0;
+}
+
+.archive-grade-confirm-hint {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.82rem;
+  color: #6c2fa0;
+  background: #f3e5ff;
+  border: 1px solid #d7b3f5;
+  border-radius: 7px;
+  padding: 8px 12px;
+  margin: 0 0 20px;
+}
+
+.archive-grade-confirm-hint i {
+  flex-shrink: 0;
+  color: #8e44ad;
+}
+
+/* Disable the Continue button until a grade is selected */
+.archive-modal-confirm:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  opacity: 1;
 }

@@ -1,6 +1,6 @@
 :root {
   --primary: #2c3e50; /* Deep Blue */
-  --accent: #3498db; /* Bright Blue */
+  --accent: #a65f81;
   --success: #2ecc71; /* Green */
   --danger: #e74c3c; /* Red */
   --warning: #f1c40f; /* Yellow */
@@ -151,29 +151,39 @@
   padding: 6px 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center; /* 🎯 Forces title text wrapper to exact center structural axis */
+  position: relative; /* ⚓ CRITICAL: Anchors the absolute positioned logo inside this box */
+  min-height: 44px; /* Gives ample breathing space for the 32px high logo content */
 }
+
 .id-card-topbar.small {
   padding: 5px 10px;
+  display: flex;
+  align-items: center;
   justify-content: center;
+  position: relative; /* Retain relative context for alternative state variant rules */
 }
 
 /* Logo is masked into a perfect circle so none of the source image's
    square background shows around the mark. */
 .id-card-logo {
-  width: 32px;
   height: 32px;
+  width: 32px; /* 🛠️ Explicit matching width ensures square dimension aspect ratio for perfect circle clip */
   flex-shrink: 0;
   border-radius: 50%;
   object-fit: cover;
   object-position: center;
   background: white;
+
+  position: absolute; /* 🚀 Pops element out of flex formatting context flow */
+  left: 12px; /* 📌 Pin it neatly to the left wall matching parent layout padding */
 }
 
 .id-card-titles {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  text-align: center; /* Centers multi-line layout string splits if school name wraps */
 }
 .id-card-school {
   display: block;

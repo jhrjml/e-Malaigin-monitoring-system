@@ -172,7 +172,7 @@ function AdminHomepage() {
             className={activePage === "dashboard" ? "active" : ""}
             onClick={() => navigate("dashboard")}
           >
-            <i className="fas fa-home"></i> <span>Home</span>
+            <i className="fas fa-chart-pie"></i> <span>Dashborad</span>
           </li>
           <li
             className={activePage === "students" ? "active" : ""}

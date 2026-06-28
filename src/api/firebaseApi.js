@@ -1041,16 +1041,28 @@ export async function getArchivedTeachers() {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
- * unarchiveStudent(studentId)
+ * unarchiveStudent(studentId, targetGrade)
  * - Sets student.archived = false, clears archivedAt.
- * - Grade level is preserved exactly as-is (no change needed).
+ * - Updates student.grade to the admin-chosen targetGrade (1–6).
  * - Finds the linked parent User and sets status back to "Active",
  *   clearing deactivatedAt so the 90-day countdown resets.
+ *
+ * @param {string} studentId  - Firestore document ID of the Student record.
+ * @param {number} targetGrade - Grade level (1–6) chosen by the admin in the
+ *                               Archive UI before confirming the restore.
  */
-export async function unarchiveStudent(studentId) {
+export async function unarchiveStudent(studentId, targetGrade) {
+  if (!targetGrade || targetGrade < 1 || targetGrade > 6) {
+    throw new Error(
+      "A valid grade level (1–6) is required to restore a student.",
+    );
+  }
+
+  // Restore the student record with the admin-chosen grade level
   await updateDoc(doc(db, "Student", studentId), {
     archived: false,
     archivedAt: null,
+    grade: targetGrade,
   });
 
   // Reactivate the parent user account if it exists and was deactivated

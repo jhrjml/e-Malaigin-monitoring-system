@@ -166,7 +166,7 @@ function ManageUsers() {
             <div className="view-section">
               <div className="toolbar">
                 <button
-                  className="btn-back"
+                  className="btn-back-mu"
                   onClick={() => setCurrentView("categories")}
                 >
                   <i className="fas fa-arrow-left"></i> Back to Categories
@@ -388,7 +388,7 @@ function ManageUsers() {
                                   className="fas fa-user-graduate"
                                   style={{
                                     marginRight: "6px",
-                                    color: "#3498db",
+                                    color: "#a65f81",
                                   }}
                                 ></i>
                                 <strong>

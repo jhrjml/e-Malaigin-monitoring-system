@@ -11,6 +11,7 @@ import ConfirmModal from "../common/ConfirmModal";
 import Toast from "../common/Toast";
 import { useToast } from "../common/useToast.js";
 import "./ManageStudents.css";
+import "../Layout.css";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 
 function ManageStudents() {
@@ -493,7 +494,7 @@ function ManageStudents() {
       {view === "students" && (
         <div className="view-section">
           <div className="toolbar">
-            <button className="btn-back" onClick={backToGrades}>
+            <button className="btn-back-ms" onClick={backToGrades}>
               <i className="fas fa-arrow-left"></i> Back
             </button>
             <h3 style={{ marginLeft: "15px" }}>Grade {selectedGrade} List</h3>
@@ -546,7 +547,7 @@ function ManageStudents() {
                     >
                       <i
                         className="fas fa-user-plus"
-                        style={{ color: "#3498db" }}
+                        style={{ color: "#a65f81" }}
                       ></i>
                       Add Student Manually
                     </button>

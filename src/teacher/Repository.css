@@ -1,7 +1,7 @@
 /* --- CORE VARIABLES --- */
 :root {
   --primary: #2c3e50; /* Deep Blue */
-  --accent: #3498db; /* Bright Blue */
+  --accent: #a65f81;
   --success: #2ecc71; /* Green */
   --danger: #e74c3c; /* Red */
   --warning: #f1c40f; /* Yellow */
@@ -103,20 +103,18 @@
   color: var(--primary);
 }
 
-.btn-back {
-  background: var(--gray);
-  color: white;
+.btn-back-rep {
+  background: transparent;
+  color: rgb(0, 0, 0);
   border: none;
-  padding: 8px 25px;
+  padding: 8px 20px;
   border-radius: 5px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-weight: 500;
-}
-.btn-back i {
-  margin-right: 5px;
+  gap: 12px;
+  font-size: x-large;
+  font-weight: bold;
 }
 
 /* Download PDF button, sits top-right of the toolbar on the list view */

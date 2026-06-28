@@ -1,7 +1,7 @@
 /* ── AttendanceMonitoring.css ── */
 :root {
   --am-primary: #2c3e50;
-  --am-accent: #3498db;
+  --am-accent: #a65f81;
   --am-success: #2ecc71;
   --am-danger: #e74c3c;
   --am-warning: #f39c12;
@@ -22,7 +22,6 @@
 }
 .am-container {
   max-width: 1200px;
-  margin: 0 auto;
 }
 .am-view {
   animation: amFadeIn 0.25s ease;
@@ -82,7 +81,7 @@
 }
 
 /* Back button */
-.am-btn-back {
+.btn-back {
   background: var(--am-gray);
   color: #fff;
   border: none;
@@ -94,8 +93,9 @@
   align-items: center;
   gap: 8px;
   transition: 0.2s;
+  font-size: 0.875rem;
 }
-.am-btn-back:hover {
+.btn-back:hover {
   background: #7f8c8d;
 }
 
@@ -161,6 +161,11 @@
   color: var(--am-purple);
   border: 1px solid var(--am-purple);
 }
+.am-badge-reset {
+  background: rgba(44, 62, 80, 0.08);
+  color: var(--am-primary);
+  border: 1px solid #aab7c4;
+}
 
 /* Alerts */
 .am-alert {
@@ -181,6 +186,11 @@
   background: rgba(52, 152, 219, 0.08);
   border: 1px solid var(--am-accent);
   color: var(--am-accent);
+}
+.am-alert-reset {
+  background: rgba(44, 62, 80, 0.05);
+  border: 1px solid #aab7c4;
+  color: var(--am-primary);
 }
 
 /* Combined class-picker grid */
@@ -277,7 +287,6 @@
 .am-table tbody tr:hover {
   background: #fafbfc;
 }
-
 .am-td-num {
   width: 40px;
   color: var(--am-gray);

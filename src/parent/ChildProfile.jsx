@@ -284,7 +284,7 @@ const ChildProfile = () => {
         <main className="main-content">
           <div className="page-container">
             <p
-              style={{ padding: "30px", textAlign: "center", color: "#3498db" }}
+              style={{ padding: "30px", textAlign: "center", color: "#a65f81" }}
             >
               Loading child profile…
             </p>

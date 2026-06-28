@@ -273,7 +273,7 @@ function Repository() {
       <main className="main-content">
         <div className="page-container">
           {loading && (
-            <p style={{ padding: "10px", color: "#3498db" }}>Loading…</p>
+            <p style={{ padding: "10px", color: "#a65f81" }}>Loading…</p>
           )}
 
           {currentView === "load" && (
@@ -328,7 +328,7 @@ function Repository() {
                 style={{ flexWrap: "wrap", gap: "10px" }}
               >
                 <button
-                  className="btn-back"
+                  className="btn-back-rep"
                   onClick={() => setCurrentView("load")}
                 >
                   <i className="fas fa-arrow-left"></i> Back
@@ -392,7 +392,7 @@ function Repository() {
                 style={{ flexWrap: "wrap", gap: "10px" }}
               >
                 <button
-                  className="btn-back"
+                  className="btn-back-rep"
                   onClick={() => setCurrentView("month")}
                 >
                   <i className="fas fa-arrow-left"></i> Back to Months

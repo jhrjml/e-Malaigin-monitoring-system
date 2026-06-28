@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../api/firebase";
 import {
@@ -18,7 +18,6 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import Repository from "./Repository";
-import Classes from "./Classes";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./TeacherDashboard.css";
 import "../Layout.css";
@@ -31,20 +30,38 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 const titleMap = {
   dashboard: "Overview",
   repository: "Attendance Repository",
-  classes: "My Classes",
   attendance: "Attendance Monitoring",
   reminding: "Classwork Reminder",
 };
 
+// ── School year runs June → March (PH DepEd calendar). ───────────────────
+function currentMonthId() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function getSchoolYearMonths() {
+  const now = new Date();
+  const startYear =
+    now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;
+  const months = [];
+  for (let i = 0; i < 10; i++) {
+    const d = new Date(startYear, 5 + i, 1);
+    months.push({
+      id: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      name: d.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+    });
+  }
+  return months;
+}
+
 // ── Shared helper — every grade+section+subject this teacher is scheduled
-// for, deduped (mirrors the same dedup ClassworkReminding.jsx's loadOptions
-// already does, since Classwork docs don't carry a teacherId of their own —
-// the only place that link exists is the Schedule collection). ──────────────
+// for, deduped. ────────────────────────────────────────────────────────────
 async function getTeacherCombos(teacherId) {
   const schedSnap = await getDocs(
     query(collection(db, "Schedule"), where("teacherId", "==", teacherId)),
   );
-  const map = new Map(); // "grade|||section|||subject" -> { grade, section, subject }
+  const map = new Map();
   schedSnap.docs.forEach((d) => {
     const data = d.data();
     const key = `${data.grade}|||${data.section}|||${data.subject}`;
@@ -69,7 +86,6 @@ function TeacherHomepage() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef(null);
 
-  // ── Persist activePage across refresh ──────────────────────────────────
   const [activePage, setActivePage] = useState(
     () => localStorage.getItem("teacherPage") || "dashboard",
   );
@@ -77,8 +93,17 @@ function TeacherHomepage() {
     () => titleMap[localStorage.getItem("teacherPage")] || "Overview",
   );
 
-  // ── Resolve this teacher's Teacher-collection id (for queries below) ────
   const [teacherId, setTeacherId] = useState(null);
+  const [focusClasswork, setFocusClasswork] = useState(null);
+
+  const rawFullName = localStorage.getItem("fullName") || "";
+  const teacherFirstName = (() => {
+    if (!rawFullName) return "Teacher";
+    const afterComma = rawFullName.includes(",")
+      ? rawFullName.split(",")[1].trim()
+      : rawFullName.trim();
+    return afterComma.split(" ")[0] || "Teacher";
+  })();
 
   useEffect(() => {
     const userId = localStorage.getItem("userId");
@@ -89,20 +114,6 @@ function TeacherHomepage() {
       })
       .catch((e) => console.error("Failed to resolve teacherId:", e));
   }, []);
-
-  // ── Clicked-reminder context, handed to ClassworkReminding so it can
-  // jump straight to that item's grading/detail view ──────────────────────
-  const [focusClasswork, setFocusClasswork] = useState(null);
-
-  // ── Read teacher name from localStorage ────────────────────────────────
-  const rawFullName = localStorage.getItem("fullName") || "";
-  const teacherFirstName = (() => {
-    if (!rawFullName) return "Teacher";
-    const afterComma = rawFullName.includes(",")
-      ? rawFullName.split(",")[1].trim()
-      : rawFullName.trim();
-    return afterComma.split(" ")[0] || "Teacher";
-  })();
 
   const toggleSidebar = () => {
     if (window.innerWidth > 768) {
@@ -149,7 +160,6 @@ function TeacherHomepage() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Close profile dropdown on outside click
   useEffect(() => {
     const handler = (e) => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(e.target))
@@ -178,8 +188,8 @@ function TeacherHomepage() {
             className={activePage === "dashboard" ? "active" : ""}
             onClick={() => navigate("dashboard")}
           >
-            <i className="fas fa-home"></i>
-            <span>Home</span>
+            <i className="fas fa-chart-pie"></i>
+            <span>Dashboard</span>
           </li>
           <li
             className={activePage === "repository" ? "active" : ""}
@@ -188,13 +198,7 @@ function TeacherHomepage() {
             <i className="fas fa-history"></i>
             <span>Attendance Repository</span>
           </li>
-          <li
-            className={activePage === "classes" ? "active" : ""}
-            onClick={() => navigate("classes")}
-          >
-            <i className="fas fa-chalkboard"></i>
-            <span>My Classes</span>
-          </li>
+
           <li
             className={activePage === "attendance" ? "active" : ""}
             onClick={() => navigate("attendance")}
@@ -261,7 +265,6 @@ function TeacherHomepage() {
         </header>
 
         <div className="page-container">
-          {/* DASHBOARD */}
           {activePage === "dashboard" && (
             <>
               <div className="welcome-banner">
@@ -275,22 +278,14 @@ function TeacherHomepage() {
                 </div>
               </div>
 
-              <div className="th-overview-grid">
-                <ReminderPanel
-                  teacherId={teacherId}
-                  onOpenReminder={openReminder}
-                />
-
-                <div className="th-charts-col">
-                  <AttendanceChart teacherId={teacherId} />
-                  <ClassworkChart teacherId={teacherId} />
-                </div>
-              </div>
+              <TeacherDashboardOverview
+                teacherId={teacherId}
+                onOpenReminder={openReminder}
+              />
             </>
           )}
 
           {activePage === "repository" && <Repository />}
-          {activePage === "classes" && <Classes />}
           {activePage === "attendance" && <AttendanceMonitoring />}
           {activePage === "reminding" && (
             <ClassworkReminding
@@ -301,7 +296,6 @@ function TeacherHomepage() {
         </div>
       </main>
 
-      {/* LOGOUT MODAL */}
       {logoutOpen && (
         <div className="modal-overlay-teacher">
           <div className="modal-teacher logout-modal">
@@ -330,14 +324,54 @@ function TeacherHomepage() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// REMINDER PANEL — classwork/announcements this teacher has posted, pulled
-// per grade+section+subject combo (Classwork docs have no teacherId of
-// their own — see getTeacherCombos above).
-//
-// Visibility rules:
-//   - isAnnouncement === true → hidden once its date has passed.
-//   - everything else          → hidden once every currently-enrolled
-//     student in that grade+section has been marked Submitted/Missing.
+// DASHBOARD OVERVIEW — Reminder panel (left) + month-filtered charts (right)
+// ════════════════════════════════════════════════════════════════════════════
+
+function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
+  // Compute inside the component on every mount so the list and default are
+  // always based on today's actual date — not a stale module-level snapshot.
+  const schoolYearMonths = useMemo(() => getSchoolYearMonths(), []);
+
+  // Find the current month in the school-year list. If today falls outside
+  // the school-year window (e.g. it's April, after March end), fall back to
+  // the last month in the list so the chart always shows something useful.
+  const defaultMonth = useMemo(() => {
+    const current = currentMonthId();
+    const match = schoolYearMonths.find((m) => m.id === current);
+    return match ? match.id : schoolYearMonths[schoolYearMonths.length - 1].id;
+  }, [schoolYearMonths]);
+
+  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
+
+  return (
+    <div className="th-overview-grid">
+      <ReminderPanel teacherId={teacherId} onOpenReminder={onOpenReminder} />
+
+      <div className="th-charts-col">
+        {/* Month filter — sits above both charts, right-aligned */}
+        <div className="th-filter-row">
+          <select
+            className="th-month-select"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+          >
+            {schoolYearMonths.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <AttendanceChart teacherId={teacherId} monthId={selectedMonth} />
+        <ClassworkChart teacherId={teacherId} monthId={selectedMonth} />
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// REMINDER PANEL
 // ════════════════════════════════════════════════════════════════════════════
 
 function ReminderPanel({ teacherId, onOpenReminder }) {
@@ -356,7 +390,6 @@ function ReminderPanel({ teacherId, onOpenReminder }) {
       try {
         const combos = await getTeacherCombos(teacherId);
 
-        // 1. Pull Classwork for every combo this teacher teaches.
         const classworkLists = await Promise.all(
           combos.map((c) =>
             getDocs(
@@ -371,9 +404,7 @@ function ReminderPanel({ teacherId, onOpenReminder }) {
         );
         const items = classworkLists.flat();
 
-        // 2. Enrolled-student counts per grade+section (subject-agnostic),
-        // used to tell whether a non-announcement item is fully marked.
-        const gsMap = new Map(); // "grade|||section" -> { grade, section }
+        const gsMap = new Map();
         combos.forEach((c) => {
           const key = `${c.grade}|||${c.section}`;
           if (!gsMap.has(key))
@@ -395,22 +426,20 @@ function ReminderPanel({ teacherId, onOpenReminder }) {
           }),
         );
 
-        const today = new Date().toISOString().split("T")[0];
+        const now = new Date();
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
         const visible = items.filter((it) => {
           if (it.isAnnouncement) {
             return !it.date || it.date >= today;
           }
-
           const key = `${it.grade}|||${it.section}`;
           const enrolledCount = enrolledCounts[key] || 0;
           if (enrolledCount === 0) return true;
-
           const statusMap = it.studentStatus || {};
           const markedCount = Object.values(statusMap).filter(
             (s) => s === "Submitted" || s === "Missing",
           ).length;
-
           return markedCount < enrolledCount;
         });
 
@@ -491,15 +520,16 @@ function ReminderPanel({ teacherId, onOpenReminder }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ATTENDANCE CHART — Grouped bar chart showing Present vs. Absent
-// per class+subject combination this teacher handles.
+// ATTENDANCE CHART — Present vs. Absent per class+subject, filtered by month
 // ════════════════════════════════════════════════════════════════════════════
 
-function AttendanceChart({ teacherId }) {
+function AttendanceChart({ teacherId, monthId }) {
   const [loading, setLoading] = useState(true);
   const [perClass, setPerClass] = useState([]);
 
   useEffect(() => {
+    setPerClass([]);
+
     if (!teacherId) {
       setLoading(false);
       return;
@@ -559,7 +589,9 @@ function AttendanceChart({ teacherId }) {
                 ),
               );
               attSnap.docs.forEach((d) => {
-                const status = (d.data().status || "").toLowerCase();
+                const data = d.data();
+                if (!data.date || !data.date.startsWith(monthId)) return;
+                const status = (data.status || "").toLowerCase();
                 if (status === "present") present++;
                 else if (status === "absent") absent++;
               });
@@ -587,7 +619,7 @@ function AttendanceChart({ teacherId }) {
     return () => {
       cancelled = true;
     };
-  }, [teacherId]);
+  }, [teacherId, monthId]);
 
   const chartData = {
     labels: perClass.map((c) => c.label),
@@ -642,7 +674,7 @@ function AttendanceChart({ teacherId }) {
       y: {
         border: { display: false },
         grid: { color: "rgba(0,0,0,0.06)" },
-        ticks: { font: { size: 11 }, color: "#888" },
+        ticks: { font: { size: 11 }, color: "#888", precision: 0 },
       },
     },
   };
@@ -658,7 +690,7 @@ function AttendanceChart({ teacherId }) {
       {loading ? (
         <p className="th-panel-status">Loading…</p>
       ) : perClass.length === 0 ? (
-        <p className="th-panel-status">No attendance records yet.</p>
+        <p className="th-panel-status">No attendance records for this month.</p>
       ) : (
         <>
           <div className="th-chart-legend">
@@ -690,15 +722,16 @@ function AttendanceChart({ teacherId }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// CLASSWORK CHART — Grouped bar chart showing Submitted vs. Missing
-// per class+subject combination this teacher handles.
+// CLASSWORK CHART — Submitted vs. Missing per class+subject, filtered by month
 // ════════════════════════════════════════════════════════════════════════════
 
-function ClassworkChart({ teacherId }) {
+function ClassworkChart({ teacherId, monthId }) {
   const [loading, setLoading] = useState(true);
   const [perClass, setPerClass] = useState([]);
 
   useEffect(() => {
+    setPerClass([]);
+
     if (!teacherId) {
       setLoading(false);
       return;
@@ -731,6 +764,7 @@ function ClassworkChart({ teacherId }) {
         const groupMap = {};
         classworkLists.flat().forEach((data) => {
           if (data.isAnnouncement) return;
+          if (!data.date || !data.date.startsWith(monthId)) return;
           const key = data._comboKey;
           if (!groupMap[key]) groupMap[key] = { submitted: 0, missing: 0 };
           Object.values(data.studentStatus || {}).forEach((s) => {
@@ -755,7 +789,7 @@ function ClassworkChart({ teacherId }) {
     return () => {
       cancelled = true;
     };
-  }, [teacherId]);
+  }, [teacherId, monthId]);
 
   const chartData = {
     labels: perClass.map((c) => c.label),
@@ -810,7 +844,7 @@ function ClassworkChart({ teacherId }) {
       y: {
         border: { display: false },
         grid: { color: "rgba(0,0,0,0.06)" },
-        ticks: { font: { size: 11 }, color: "#888" },
+        ticks: { font: { size: 11 }, color: "#888", precision: 0 },
       },
     },
   };
@@ -826,7 +860,7 @@ function ClassworkChart({ teacherId }) {
       {loading ? (
         <p className="th-panel-status">Loading…</p>
       ) : perClass.length === 0 ? (
-        <p className="th-panel-status">No marked classwork yet.</p>
+        <p className="th-panel-status">No classwork records for this month.</p>
       ) : (
         <>
           <div className="th-chart-legend">

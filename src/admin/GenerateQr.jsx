@@ -163,7 +163,7 @@ const GenerateQR = () => {
               <div className="form-group-qr">
                 <label>Select Student (LRN)</label>
                 {loading ? (
-                  <p style={{ color: "#3498db", fontSize: "0.875rem" }}>
+                  <p style={{ color: "#a65f81", fontSize: "0.875rem" }}>
                     Loading students…
                   </p>
                 ) : availableStudents.length === 0 ? (
@@ -262,9 +262,6 @@ const GenerateQR = () => {
                         <span className="id-card-school">
                           MALAIG ELEMENTARY SCHOOL
                         </span>
-                        <span className="id-card-type">
-                          STUDENT IDENTIFICATION CARD
-                        </span>
                       </div>
                     </div>
                     <div className="id-card-body-front">
@@ -301,6 +298,11 @@ const GenerateQR = () => {
                   <span className="side-label">BACK</span>
                   <div id="id-card-back" className="id-card">
                     <div className="id-card-topbar small">
+                      <img
+                        src="/logo.jpg"
+                        alt="School Logo"
+                        className="id-card-logo"
+                      />
                       <span className="id-card-school">
                         MALAIG ELEMENTARY SCHOOL
                       </span>
