@@ -46,7 +46,7 @@ export default defineConfig({
 
         icons: [
           {
-            src: "/school-logo-192x192.png",
+            src: "/logo-192x192.png",
             sizes: "192x192",
             type: "image/png",
             purpose: "any ",
