@@ -651,8 +651,8 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                 <p className="cwr-ann-body">{activeCW.desc}</p>
                 <div className="cwr-ann-footer">
                   <i className="fas fa-info-circle"></i>
-                  This is a reminder/announcement for parents and students. No
-                  submission tracking is needed.
+                  This is a reminder/announcement for parents. No submission
+                  tracking is needed.
                 </div>
               </div>
             </div>
@@ -700,8 +700,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                 {newCW.title === "Announcement" && (
                   <div className="cwr-ann-hint">
                     <i className="fas fa-info-circle"></i> Announcements are
-                    visible to parents and students. No submission tracking will
-                    be created.
+                    visible to parents. No submission tracking will be created.
                   </div>
                 )}
 
@@ -720,7 +719,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                     }
                     placeholder={
                       newCW.title === "Announcement"
-                        ? "e.g. Please make your child wear his ID tomorrow."
+                        ? "Announcement Message"
                         : "Enter instructions or details…"
                     }
                   />
