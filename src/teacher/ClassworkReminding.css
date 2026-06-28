@@ -672,6 +672,46 @@
   gap: 5px;
 }
 
+/* ── Additions to ClassworkReminding.css ── */
+
+/* Loading spinner shown while fetching fresh marks */
+.cwr-loading-marks {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 20px;
+  color: #7f8c8d;
+  font-size: 0.95rem;
+}
+.cwr-loading-marks i {
+  font-size: 1.3rem;
+  color: #9b59b6;
+}
+
+/* Row tinting so already-marked students stand out at a glance */
+.cwr-table tbody tr.cwr-row-submitted {
+  background: rgba(46, 204, 113, 0.07);
+}
+.cwr-table tbody tr.cwr-row-missing {
+  background: rgba(231, 76, 60, 0.07);
+}
+
+/* Clear / undo button — small, neutral, only visible when a status is set */
+.cwr-toggle-btn.cwr-toggle-clear {
+  background: #f0f0f0;
+  color: #888;
+  border: 1.5px solid #ddd;
+  padding: 5px 9px;
+  margin-left: 4px;
+  font-size: 0.78rem;
+}
+.cwr-toggle-btn.cwr-toggle-clear:hover {
+  background: #e0e0e0;
+  color: #555;
+  border-color: #bbb;
+}
+
 @media (max-width: 600px) {
   .cwr-main {
     padding: 14px;

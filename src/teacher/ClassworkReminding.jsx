@@ -36,15 +36,7 @@ const TYPE_META = {
   Announcement: { icon: "fa-bullhorn", cls: "cwr-teal" },
 };
 
-// focusClasswork: a classwork object (from the Homepage's Reminder panel)
-//   to jump straight into, e.g. { id, grade, section, subject, isAnnouncement, ... }
-// onFocusConsumed: called once the jump has been handled, so the parent can
-//   clear the flag and avoid re-triggering it on a later visit.
 function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
-  // "load"         → combined Grade-Section-Subject picker
-  // "list"         → classwork / announcement list for chosen class
-  // "grading"      → per-student marking for a non-announcement task
-  // "detail"       → read-only detail view for an Announcement
   const [currentView, setCurrentView] = useState("load");
 
   const [classGrade, setClassGrade] = useState(null);
@@ -55,6 +47,9 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   const [students, setStudents] = useState([]);
   const [classworks, setClassworks] = useState([]);
   const [activeCW, setActiveCW] = useState(null);
+
+  // Tracks whether we're re-fetching the active CW from Firestore
+  const [loadingCW, setLoadingCW] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
   const [newCW, setNewCW] = useState({ title: "", desc: "", date: "" });
@@ -130,29 +125,34 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   }, [classGrade, classSection]);
 
   // ── 3. Load classworks when subject changes ──────────────────────────────
+  const loadClassworks = async (grade, section, subject) => {
+    try {
+      const snap = await getDocs(
+        query(
+          col("Classwork"),
+          where("grade", "==", grade),
+          where("section", "==", section),
+          where("subject", "==", subject),
+        ),
+      );
+      setClassworks(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.date || "").localeCompare(a.date || "")),
+      );
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   useEffect(() => {
     if (!classGrade || !classSection || !classSubject) return;
-    getDocs(
-      query(
-        col("Classwork"),
-        where("grade", "==", classGrade),
-        where("section", "==", classSection),
-        where("subject", "==", classSubject),
-      ),
-    )
-      .then((snap) =>
-        setClassworks(
-          snap.docs
-            .map((d) => ({ id: d.id, ...d.data() }))
-            .sort((a, b) => (b.date || "").localeCompare(a.date || "")),
-        ),
-      )
-      .catch(console.error);
+    loadClassworks(classGrade, classSection, classSubject);
   }, [classGrade, classSection, classSubject]);
 
-  // ── 4. Jump straight to a specific item, e.g. from the Homepage's
-  // Reminder panel — re-fetches the item fresh in case its status changed
-  // since the Homepage loaded it. ───────────────────────────────────────────
+  // ── 4. Jump straight to a specific item from the Homepage Reminder panel ─
+  // Always re-fetches the item fresh from Firestore so marks saved in any
+  // previous session are visible immediately.
   useEffect(() => {
     if (!focusClasswork) return;
     let cancelled = false;
@@ -229,7 +229,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
         section: classSection,
         subject: classSubject,
         isAnnouncement,
-        // Announcements have no per-student tracking
         studentStatus: isAnnouncement ? null : {},
         createdAt: new Date().toISOString(),
       };
@@ -249,9 +248,33 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   };
 
   // ── Open grading or detail view ──────────────────────────────────────────
-  const openCW = (cw) => {
-    setActiveCW({ ...cw });
-    setCurrentView(cw.isAnnouncement ? "detail" : "grading");
+  // Always re-fetches the document fresh from Firestore so that marks saved
+  // in any earlier session are immediately visible when the teacher opens it.
+  const openCW = async (cw) => {
+    if (cw.isAnnouncement) {
+      setActiveCW({ ...cw });
+      setCurrentView("detail");
+      return;
+    }
+
+    setLoadingCW(true);
+    setCurrentView("grading");
+    try {
+      const freshSnap = await getDoc(doc(db, "Classwork", cw.id));
+      const fresh = freshSnap.exists()
+        ? { id: cw.id, ...freshSnap.data() }
+        : { ...cw };
+      setActiveCW(fresh);
+      // Keep local list in sync so counts in the list view are correct too
+      setClassworks((prev) =>
+        prev.map((item) => (item.id === fresh.id ? fresh : item)),
+      );
+    } catch (e) {
+      console.error("Failed to refresh classwork:", e);
+      setActiveCW({ ...cw });
+    } finally {
+      setLoadingCW(false);
+    }
   };
 
   // ── Mark a student ───────────────────────────────────────────────────────
@@ -263,6 +286,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
         [studentId]: status,
       },
     };
+    // Update local state immediately for a snappy UI
     setActiveCW(updated);
     setClassworks((prev) =>
       prev.map((cw) =>
@@ -335,7 +359,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                         Grade {l.grade} – {l.section}
                       </h3>
                       <p className="cwr-card-sub">{l.subject}</p>
-                      {/* ⏰ Added Schedule Time Block */}
                       {l.start && l.end && (
                         <span className="cwr-card-time">
                           <i className="fas fa-clock"></i> {l.start} – {l.end}
@@ -441,7 +464,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
           )}
 
           {/* ── GRADING (non-announcement) ── */}
-          {currentView === "grading" && activeCW && (
+          {currentView === "grading" && (
             <div className="cwr-view">
               <div className="cwr-toolbar">
                 <button
@@ -451,88 +474,145 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                   <i className="fas fa-arrow-left"></i> Back
                 </button>
                 <div className="cwr-title-block">
-                  <h3>{activeCW.title}</h3>
+                  <h3>{activeCW?.title}</h3>
                   <small>
-                    {activeCW.desc && `${activeCW.desc} • `}
-                    Due: {activeCW.date || "—"} | Grade {classGrade} –{" "}
+                    {activeCW?.desc && `${activeCW.desc} • `}
+                    Due: {activeCW?.date || "—"} | Grade {classGrade} –{" "}
                     {classSection}
                   </small>
                 </div>
               </div>
 
-              <div className="cwr-grading-hint">
-                <i className="fas fa-info-circle"></i> Tap a button to set each
-                student's status.
-              </div>
-
-              <div className="cwr-table-wrap">
-                <table className="cwr-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Student Name</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {students.map((s, idx) => {
-                      const status = activeCW.studentStatus?.[s.id];
-                      return (
-                        <tr key={s.id}>
-                          <td className="cwr-td-num">{idx + 1}</td>
-                          <td className="cwr-td-name">
-                            {s.lastName}, {s.firstName}
-                            {s.middleName ? ` ${s.middleName}` : ""}
-                          </td>
-                          <td className="cwr-td-actions">
-                            <button
-                              className={`cwr-toggle-btn ${status === "Submitted" ? "cwr-toggle-sub" : ""}`}
-                              onClick={() => markStudent(s.id, "Submitted")}
-                            >
-                              <i className="fas fa-check"></i> Submitted
-                            </button>
-                            <button
-                              className={`cwr-toggle-btn ${status === "Missing" ? "cwr-toggle-miss" : ""}`}
-                              onClick={() => markStudent(s.id, "Missing")}
-                            >
-                              <i className="fas fa-times"></i> Missing
-                            </button>
-                            {!status && (
-                              <span className="cwr-not-set">Not set</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Quick stats footer */}
-              {students.length > 0 && (
-                <div className="cwr-grading-summary">
-                  <span className="cwr-gs-sub">
-                    <i className="fas fa-check-circle"></i> Submitted:{" "}
-                    {
-                      Object.values(activeCW.studentStatus || {}).filter(
-                        (s) => s === "Submitted",
-                      ).length
-                    }
-                  </span>
-                  <span className="cwr-gs-miss">
-                    <i className="fas fa-times-circle"></i> Missing:{" "}
-                    {
-                      Object.values(activeCW.studentStatus || {}).filter(
-                        (s) => s === "Missing",
-                      ).length
-                    }
-                  </span>
-                  <span className="cwr-gs-none">
-                    <i className="fas fa-circle"></i> Not set:{" "}
-                    {students.length -
-                      Object.keys(activeCW.studentStatus || {}).length}
-                  </span>
+              {loadingCW ? (
+                /* Loading spinner while fetching fresh marks from Firestore */
+                <div className="cwr-loading-marks">
+                  <i className="fas fa-spinner fa-spin"></i> Loading student
+                  marks…
                 </div>
+              ) : (
+                <>
+                  <div className="cwr-grading-hint">
+                    <i className="fas fa-info-circle"></i> Tap a button to set
+                    each student's status. Marks are saved automatically.
+                  </div>
+
+                  <div className="cwr-table-wrap">
+                    <table className="cwr-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Student Name</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {students.map((s, idx) => {
+                          const status = activeCW?.studentStatus?.[s.id];
+                          return (
+                            <tr
+                              key={s.id}
+                              className={
+                                status === "Submitted"
+                                  ? "cwr-row-submitted"
+                                  : status === "Missing"
+                                    ? "cwr-row-missing"
+                                    : ""
+                              }
+                            >
+                              <td className="cwr-td-num">{idx + 1}</td>
+                              <td className="cwr-td-name">
+                                {s.lastName}, {s.firstName}
+                                {s.middleName ? ` ${s.middleName}` : ""}
+                              </td>
+                              <td className="cwr-td-actions">
+                                <button
+                                  className={`cwr-toggle-btn ${status === "Submitted" ? "cwr-toggle-sub" : ""}`}
+                                  onClick={() => markStudent(s.id, "Submitted")}
+                                >
+                                  <i className="fas fa-check"></i> Submitted
+                                </button>
+                                <button
+                                  className={`cwr-toggle-btn ${status === "Missing" ? "cwr-toggle-miss" : ""}`}
+                                  onClick={() => markStudent(s.id, "Missing")}
+                                >
+                                  <i className="fas fa-times"></i> Missing
+                                </button>
+                                {/* Clear button — only shown when a status IS set */}
+                                {status && (
+                                  <button
+                                    className="cwr-toggle-btn cwr-toggle-clear"
+                                    title="Clear mark"
+                                    onClick={async () => {
+                                      const updatedStatus = {
+                                        ...(activeCW.studentStatus || {}),
+                                      };
+                                      delete updatedStatus[s.id];
+                                      const updated = {
+                                        ...activeCW,
+                                        studentStatus: updatedStatus,
+                                      };
+                                      setActiveCW(updated);
+                                      setClassworks((prev) =>
+                                        prev.map((cw) =>
+                                          cw.id === activeCW.id
+                                            ? {
+                                                ...cw,
+                                                studentStatus: updatedStatus,
+                                              }
+                                            : cw,
+                                        ),
+                                      );
+                                      try {
+                                        await updateDoc(
+                                          doc(db, "Classwork", activeCW.id),
+                                          { studentStatus: updatedStatus },
+                                        );
+                                      } catch (e) {
+                                        console.error(e);
+                                      }
+                                    }}
+                                  >
+                                    <i className="fas fa-undo"></i>
+                                  </button>
+                                )}
+                                {!status && (
+                                  <span className="cwr-not-set">Not set</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Quick stats footer */}
+                  {students.length > 0 && (
+                    <div className="cwr-grading-summary">
+                      <span className="cwr-gs-sub">
+                        <i className="fas fa-check-circle"></i> Submitted:{" "}
+                        {
+                          Object.values(activeCW?.studentStatus || {}).filter(
+                            (s) => s === "Submitted",
+                          ).length
+                        }
+                      </span>
+                      <span className="cwr-gs-miss">
+                        <i className="fas fa-times-circle"></i> Missing:{" "}
+                        {
+                          Object.values(activeCW?.studentStatus || {}).filter(
+                            (s) => s === "Missing",
+                          ).length
+                        }
+                      </span>
+                      <span className="cwr-gs-none">
+                        <i className="fas fa-circle"></i> Not set:{" "}
+                        {students.length -
+                          Object.keys(activeCW?.studentStatus || {}).length}
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -597,7 +677,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
             </div>
             <div className="cwr-modal-body">
               <form onSubmit={handleSave}>
-                {/* Type */}
                 <div className="cwr-form-group">
                   <label>Type</label>
                   <select
@@ -618,7 +697,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                   </select>
                 </div>
 
-                {/* Announcement hint */}
                 {newCW.title === "Announcement" && (
                   <div className="cwr-ann-hint">
                     <i className="fas fa-info-circle"></i> Announcements are
@@ -627,7 +705,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                   </div>
                 )}
 
-                {/* Details */}
                 <div className="cwr-form-group">
                   <label>
                     {newCW.title === "Announcement"
@@ -649,7 +726,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                   />
                 </div>
 
-                {/* Date — label changes based on type */}
                 <div className="cwr-form-group">
                   <label>
                     {newCW.title === "Announcement" ? "Date" : "Due Date"}

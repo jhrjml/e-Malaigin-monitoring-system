@@ -592,7 +592,7 @@ function AttendanceMonitoring() {
             <div className="am-view">
               <div className="am-toolbar">
                 <button
-                  className="btn-back"
+                  className="btn-back-am"
                   onClick={() => {
                     clearTimeout(autoCloseTimerRef.current);
                     clearInterval(timeWindowTimerRef.current);
