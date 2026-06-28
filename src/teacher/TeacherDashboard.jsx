@@ -343,6 +343,13 @@ function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
 
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
 
+  // useState only uses its initial value on the very first mount.
+  // This effect syncs selectedMonth whenever defaultMonth resolves or changes
+  // (e.g. component remounts after navigating away and back).
+  useEffect(() => {
+    setSelectedMonth(defaultMonth);
+  }, [defaultMonth]);
+
   return (
     <div className="th-overview-grid">
       <ReminderPanel teacherId={teacherId} onOpenReminder={onOpenReminder} />
