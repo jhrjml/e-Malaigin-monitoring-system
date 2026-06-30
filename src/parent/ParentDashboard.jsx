@@ -55,9 +55,13 @@ function getSchoolYearMonths() {
 }
 
 const ParentDashboard = () => {
-  const [isSidebarClosed, setIsSidebarClosed] = useState(
-    window.innerWidth <= 768,
-  );
+  // ── Register for push notifications as soon as parent logs in ──────────
+  // usePushNotifications(); // ← This is the only change to this file
+
+  // ── Sidebar state — same pattern as AdminHomepage ───────────────────────
+  const [sidebarOpen, setSidebarOpen] = useState(false); // mobile: slide-in
+  const [sidebarClosed, setSidebarClosed] = useState(false); // desktop: collapse
+
   const [currentDate, setCurrentDate] = useState("");
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -76,8 +80,16 @@ const ParentDashboard = () => {
   useEffect(() => {
     const options = { year: "numeric", month: "long", day: "numeric" };
     setCurrentDate(new Date().toLocaleDateString("en-US", options));
+  }, []);
 
-    const handleResize = () => setIsSidebarClosed(window.innerWidth <= 768);
+  // Reset sidebar state on resize, same as AdminHomepage
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 768) {
+        setSidebarOpen(false);
+        setSidebarClosed(false);
+      }
+    };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
@@ -91,7 +103,13 @@ const ParentDashboard = () => {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const toggleSidebar = () => setIsSidebarClosed(!isSidebarClosed);
+  const toggleSidebar = () => {
+    if (window.innerWidth > 768) {
+      setSidebarClosed(!sidebarClosed);
+    } else {
+      setSidebarOpen(!sidebarOpen);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.clear();
@@ -102,6 +120,7 @@ const ParentDashboard = () => {
   const navigate = (page) => {
     setActivePage(page);
     localStorage.setItem("parentPage", page);
+    if (window.innerWidth <= 768) setSidebarOpen(false);
   };
 
   const openReminder = (cw) => {
@@ -112,7 +131,10 @@ const ParentDashboard = () => {
   return (
     <div className="app-container">
       {/* SIDEBAR */}
-      <aside className={`sidebar ${isSidebarClosed ? "closed" : ""}`}>
+      <aside
+        id="sidebar"
+        className={`sidebar ${sidebarOpen ? "open" : ""} ${sidebarClosed ? "closed" : ""}`}
+      >
         <div className="brand-logo">
           <img src="/logo.jpg" alt="School Logo" className="brand-logo-img" />
           <div className="brand-text">

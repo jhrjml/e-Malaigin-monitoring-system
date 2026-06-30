@@ -630,7 +630,10 @@ function ManageStudents() {
 
       {/* ── ADD / EDIT MODAL ── */}
       {modalOpen && (
-        <div className="modal-overlay">
+        <div
+          className="modal-overlay"
+          style={{ display: "flex", zIndex: 9999 }}
+        >
           <div className="modal-content-student add-student-modal">
             <div className="modal-header">
               <h3>

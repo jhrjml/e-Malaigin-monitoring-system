@@ -14,6 +14,8 @@ import {
   persistentMultipleTabManager,
 } from "firebase/firestore";
 
+import { getMessaging, isSupported } from "firebase/messaging";
+
 const firebaseConfig = {
   apiKey: "AIzaSyCaNSjnSjXmckEy5XA68bKjamjXKKq3LwM",
   authDomain: "e-malaigin.firebaseapp.com",
@@ -38,6 +40,11 @@ export const db = initializeFirestore(app, {
     tabManager: persistentMultipleTabManager(), // Allows offline synchronization across multiple open tabs
   }),
 });
+
+// Messaging is only available in browsers that support service workers
+export const messagingPromise = isSupported().then((supported) =>
+  supported ? getMessaging(app) : null,
+);
 
 //New one
 // 1. Safe App Initialization (prevents re-init crashes on HMR)

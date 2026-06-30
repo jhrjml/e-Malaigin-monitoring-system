@@ -15,18 +15,6 @@
   --shadow-md: 0 5px 15px rgba(0, 0, 0, 0.08);
 }
 
-/* RESPONSIVE */
-@media (max-width: 768px) {
-  .sidebar {
-    margin-left: -260px;
-    position: fixed;
-    height: 100%;
-  }
-  .sidebar.open {
-    margin-left: 0;
-  }
-}
-
 /* Welcome Banner */
 .welcome-banner {
   background: var(--accent);
@@ -485,16 +473,16 @@
 .pd-child-filter-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  border: 1px solid #ddd;
-  background: var(--white);
-  padding: 7px 16px;
-  border-radius: 20px;
-  font-size: 0.82rem;
+  gap: 7px;
+  padding: 9px 18px;
+  border: 1.5px solid #dde1e7;
+  border-radius: 8px;
+  background: #fff;
+  color: #555;
+  font-size: 0.875rem;
   font-weight: 600;
-  color: var(--dark-gray);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.18s;
 }
 .pd-child-filter-btn:hover {
   border-color: var(--accent);
@@ -552,14 +540,6 @@
 
 /* --- RESPONSIVE --- */
 @media (max-width: 768px) {
-  .sidebar {
-    margin-left: -260px;
-    position: fixed;
-    height: 100%;
-  }
-  .sidebar.open {
-    margin-left: 0;
-  }
   .welcome-banner {
     flex-direction: column;
     align-items: flex-start;
@@ -570,5 +550,40 @@
   }
   .dashboard-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Desktop collapse behavior */
+.sidebar {
+  transition:
+    width 0.25s ease,
+    margin-left 0.25s ease;
+}
+
+.sidebar.closed {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: none;
+}
+
+/* Mobile slide-in behavior (same pattern already used in AdminHomepage.css) */
+@media (max-width: 768px) {
+  .sidebar {
+    margin-left: -260px;
+    position: fixed;
+    height: 100%;
+    z-index: 1000;
+  }
+  .sidebar.open {
+    margin-left: 0;
+  }
+  /* On mobile, "closed" shouldn't apply — open/closed states only matter
+     on desktop and mobile respectively */
+  .sidebar.closed {
+    width: auto;
+    min-width: auto;
+    overflow: visible;
   }
 }
