@@ -84,7 +84,6 @@ body {
 .menu li.active {
   background: var(--accent);
   color: var(--white);
-  box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3);
 }
 
 .menu li i {
