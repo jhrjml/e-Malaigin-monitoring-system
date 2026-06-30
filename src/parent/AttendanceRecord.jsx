@@ -285,7 +285,7 @@ function AttendanceRecord() {
                       className="btn-back-ar"
                       onClick={() => setCurrentView("select-subject")}
                     >
-                      <i className="fas fa-arrow-left"></i> Back
+                      <i className="fas fa-arrow-left"></i>
                     </button>
                     <h3>{currentSubject} Attendance</h3>
                   </div>
@@ -321,7 +321,7 @@ function AttendanceRecord() {
                       className="btn-back-ar"
                       onClick={() => setCurrentView("select-month")}
                     >
-                      <i className="fas fa-arrow-left"></i> Back
+                      <i className="fas fa-arrow-left"></i>
                     </button>
                     <h3>{currentSubject} Attendance</h3>
                   </div>

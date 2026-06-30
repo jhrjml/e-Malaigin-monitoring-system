@@ -442,7 +442,9 @@
   .sidebar {
     margin-left: -260px;
     position: fixed;
-    height: 100%;
+    top: 60px; /* match your header's actual height */
+    height: calc(100% - 60px);
+    z-index: 999;
   }
   .sidebar.open {
     margin-left: 0;

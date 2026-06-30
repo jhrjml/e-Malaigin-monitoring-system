@@ -169,7 +169,7 @@ function ManageUsers() {
                   className="btn-back-mu"
                   onClick={() => setCurrentView("categories")}
                 >
-                  <i className="fas fa-arrow-left"></i> Back to Categories
+                  <i className="fas fa-arrow-left"></i>
                 </button>
                 <h3 className="list-title">
                   {currentRoleFilter} Accounts List

@@ -331,7 +331,7 @@ function Repository() {
                   className="btn-back-rep"
                   onClick={() => setCurrentView("load")}
                 >
-                  <i className="fas fa-arrow-left"></i> Back
+                  <i className="fas fa-arrow-left"></i>
                 </button>
                 <div>
                   <h3>
@@ -395,7 +395,7 @@ function Repository() {
                   className="btn-back-rep"
                   onClick={() => setCurrentView("month")}
                 >
-                  <i className="fas fa-arrow-left"></i> Back to Months
+                  <i className="fas fa-arrow-left"></i>
                 </button>
                 <div>
                   <h3>{selectedMonthLabel} Attendance</h3>

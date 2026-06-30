@@ -162,6 +162,7 @@
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   margin-top: 20px;
+  overflow-x: auto;
 }
 .data-table {
   width: 100%;
@@ -318,18 +319,6 @@
   to {
     transform: translateY(0);
     opacity: 1;
-  }
-}
-
-/* RESPONSIVE */
-@media (max-width: 768px) {
-  .sidebar {
-    margin-left: -260px;
-    position: fixed;
-    height: 100%;
-  }
-  .sidebar.open {
-    margin-left: 0;
   }
 }
 

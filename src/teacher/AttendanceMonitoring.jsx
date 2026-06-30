@@ -601,7 +601,7 @@ function AttendanceMonitoring() {
                     setCurrentView("load");
                   }}
                 >
-                  <i className="fas fa-arrow-left"></i> Back
+                  <i className="fas fa-arrow-left"></i>
                 </button>
 
                 <div className="am-title-block">

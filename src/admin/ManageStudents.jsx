@@ -495,7 +495,7 @@ function ManageStudents() {
         <div className="view-section">
           <div className="toolbar">
             <button className="btn-back-ms" onClick={backToGrades}>
-              <i className="fas fa-arrow-left"></i> Back
+              <i className="fas fa-arrow-left"></i>
             </button>
             <h3 style={{ marginLeft: "15px" }}>Grade {selectedGrade} List</h3>
 

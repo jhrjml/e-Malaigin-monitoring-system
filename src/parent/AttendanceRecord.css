@@ -8,7 +8,7 @@
 
 .toolbar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 15px;
   margin-bottom: 20px;
 }
@@ -228,6 +228,7 @@
   overflow: hidden;
   width: 100%;
   box-sizing: border-box;
+  overflow-x: auto;
 }
 .data-table-ar {
   width: 100%;

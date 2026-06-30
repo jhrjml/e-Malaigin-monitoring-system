@@ -107,6 +107,7 @@
   border-radius: 8px;
   box-shadow: var(--shadow-sm);
   overflow: hidden;
+  overflow-x: auto;
 }
 .data-table {
   width: 100%;
@@ -340,18 +341,6 @@
   transform: translateY(-50%);
   color: var(--gray);
   cursor: pointer;
-}
-
-@media (max-width: 768px) {
-  .sidebar {
-    margin-left: -260px;
-    position: fixed;
-    height: 100%;
-    z-index: 100;
-  }
-  .sidebar.open {
-    margin-left: 0;
-  }
 }
 
 /* MODAL OPEN */

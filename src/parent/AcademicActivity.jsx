@@ -336,7 +336,7 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
                       className="btn-back-aa"
                       onClick={() => setCurrentView("select-subject")}
                     >
-                      <i className="fas fa-arrow-left"></i> Back
+                      <i className="fas fa-arrow-left"></i>
                     </button>
                     <h3>{currentSubject} Classwork</h3>
                   </div>

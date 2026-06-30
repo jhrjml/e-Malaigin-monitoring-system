@@ -379,7 +379,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                   className="btn-back-cwr"
                   onClick={() => setCurrentView("load")}
                 >
-                  <i className="fas fa-arrow-left"></i> Back
+                  <i className="fas fa-arrow-left"></i>
                 </button>
                 <div className="cwr-title-block">
                   <h3>{classSubject} — Classwork & Reminders</h3>
@@ -471,7 +471,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                   className="btn-back-cwr"
                   onClick={() => setCurrentView("list")}
                 >
-                  <i className="fas fa-arrow-left"></i> Back
+                  <i className="fas fa-arrow-left"></i>
                 </button>
                 <div className="cwr-title-block">
                   <h3>{activeCW?.title}</h3>
@@ -625,7 +625,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                   className="btn-back-cwr"
                   onClick={() => setCurrentView("list")}
                 >
-                  <i className="fas fa-arrow-left"></i> Back
+                  <i className="fas fa-arrow-left"></i>
                 </button>
                 <div className="cwr-title-block">
                   <h3>Announcement</h3>
