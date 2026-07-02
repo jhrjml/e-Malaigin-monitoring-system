@@ -2,47 +2,62 @@
 import webpush from "web-push";
 import admin from "firebase-admin";
 
-// ── Validate required env vars up front with a CLEAR error ─────────────────
-// Prevents cryptic "Cannot read properties of undefined" crashes further
-// down — if something's missing, this tells you exactly what and where.
-const REQUIRED_ENV = [
-  "VAPID_PUBLIC_KEY",
-  "VAPID_PRIVATE_KEY",
-  "VAPID_SUBJECT",
-  "FIREBASE_SERVICE_ACCOUNT",
-];
-const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
+// ── Everything that could throw at module load time is now wrapped, so a
+// bad env var produces a clean, readable JSON error instead of Vercel's
+// generic "FUNCTION_INVOCATION_FAILED" crash page (which hides the real
+// cause). initError, if set, short-circuits the handler below.
+let initError = null;
+let db = null;
 
-// ── Init firebase-admin once per cold start ────────────────────────────────
-if (!admin.apps.length && missingEnv.length === 0) {
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-}
-const db = missingEnv.length === 0 ? admin.firestore() : null;
+try {
+  const REQUIRED_ENV = [
+    "VAPID_PUBLIC_KEY",
+    "VAPID_PRIVATE_KEY",
+    "VAPID_SUBJECT",
+    "FIREBASE_SERVICE_ACCOUNT",
+  ];
+  const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
+  if (missingEnv.length > 0) {
+    throw new Error(
+      `Missing required environment variable(s): ${missingEnv.join(", ")}`,
+    );
+  }
 
-// ── Init web-push with your VAPID keys ──────────────────────────────────────
-if (missingEnv.length === 0) {
+  let serviceAccount;
+  try {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } catch (parseErr) {
+    throw new Error(
+      `FIREBASE_SERVICE_ACCOUNT is not valid JSON: ${parseErr.message}. ` +
+        `Make sure the ENTIRE contents of the downloaded service account ` +
+        `JSON file were pasted as-is into the Vercel env var (including the ` +
+        `\\n sequences inside the private_key field — don't reformat or ` +
+        `re-type it).`,
+    );
+  }
+
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  }
+  db = admin.firestore();
+
   webpush.setVapidDetails(
     process.env.VAPID_SUBJECT,
     process.env.VAPID_PUBLIC_KEY,
     process.env.VAPID_PRIVATE_KEY,
   );
+} catch (err) {
+  initError = err.message;
+  console.error("process-notification-queue init error:", err);
 }
 
 export default async function handler(req, res) {
-  // Fail loudly and clearly instead of crashing on an undefined value later.
-  if (missingEnv.length > 0) {
-    console.error(
-      `process-notification-queue: missing env var(s): ${missingEnv.join(", ")}. ` +
-        `Check Vercel → Settings → Environment Variables and confirm each is ` +
-        `set for the Production environment, then redeploy.`,
-    );
-    return res.status(500).json({
-      error: "Missing required environment variable(s)",
-      missing: missingEnv,
-    });
+  if (initError) {
+    return res
+      .status(500)
+      .json({ error: "Initialization failed", detail: initError });
   }
 
   try {
@@ -111,7 +126,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ processed, sent, failed });
   } catch (err) {
-    console.error("process-notification-queue error:", err);
+    console.error("process-notification-queue runtime error:", err);
     return res.status(500).json({ error: err.message });
   }
 }
