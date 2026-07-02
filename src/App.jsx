@@ -5,6 +5,7 @@ import AdminHomepage from "./admin/AdminHomepage.jsx";
 import TeacherDashboard from "./teacher/TeacherDashboard.jsx";
 import ParentDashboard from "./parent/ParentDashboard.jsx";
 import NetworkToast from "./common/NetworkToast";
+import NotificationQueueSync from "./common/NotificationQueueSync";
 
 // ── Protected route — redirects to "/" if not logged in or wrong role ─────
 const ProtectedRoute = ({ children, role }) => {
