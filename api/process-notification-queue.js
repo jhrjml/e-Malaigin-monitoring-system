@@ -1,11 +1,14 @@
 // api/process-notification-queue.js
 import webpush from "web-push";
-import admin from "firebase-admin";
+// Modular firebase-admin API (sub-path imports) instead of the classic
+// `import admin from "firebase-admin"` default import — the default-import
+// style doesn't reliably resolve `.apps` in Vercel's Node ESM runtime due
+// to a CommonJS/ESM interop quirk in how the package is bundled. The
+// modular API sidesteps that entirely and is Firebase's own recommended
+// pattern for serverless/ESM environments.
+import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
-// ── Everything that could throw at module load time is now wrapped, so a
-// bad env var produces a clean, readable JSON error instead of Vercel's
-// generic "FUNCTION_INVOCATION_FAILED" crash page (which hides the real
-// cause). initError, if set, short-circuits the handler below.
 let initError = null;
 let db = null;
 
@@ -30,18 +33,14 @@ try {
     throw new Error(
       `FIREBASE_SERVICE_ACCOUNT is not valid JSON: ${parseErr.message}. ` +
         `Make sure the ENTIRE contents of the downloaded service account ` +
-        `JSON file were pasted as-is into the Vercel env var (including the ` +
-        `\\n sequences inside the private_key field — don't reformat or ` +
-        `re-type it).`,
+        `JSON file were pasted as-is into the Vercel env var.`,
     );
   }
 
-  if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
+  if (getApps().length === 0) {
+    initializeApp({ credential: cert(serviceAccount) });
   }
-  db = admin.firestore();
+  db = getFirestore();
 
   webpush.setVapidDetails(
     process.env.VAPID_SUBJECT,
@@ -119,7 +118,7 @@ export default async function handler(req, res) {
 
       await queueDoc.ref.update({
         status: "sent",
-        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        processedAt: FieldValue.serverTimestamp(),
       });
       processed++;
     }
