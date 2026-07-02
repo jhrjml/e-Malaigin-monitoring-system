@@ -1,4 +1,11 @@
 // ManageClasses.jsx  (Firebase version)
+// OFFLINE-SAFE VERSION — see ManageStudents.jsx header comment for the
+// full explanation of the pattern used throughout this file:
+//  - Modals close immediately on submit instead of awaiting the network.
+//  - useSubmitGuard blocks a fast double-click from firing twice.
+//  - Bulk import fires all writes at once instead of awaiting each row in
+//    sequence (which hung forever offline on the very first row), then
+//    closes with an optimistic result and reconciles in the background.
 import React, { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import {
@@ -19,6 +26,8 @@ import {
 import ConfirmModal from "../common/ConfirmModal";
 import Toast from "../common/Toast";
 import { useToast } from "../common/useToast.js";
+import useSubmitGuard from "../common/useSubmitGuard";
+import useNetworkStatus from "../common/useNetworkStatus"; // adjust path if different
 import "./ManageClasses.css";
 
 // ── Pre-defined time slots ────────────────────────────────────────────────
@@ -50,8 +59,6 @@ const slotLabel = (value) =>
   TIME_SLOTS.find((s) => s.value === value)?.label ?? value;
 
 // ── Helper: fault-tolerant section-student loader ─────────────────────────
-// Wraps each getStudent() in a .catch(() => null) so a single missing or
-// archived student document never crashes the entire list load.
 async function loadSectionStudents(enrolledDocs) {
   const details = (
     await Promise.all(
@@ -111,6 +118,12 @@ const ManageClasses = () => {
   const [formError, setFormError] = useState("");
 
   const { toast, showToast } = useToast();
+  const { isOnline } = useNetworkStatus();
+
+  // ── submit guards (separate lock per action) ────────────────────────────
+  const guardEnroll = useSubmitGuard();
+  const guardSchedule = useSubmitGuard();
+  const guardStudentImport = useSubmitGuard();
 
   const [confirm, setConfirm] = useState({
     open: false,
@@ -132,8 +145,6 @@ const ManageClasses = () => {
   }, []);
 
   // ── fetch section data ────────────────────────────────────────────────
-  // FIX: uses loadSectionStudents() which gracefully skips missing docs
-  // instead of crashing the whole Promise.all on any single missing student.
   useEffect(() => {
     if (!currentGrade || !currentSection) return;
     const load = async () => {
@@ -190,32 +201,47 @@ const ManageClasses = () => {
     setShowStudentModal(true);
   };
 
-  // FIX: re-fetch after enroll also uses loadSectionStudents()
-  const enroll = async (e) => {
+  // Offline-safe enroll: closes the modal and shows success immediately,
+  // fires the write in the background, and refreshes the list once it
+  // resolves (instantly online, on reconnect if offline).
+  const enroll = (e) => {
     e.preventDefault();
     setFormError("");
     if (!selectedStudentId) {
       setFormError("Please select a student.");
       return;
     }
-    try {
-      const chosen = eligibleStudents.find((s) => s.id === selectedStudentId);
-      await enrollStudent({
-        studentId: selectedStudentId,
-        grade: currentGrade,
-        section: currentSection,
+    guardEnroll(() => doEnroll());
+  };
+
+  const doEnroll = () => {
+    const chosen = eligibleStudents.find((s) => s.id === selectedStudentId);
+    const studentId = selectedStudentId;
+    const grade = currentGrade;
+    const section = currentSection;
+
+    setShowStudentModal(false);
+    showToast(
+      isOnline
+        ? `${chosen ? `${chosen.firstName} ${chosen.lastName}` : "Student"} was enrolled successfully.`
+        : `${chosen ? `${chosen.firstName} ${chosen.lastName}` : "Student"} saved offline — will sync when back online.`,
+    );
+
+    enrollStudent({ studentId, grade, section })
+      .then(async () => {
+        // Only refresh the visible list if the user is still viewing
+        // that same grade/section.
+        if (currentGrade === grade && currentSection === section) {
+          const docs = await getEnrolled(grade, section);
+          setSectionStudents(await loadSectionStudents(docs));
+        }
+      })
+      .catch((err) => {
+        showToast(
+          `Failed to enroll ${chosen ? `${chosen.firstName} ${chosen.lastName}` : "student"}: ${err.message}`,
+          true,
+        );
       });
-      const docs = await getEnrolled(currentGrade, currentSection);
-      setSectionStudents(await loadSectionStudents(docs));
-      setShowStudentModal(false);
-      showToast(
-        chosen
-          ? `${chosen.firstName} ${chosen.lastName} was enrolled successfully.`
-          : "Student enrolled successfully.",
-      );
-    } catch (e) {
-      setFormError(e.message);
-    }
   };
 
   // ── bulk select helpers ───────────────────────────────────────────────
@@ -254,28 +280,27 @@ const ManageClasses = () => {
       ),
       confirmText: "Yes, Drop",
       confirmColor: "danger",
-      onConfirm: async () => {
+      onConfirm: () => {
         closeConfirm();
-        try {
-          await dropStudent(student.enrollId);
-          setSectionStudents((prev) => {
-            const remaining = prev.filter(
-              (s) => s.enrollId !== student.enrollId,
-            );
-            maybeClearSchedules(remaining);
-            return remaining;
-          });
-          setSelectedIds((prev) => {
-            const n = new Set(prev);
-            n.delete(student.enrollId);
-            return n;
-          });
-          showToast(
-            `${student.firstName} ${student.lastName} has been dropped.`,
-          );
-        } catch (e) {
+        // Optimistic UI update — offline-safe.
+        setSectionStudents((prev) => {
+          const remaining = prev.filter((s) => s.enrollId !== student.enrollId);
+          maybeClearSchedules(remaining);
+          return remaining;
+        });
+        setSelectedIds((prev) => {
+          const n = new Set(prev);
+          n.delete(student.enrollId);
+          return n;
+        });
+        showToast(
+          isOnline
+            ? `${student.firstName} ${student.lastName} has been dropped.`
+            : `${student.firstName} ${student.lastName} dropped offline — will sync when back online.`,
+        );
+        dropStudent(student.enrollId).catch((e) => {
           showToast(e.message || "Failed to drop student.", true);
-        }
+        });
       },
     });
   };
@@ -300,37 +325,39 @@ const ManageClasses = () => {
       ),
       confirmText: `Yes, ${action}`,
       confirmColor: "success",
-      onConfirm: async () => {
+      onConfirm: () => {
         closeConfirm();
-        try {
-          if (isGrade6) await graduateStudent(student.enrollId);
-          else await promoteStudent(student.enrollId);
-          setSectionStudents((prev) => {
-            const remaining = prev.filter(
-              (s) => s.enrollId !== student.enrollId,
-            );
-            maybeClearSchedules(remaining);
-            return remaining;
-          });
-          setSelectedIds((prev) => {
-            const n = new Set(prev);
-            n.delete(student.enrollId);
-            return n;
-          });
-          showToast(
-            `${student.firstName} ${student.lastName} was successfully ${action.toLowerCase()}d!`,
-          );
-        } catch (e) {
+        setSectionStudents((prev) => {
+          const remaining = prev.filter((s) => s.enrollId !== student.enrollId);
+          maybeClearSchedules(remaining);
+          return remaining;
+        });
+        setSelectedIds((prev) => {
+          const n = new Set(prev);
+          n.delete(student.enrollId);
+          return n;
+        });
+        showToast(
+          isOnline
+            ? `${student.firstName} ${student.lastName} was successfully ${action.toLowerCase()}d!`
+            : `${student.firstName} ${student.lastName} ${action.toLowerCase()}d offline — will sync when back online.`,
+        );
+        const opPromise = isGrade6
+          ? graduateStudent(student.enrollId)
+          : promoteStudent(student.enrollId);
+        opPromise.catch((e) => {
           showToast(
             e.message || `Failed to ${action.toLowerCase()} student.`,
             true,
           );
-        }
+        });
       },
     });
   };
 
   // ── drop (bulk) ───────────────────────────────────────────────────────
+  // Offline-safe: fires all drops at once instead of awaiting each in a
+  // sequential loop (which used to hang on the first item while offline).
   const bulkDrop = () => {
     if (selectedIds.size === 0) return;
     setConfirm({
@@ -341,19 +368,10 @@ const ManageClasses = () => {
       message: `Are you sure you want to drop ${selectedIds.size} selected student${selectedIds.size !== 1 ? "s" : ""}?`,
       confirmText: "Yes, Drop",
       confirmColor: "danger",
-      onConfirm: async () => {
+      onConfirm: () => {
         closeConfirm();
         const ids = Array.from(selectedIds);
-        let success = 0,
-          failed = 0;
-        for (const id of ids) {
-          try {
-            await dropStudent(id);
-            success++;
-          } catch {
-            failed++;
-          }
-        }
+
         setSectionStudents((prev) => {
           const remaining = prev.filter((s) => !selectedIds.has(s.enrollId));
           maybeClearSchedules(remaining);
@@ -361,9 +379,17 @@ const ManageClasses = () => {
         });
         setSelectedIds(new Set());
         showToast(
-          `${success} student(s) dropped.${failed > 0 ? ` ${failed} failed.` : ""}`,
-          failed > 0,
+          isOnline
+            ? `${ids.length} student(s) dropped.`
+            : `${ids.length} student(s) dropped offline — will sync when back online.`,
         );
+
+        Promise.allSettled(ids.map((id) => dropStudent(id))).then((settled) => {
+          const failed = settled.filter((r) => r.status === "rejected").length;
+          if (failed > 0) {
+            showToast(`${failed} drop(s) failed to sync.`, true);
+          }
+        });
       },
     });
   };
@@ -381,20 +407,10 @@ const ManageClasses = () => {
       message: `Confirm ${action.toLowerCase()} for ${selectedIds.size} selected student${selectedIds.size !== 1 ? "s" : ""}?`,
       confirmText: `Yes, ${action}`,
       confirmColor: "success",
-      onConfirm: async () => {
+      onConfirm: () => {
         closeConfirm();
         const ids = Array.from(selectedIds);
-        let success = 0,
-          failed = 0;
-        for (const id of ids) {
-          try {
-            if (isGrade6) await graduateStudent(id);
-            else await promoteStudent(id);
-            success++;
-          } catch {
-            failed++;
-          }
-        }
+
         setSectionStudents((prev) => {
           const remaining = prev.filter((s) => !selectedIds.has(s.enrollId));
           maybeClearSchedules(remaining);
@@ -402,9 +418,24 @@ const ManageClasses = () => {
         });
         setSelectedIds(new Set());
         showToast(
-          `${success} student(s) successfully ${action.toLowerCase()}d!${failed > 0 ? ` ${failed} failed.` : ""}`,
-          failed > 0,
+          isOnline
+            ? `${ids.length} student(s) successfully ${action.toLowerCase()}d!`
+            : `${ids.length} student(s) ${action.toLowerCase()}d offline — will sync when back online.`,
         );
+
+        Promise.allSettled(
+          ids.map((id) =>
+            isGrade6 ? graduateStudent(id) : promoteStudent(id),
+          ),
+        ).then((settled) => {
+          const failed = settled.filter((r) => r.status === "rejected").length;
+          if (failed > 0) {
+            showToast(
+              `${failed} ${action.toLowerCase()} action(s) failed to sync.`,
+              true,
+            );
+          }
+        });
       },
     });
   };
@@ -485,43 +516,67 @@ const ManageClasses = () => {
     e.target.value = "";
   };
 
-  // FIX: re-fetch after import also uses loadSectionStudents()
-  const handleStudentImportSave = async () => {
+  // Offline-safe bulk enroll — see ManageStudents.jsx for the full
+  // explanation. All valid rows are enrolled in parallel (never awaited
+  // one-by-one), the modal closes immediately with an optimistic result,
+  // and the section list is refreshed quietly in the background.
+  const handleStudentImportSave = () => {
     const validRows = studentImportRows.filter((r) => r.errs.length === 0);
     if (validRows.length === 0) return;
-    setStudentImportLoading(true);
-    let success = 0,
-      failed = 0;
-    const newErrors = [...studentImportErrors];
-    for (const row of validRows) {
-      try {
-        await enrollStudent({
-          studentId: row.studentId,
-          grade: currentGrade,
-          section: currentSection,
-        });
-        success++;
-      } catch (err) {
-        newErrors.push(`LRN ${row.lrn} (${row.name}): ${err.message}`);
-        failed++;
-      }
-    }
-    const docs = await getEnrolled(currentGrade, currentSection);
-    setSectionStudents(await loadSectionStudents(docs)); // FIX
-    setStudentImportLoading(false);
-    setStudentImportDone({ success, failed });
-    setStudentImportFinished(true);
-    setStudentImportErrors(newErrors);
-    setStudentImportRows([]);
+    guardStudentImport(() => doStudentImportSave(validRows));
+  };
 
-    if (success > 0) {
-      showToast(
-        `${success} student${success !== 1 ? "s" : ""} enrolled successfully.${failed > 0 ? ` ${failed} failed.` : ""}`,
-        failed > 0,
-      );
-    } else if (failed > 0) {
-      showToast(`Enrollment failed for all ${failed} row(s).`, true);
-    }
+  const doStudentImportSave = (validRows) => {
+    setStudentImportLoading(true);
+
+    const grade = currentGrade;
+    const section = currentSection;
+
+    const pending = validRows.map((row) =>
+      enrollStudent({ studentId: row.studentId, grade, section })
+        .then(() => ({ ok: true, row }))
+        .catch((err) => ({ ok: false, row, error: err })),
+    );
+
+    // Close the import modal right away with an optimistic result.
+    setStudentImportLoading(false);
+    setStudentImportDone({ success: validRows.length, failed: 0 });
+    setStudentImportFinished(true);
+    setStudentImportErrors([]);
+    setStudentImportRows([]);
+    showToast(
+      isOnline
+        ? `${validRows.length} student${validRows.length !== 1 ? "s" : ""} enrolled successfully.`
+        : `${validRows.length} student${validRows.length !== 1 ? "s" : ""} saved offline — will sync when back online.`,
+    );
+
+    // Reconcile quietly in the background once writes actually resolve.
+    Promise.allSettled(pending).then(async (settled) => {
+      const failMsgs = [];
+      settled.forEach((s) => {
+        const outcome = s.value;
+        if (outcome && !outcome.ok) {
+          failMsgs.push(
+            `LRN ${outcome.row.lrn} (${outcome.row.name}): ${outcome.error.message}`,
+          );
+        }
+      });
+
+      // Only refresh the visible list if still viewing the same section.
+      if (currentGrade === grade && currentSection === section) {
+        try {
+          const docs = await getEnrolled(grade, section);
+          setSectionStudents(await loadSectionStudents(docs));
+        } catch (e) {
+          console.error("Failed to refresh section after import:", e);
+        }
+      }
+
+      if (failMsgs.length > 0) {
+        setStudentImportErrors(failMsgs);
+        showToast(`${failMsgs.length} enrolled row(s) failed to save.`, true);
+      }
+    });
   };
 
   const closeStudentImportModal = () => {
@@ -541,7 +596,7 @@ const ManageClasses = () => {
   ).length;
 
   // ── save schedule (add / edit) ────────────────────────────────────────
-  const saveSchedule = async (e) => {
+  const saveSchedule = (e) => {
     e.preventDefault();
     setFormError("");
     if (!schedForm.timeSlot) {
@@ -552,7 +607,10 @@ const ManageClasses = () => {
       setFormError("Please select a teacher.");
       return;
     }
+    guardSchedule(() => doSaveSchedule());
+  };
 
+  const doSaveSchedule = () => {
     const [start, end] = schedForm.timeSlot.split("-");
     const payload = {
       subject: schedForm.subject,
@@ -562,27 +620,36 @@ const ManageClasses = () => {
       teacherId: schedForm.teacherId,
       days: "Sunday – Thursday",
     };
+    const wasEditing = isEditingSched;
+    const editingId = editSchedId;
+    const grade = currentGrade;
+    const section = currentSection;
 
-    try {
-      if (isEditingSched) {
-        const updated = await updateSchedule(editSchedId, payload);
-        setSchedules((prev) =>
-          prev.map((s) => (s.id === editSchedId ? updated : s)),
-        );
-        showToast("Schedule updated successfully.");
-      } else {
-        const created = await addSchedule({
-          ...payload,
-          grade: currentGrade,
-          section: currentSection,
-        });
-        setSchedules((prev) => [...prev, created]);
-        showToast("Schedule saved successfully.");
-      }
-      setShowScheduleModal(false);
-    } catch (e) {
-      setFormError(e.message);
-    }
+    setShowScheduleModal(false);
+    showToast(
+      isOnline
+        ? `Schedule ${wasEditing ? "updated" : "saved"} successfully.`
+        : `Schedule saved offline — will sync when back online.`,
+    );
+
+    const savePromise = wasEditing
+      ? updateSchedule(editingId, payload)
+      : addSchedule({ ...payload, grade, section });
+
+    savePromise
+      .then((result) => {
+        if (currentGrade !== grade || currentSection !== section) return;
+        if (wasEditing) {
+          setSchedules((prev) =>
+            prev.map((s) => (s.id === editingId ? result : s)),
+          );
+        } else {
+          setSchedules((prev) => [...prev, result]);
+        }
+      })
+      .catch((err) => {
+        showToast(`Failed to save schedule: ${err.message}`, true);
+      });
   };
 
   const openEditScheduleModal = (slotValue) => {
@@ -655,8 +722,8 @@ const ManageClasses = () => {
         {/* ── GRADE LIST ── */}
         {currentView === "view-grade" && (
           <div className="view-section active">
-            <div className="toolbar">
-              <h2 className="section-title">Manage Grade Levels</h2>
+            <div className="toolbar-mc">
+              <h2 className="section-title-mc">Manage Grade Levels</h2>
             </div>
             <div className="grade-accordion-list">
               {[1, 2, 3, 4, 5, 6].map((num) => (
@@ -699,14 +766,14 @@ const ManageClasses = () => {
         {/* ── ACTION ── */}
         {currentView === "view-action" && (
           <div className="view-section active">
-            <div className="toolbar">
+            <div className="toolbar-mc">
               <button
                 className="btn-back-mc"
                 onClick={() => setCurrentView("view-grade")}
               >
                 <i className="fas fa-arrow-left" />
               </button>
-              <h2 className="section-title">
+              <h2 className="section-title-mc">
                 Manage Grade {currentGrade} – Section {currentSection}
               </h2>
             </div>
@@ -743,7 +810,7 @@ const ManageClasses = () => {
         {/* ── MASTERLIST ── */}
         {currentView === "view-masterlist" && (
           <div className="view-section active">
-            <div className="toolbar">
+            <div className="toolbar-mc">
               <button
                 className="btn-back-mc"
                 onClick={() => setCurrentView("view-action")}
@@ -826,7 +893,7 @@ const ManageClasses = () => {
             </div>
 
             <div className="table-container">
-              <table className="data-table">
+              <table className="data-table-mc">
                 <thead>
                   <tr>
                     <th style={{ width: "40px" }}>
@@ -882,7 +949,7 @@ const ManageClasses = () => {
         {/* ── SCHEDULE ── */}
         {currentView === "view-schedule" && (
           <div className="view-section active">
-            <div className="toolbar">
+            <div className="toolbar-mc">
               <button
                 className="btn-back-mc"
                 onClick={() => setCurrentView("view-action")}
@@ -899,7 +966,7 @@ const ManageClasses = () => {
             </div>
 
             <div className="table-container">
-              <table className="data-table">
+              <table className="data-table-mc">
                 <thead>
                   <tr>
                     <th>Time</th>
@@ -1214,7 +1281,7 @@ const ManageClasses = () => {
                     }}
                   >
                     <table
-                      className="data-table"
+                      className="data-table-mc"
                       style={{ fontSize: "0.8rem" }}
                     >
                       <thead>
@@ -1269,11 +1336,13 @@ const ManageClasses = () => {
                   {studentImportDone.success > 0 && (
                     <div className="import-result-ok">
                       <i className="fas fa-check-circle"></i>{" "}
-                      {studentImportDone.success} student(s) enrolled
-                      successfully.
+                      {studentImportDone.success} student(s){" "}
+                      {isOnline
+                        ? "enrolled successfully."
+                        : "saved offline — will sync when back online."}
                     </div>
                   )}
-                  {studentImportDone.failed > 0 && (
+                  {studentImportErrors.length > 0 && (
                     <div className="import-error-box">
                       {studentImportErrors.map((e, i) => (
                         <div key={i}>⚠ {e}</div>

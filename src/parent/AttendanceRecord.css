@@ -1,21 +1,30 @@
 :root {
-  --primary: #2c3e50;
+  --primary: #3f3f97;
   --accent: #a65f81;
   --success: #2ecc71;
   --danger: #e74c3c;
   --gray: #95a5a6;
 }
 
-.toolbar {
+.toolbar-ar {
   display: flex;
-  align-items: flex-start;
-  gap: 15px;
-  margin-bottom: 20px;
+  justify-content: space-between;
+  align-items: center; /* NEW — vertically centers back button + title */
+  flex-wrap: nowrap; /* NEW — keeps them on one line */
+  margin-bottom: 25px;
 }
-.section-title {
+
+/* RESPONSIVE */
+@media (max-width: 600px) {
+  .toolbar-ar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+.section-title-ar {
   font-size: 1.4rem;
   font-weight: 700;
-  color: var(--primary);
+  color: black;
 }
 
 .ar-loading-text {
@@ -29,7 +38,7 @@
 }
 .ar-sub-title {
   font-size: 1.1rem;
-  color: var(--primary);
+  color: black;
   margin-bottom: 10px;
 }
 
@@ -129,7 +138,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--primary);
+  color: black;
 }
 
 /* ── MONTH CHOICE CARD ──────────────────────────────────────────────────────── */
@@ -150,7 +159,7 @@
 }
 .choice-card-ar h3 {
   margin: 15px 0 5px;
-  color: var(--primary);
+  color: black;
 }
 .choice-card-ar p {
   color: var(--gray);
@@ -191,6 +200,14 @@
   gap: 12px;
   font-size: x-large;
   font-weight: bold;
+}
+
+@media (max-width: 600px) {
+  .btn-back-ar {
+    padding: 8px 12px;
+    gap: 8px;
+    font-size: 1.25rem;
+  }
 }
 
 /* ── TODAY STATUS ───────────────────────────────────────────────────────────── */
@@ -243,6 +260,17 @@
 .data-table-ar th {
   background: #f8f9fa;
   color: var(--gray);
+}
+
+@media (max-width: 600px) {
+  .data-table-ar {
+    min-width: 560px;
+  }
+  .data-table-ar th,
+  .data-table-ar td {
+    padding: 10px 8px;
+    font-size: 0.85rem;
+  }
 }
 
 /* ── RESPONSIVE ─────────────────────────────────────────────────────────────── */

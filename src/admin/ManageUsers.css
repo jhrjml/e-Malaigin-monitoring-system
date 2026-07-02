@@ -1,5 +1,5 @@
 :root {
-  --primary: #2c3e50; /* Deep Blue */
+  --primary: #3f3f97; /* Deep Blue */
   --accent: #a65f81;
   --success: #2ecc71; /* Green */
   --danger: #e74c3c; /* Red */
@@ -82,7 +82,7 @@
   border-radius: 20px;
   font-weight: bold;
   font-size: 0.8rem;
-  color: var(--primary);
+  color: gray;
 }
 
 .card-action {
@@ -96,12 +96,22 @@
 }
 
 /* TABLE & TOOLBAR */
-.toolbar {
+.toolbar-mu {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  align-items: center; /* NEW — vertically centers back button + title */
+  flex-wrap: nowrap; /* NEW — keeps them on one line */
+  margin-bottom: 25px;
 }
+
+/* RESPONSIVE */
+@media (max-width: 600px) {
+  .toolbar-mu {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .table-container {
   background: white;
   border-radius: 8px;
@@ -109,22 +119,33 @@
   overflow: hidden;
   overflow-x: auto;
 }
-.data-table {
+.data-table-mu {
   width: 100%;
   border-collapse: collapse;
 }
-.data-table th,
-.data-table td {
+.data-table-mu th,
+.data-table-mu td {
   padding: 18px 20px;
   text-align: left;
   border-bottom: 1px solid #eee;
 }
-.data-table th {
+.data-table-mu th {
   background: #f8f9fa;
   color: var(--gray);
   font-weight: 600;
   text-transform: uppercase;
   font-size: 0.85rem;
+}
+
+@media (max-width: 600px) {
+  .data-table-mu {
+    min-width: 560px;
+  }
+  .data-table-mu th,
+  .data-table-mu td {
+    padding: 10px 8px;
+    font-size: 0.85rem;
+  }
 }
 
 /* STATUS BADGES */
@@ -157,6 +178,14 @@
   gap: 12px;
   font-size: x-large;
   font-weight: bold;
+}
+
+@media (max-width: 600px) {
+  .btn-back-mu {
+    padding: 8px 12px;
+    gap: 8px;
+    font-size: 1.25rem;
+  }
 }
 
 /* ACTION BUTTONS (Icon Style) */
@@ -280,7 +309,7 @@
 .add-user-modal .modal-body {
   padding: 25px;
 }
-.add-user-modal .modal-footer {
+.add-user-modal .modal-footer-mu {
   padding: 15px 20px;
   background: white;
   text-align: right;
@@ -424,7 +453,7 @@
 .modal-view .modal-body {
   padding: 25px;
 }
-.modal-view .modal-footer {
+.modal-view .modal-footer-mu {
   padding: 15px 20px;
   background: white;
   text-align: right;
@@ -444,7 +473,7 @@
   padding: 12px 16px;
   margin-bottom: 20px;
   font-size: 0.875rem;
-  color: #2c3e50;
+  color: black;
   line-height: 1.5;
 }
 

@@ -41,7 +41,7 @@
 .pm-displayname {
   font-size: 1.2rem;
   font-weight: 700;
-  color: #2c3e50;
+  color: black;
   margin-bottom: 4px;
 }
 
@@ -123,7 +123,7 @@
 .pm-text {
   font-size: 1rem;
   font-weight: 700;
-  color: #2c3e50;
+  color: black;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -153,7 +153,7 @@
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 0.95rem;
-  color: #2c3e50;
+  color: black;
   outline: none;
   transition:
     border-color 0.2s,
@@ -250,7 +250,7 @@
 .pm-cancel,
 .pm-close {
   background: #ecf0f1;
-  color: #2c3e50;
+  color: black;
 }
 
 .pm-grid {

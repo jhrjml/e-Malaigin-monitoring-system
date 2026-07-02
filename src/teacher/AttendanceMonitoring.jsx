@@ -1,4 +1,6 @@
 // AttendanceMonitoring.jsx
+// PUSH NOTIFICATIONS — handleQRResult() now queues a notification to the
+// scanned student's parent right after attendance is recorded.
 import { useState, useEffect, useRef, useCallback } from "react";
 import { db } from "../api/firebase";
 import {
@@ -11,6 +13,7 @@ import {
   getDoc,
 } from "firebase/firestore";
 import { BrowserQRCodeReader } from "@zxing/browser";
+import { queueNotification, getParentIdsForStudents } from "../api/firebaseApi";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./AttendanceMonitoring.css";
 
@@ -504,6 +507,22 @@ function AttendanceMonitoring() {
       } catch (e) {
         console.error("Failed to save attendance:", e);
       }
+
+      // ── Notify this student's parent ────────────────────────────────────
+      // Fire-and-forget: never awaited, never blocks scanning the next
+      // student, and safe if it fails — the attendance record already
+      // saved regardless.
+      getParentIdsForStudents([student.id])
+        .then((parentIds) => {
+          if (parentIds.length === 0) return null;
+          return queueNotification({
+            parentIds,
+            title: "Attendance Recorded",
+            body: `${student.firstName} ${student.lastName} was marked present in ${classSubject} at ${time}.`,
+            url: "/parent",
+          });
+        })
+        .catch((err) => console.error("Failed to queue notification:", err));
     },
     [
       students,

@@ -1,5 +1,5 @@
 :root {
-  --primary: #2c3e50; /* Deep Blue */
+  --primary: #3f3f97; /* Deep Blue */
   --accent: #a65f81;
   --success: #2ecc71; /* Green */
   --danger: #e74c3c; /* Red */
@@ -187,7 +187,7 @@
 }
 .id-card-school {
   display: block;
-  font-size: 0.7rem;
+  font-size: larger;
   font-weight: 700;
   letter-spacing: 0.5px;
 }
@@ -214,7 +214,7 @@
   width: 200px;
   height: 200px;
   flex-shrink: 0;
-  border: 2px dashed var(--accent);
+  border: 2px dashed black;
   border-radius: 2px;
   display: flex;
   flex-direction: column;
@@ -226,7 +226,7 @@
 }
 .id-photo-box-label {
   font-size: 1.1rem;
-  color: var(--accent);
+  color: black;
   font-weight: 700;
 }
 .id-photo-box-sublabel {
@@ -258,7 +258,7 @@
 }
 .id-info-row span {
   font-size: 0.85rem;
-  color: var(--primary);
+  color: black;
   font-weight: 600;
   word-break: break-word;
 }

@@ -1,4 +1,8 @@
 // ClassworkReminding.jsx
+// OFFLINE-SAFE VERSION — see ManageStudents.jsx header comment for the
+// full explanation of the pattern used here.
+// PUSH NOTIFICATIONS — doSave() now queues a notification to parents of
+// every enrolled student in this section after posting.
 import { useState, useEffect } from "react";
 import { db } from "../api/firebase";
 import {
@@ -6,11 +10,14 @@ import {
   query,
   where,
   getDocs,
-  addDoc,
-  updateDoc,
   doc,
+  setDoc,
+  updateDoc,
   getDoc,
 } from "firebase/firestore";
+import { queueNotification, getParentIdsForStudents } from "../api/firebaseApi";
+import useSubmitGuard from "../common/useSubmitGuard";
+import useNetworkStatus from "../common/useNetworkStatus"; // adjust path if different
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./ClassworkReminding.css";
 
@@ -55,8 +62,19 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   const [newCW, setNewCW] = useState({ title: "", desc: "", date: "" });
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // ── toast (simple inline toast since this file didn't use the shared one) ─
+  const [toastMsg, setToastMsg] = useState(null);
+  const showToast = (message, isError = false) => {
+    setToastMsg({ message, isError });
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => setToastMsg(null), 4000);
+  };
+
+  // ── network + submit guard ───────────────────────────────────────────────
+  const { isOnline } = useNetworkStatus();
+  const guardSave = useSubmitGuard();
 
   // ── 1. Load teacher's schedules ──────────────────────────────────────────
   useEffect(() => {
@@ -151,8 +169,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   }, [classGrade, classSection, classSubject]);
 
   // ── 4. Jump straight to a specific item from the Homepage Reminder panel ─
-  // Always re-fetches the item fresh from Firestore so marks saved in any
-  // previous session are visible immediately.
   useEffect(() => {
     if (!focusClasswork) return;
     let cancelled = false;
@@ -215,41 +231,76 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
     setCurrentView("list");
   };
 
-  // ── Add classwork / announcement ─────────────────────────────────────────
-  const handleSave = async (e) => {
+  // ── Add classwork / announcement (offline-safe) ──────────────────────────
+  // Closes the modal and shows the entry in the list immediately. The write
+  // is fired in the background — Firestore's persistentLocalCache queues it
+  // instantly and syncs automatically once connectivity is restored.
+  const handleSave = (e) => {
     e.preventDefault();
-    setSaving(true);
-    try {
-      const isAnnouncement = newCW.title === "Announcement";
-      const payload = {
-        title: newCW.title,
-        desc: newCW.desc,
-        date: newCW.date,
-        grade: classGrade,
-        section: classSection,
-        subject: classSubject,
-        isAnnouncement,
-        studentStatus: isAnnouncement ? null : {},
-        createdAt: new Date().toISOString(),
-      };
-      const ref = await addDoc(col("Classwork"), payload);
-      setClassworks((prev) =>
-        [{ id: ref.id, ...payload }, ...prev].sort((a, b) =>
-          (b.date || "").localeCompare(a.date || ""),
-        ),
-      );
-      setShowModal(false);
-      setNewCW({ title: "", desc: "", date: "" });
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSaving(false);
-    }
+    guardSave(() => doSave());
+  };
+
+  const doSave = () => {
+    const isAnnouncement = newCW.title === "Announcement";
+    const payload = {
+      title: newCW.title,
+      desc: newCW.desc,
+      date: newCW.date,
+      grade: classGrade,
+      section: classSection,
+      subject: classSubject,
+      isAnnouncement,
+      studentStatus: isAnnouncement ? null : {},
+      createdAt: new Date().toISOString(),
+    };
+
+    // Create the doc reference client-side so we have a stable id right
+    // away, before the write has actually synced.
+    const ref = doc(col("Classwork"));
+
+    setShowModal(false);
+    setNewCW({ title: "", desc: "", date: "" });
+    showToast(
+      isOnline
+        ? `${payload.title} posted successfully.`
+        : `${payload.title} saved offline — will sync when back online.`,
+    );
+    setClassworks((prev) =>
+      [{ id: ref.id, ...payload }, ...prev].sort((a, b) =>
+        (b.date || "").localeCompare(a.date || ""),
+      ),
+    );
+
+    setDoc(ref, payload).catch((err) => {
+      console.error(err);
+      showToast(`Failed to post ${payload.title}: ${err.message}`, true);
+    });
+
+    // ── Notify parents of every enrolled student in this section ─────────
+    // Fire-and-forget: never awaited, never blocks the UI, and safe if it
+    // fails — the classwork post itself already succeeded regardless.
+    (async () => {
+      try {
+        const parentIds = await getParentIdsForStudents(
+          students.map((s) => s.id),
+        );
+        if (parentIds.length === 0) return;
+        await queueNotification({
+          parentIds,
+          title: isAnnouncement ? "New Announcement" : `New ${payload.title}`,
+          body:
+            payload.desc.length > 120
+              ? payload.desc.slice(0, 117) + "..."
+              : payload.desc,
+          url: "/parent", // adjust to wherever parents should land in-app
+        });
+      } catch (err) {
+        console.error("Failed to queue notification:", err);
+      }
+    })();
   };
 
   // ── Open grading or detail view ──────────────────────────────────────────
-  // Always re-fetches the document fresh from Firestore so that marks saved
-  // in any earlier session are immediately visible when the teacher opens it.
   const openCW = async (cw) => {
     if (cw.isAnnouncement) {
       setActiveCW({ ...cw });
@@ -265,7 +316,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
         ? { id: cw.id, ...freshSnap.data() }
         : { ...cw };
       setActiveCW(fresh);
-      // Keep local list in sync so counts in the list view are correct too
       setClassworks((prev) =>
         prev.map((item) => (item.id === fresh.id ? fresh : item)),
       );
@@ -277,7 +327,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
     }
   };
 
-  // ── Mark a student ───────────────────────────────────────────────────────
+  // ── Mark a student (already offline-safe — fire-and-forget) ─────────────
   const markStudent = async (studentId, status) => {
     const updated = {
       ...activeCW,
@@ -286,7 +336,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
         [studentId]: status,
       },
     };
-    // Update local state immediately for a snappy UI
     setActiveCW(updated);
     setClassworks((prev) =>
       prev.map((cw) =>
@@ -327,6 +376,26 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="cwr-wrapper">
+      {toastMsg && (
+        <div
+          role="alert"
+          style={{
+            position: "fixed",
+            top: "16px",
+            right: "16px",
+            zIndex: 10000,
+            padding: "10px 16px",
+            borderRadius: "8px",
+            color: "#fff",
+            fontSize: "0.85rem",
+            background: toastMsg.isError ? "#e74c3c" : "#2ecc71",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+          }}
+        >
+          {toastMsg.message}
+        </div>
+      )}
+
       <main className="cwr-main">
         <div className="cwr-container">
           {/* ── LOAD PICKER ── */}
@@ -484,7 +553,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
               </div>
 
               {loadingCW ? (
-                /* Loading spinner while fetching fresh marks from Firestore */
                 <div className="cwr-loading-marks">
                   <i className="fas fa-spinner fa-spin"></i> Loading student
                   marks…
@@ -537,7 +605,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                                 >
                                   <i className="fas fa-times"></i> Missing
                                 </button>
-                                {/* Clear button — only shown when a status IS set */}
                                 {status && (
                                   <button
                                     className="cwr-toggle-btn cwr-toggle-clear"
@@ -750,16 +817,10 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                   >
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    className="cwr-btn-save"
-                    disabled={saving}
-                  >
-                    {saving
-                      ? "Saving…"
-                      : newCW.title === "Announcement"
-                        ? "Post Announcement"
-                        : "Post Classwork"}
+                  <button type="submit" className="cwr-btn-save">
+                    {newCW.title === "Announcement"
+                      ? "Post Announcement"
+                      : "Post Classwork"}
                   </button>
                 </div>
               </form>

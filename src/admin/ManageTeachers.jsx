@@ -1,4 +1,6 @@
 // ManageTeachers.jsx  (Firebase version — custom modals + batch import)
+// OFFLINE-SAFE VERSION — see ManageStudents.jsx header comment for the
+// full explanation of the pattern used here.
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import {
@@ -12,6 +14,8 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import ConfirmModal from "../common/ConfirmModal";
 import Toast from "../common/Toast";
 import { useToast } from "../common/useToast.js";
+import useSubmitGuard from "../common/useSubmitGuard";
+import useNetworkStatus from "../common/useNetworkStatus"; // adjust path if different
 import "./ManageTeachers.css";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 
@@ -58,8 +62,13 @@ function ManageTeachers() {
   const [error, setError] = useState(null);
   const [formError, setFormError] = useState("");
 
-  // ── toast ────────────────────────────────────────────────────────────────
+  // ── toast / network ──────────────────────────────────────────────────────
   const { toast, showToast } = useToast();
+  const { isOnline } = useNetworkStatus();
+
+  // ── submit guards ────────────────────────────────────────────────────────
+  const guardSubmit = useSubmitGuard();
+  const guardImport = useSubmitGuard();
 
   // ── add menu dropdown ───────────────────────────────────────────────────
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -175,7 +184,8 @@ function ManageTeachers() {
     setForm({ ...form, [name]: value });
   };
 
-  const handleSubmit = async (e) => {
+  // ── ADD / EDIT (offline-safe) ───────────────────────────────────────────
+  const handleSubmit = (e) => {
     e.preventDefault();
     setFormError("");
     const err = validateForm();
@@ -183,29 +193,42 @@ function ManageTeachers() {
       setFormError(err);
       return;
     }
-    try {
-      const payload = {
-        empId: form.empId,
-        fname: form.fname,
-        mname: form.mname || "",
-        lname: form.lname,
-        advisory: form.advisory || "",
-        contact: form.contact,
-        email: form.email || "",
-      };
-      if (isEditing) await updateTeacher(editId, payload);
-      else await addTeacher(payload);
+    guardSubmit(() => doSubmit());
+  };
 
-      showToast(
-        isEditing
-          ? `${form.fname} ${form.lname} was updated successfully.`
-          : `${form.fname} ${form.lname} was added successfully.`,
-      );
-      await fetchTeachers();
-      closeModal();
-    } catch (err) {
-      setFormError(err.message || "Request failed.");
-    }
+  const doSubmit = () => {
+    const payload = {
+      empId: form.empId,
+      fname: form.fname,
+      mname: form.mname || "",
+      lname: form.lname,
+      advisory: form.advisory || "",
+      contact: form.contact,
+      email: form.email || "",
+    };
+    const wasEditing = isEditing;
+    const editingId = editId;
+
+    // Close + notify immediately — don't wait for the network.
+    closeModal();
+    showToast(
+      isOnline
+        ? `${form.fname} ${form.lname} was ${wasEditing ? "updated" : "added"} successfully.`
+        : `${form.fname} ${form.lname} saved offline — will sync when back online.`,
+    );
+
+    const savePromise = wasEditing
+      ? updateTeacher(editingId, payload)
+      : addTeacher(payload);
+
+    savePromise
+      .then(() => fetchTeachers())
+      .catch((err) => {
+        showToast(
+          `Failed to save ${form.fname} ${form.lname}: ${err.message}`,
+          true,
+        );
+      });
   };
 
   const editTeacher_ = (t) => {
@@ -241,15 +264,20 @@ function ManageTeachers() {
       ),
       confirmText: "Yes, Archive",
       confirmColor: "danger",
-      onConfirm: async () => {
+      onConfirm: () => {
         closeConfirm();
-        try {
-          await archiveTeacher(t.id);
-          await fetchTeachers();
-          showToast(`${t.fname} ${t.lname} has been archived.`);
-        } catch (err) {
-          showToast(err.message || "Failed to archive teacher.", true);
-        }
+        // Optimistic remove — same offline-safe pattern.
+        setTeachers((prev) => prev.filter((x) => x.id !== t.id));
+        showToast(
+          isOnline
+            ? `${t.fname} ${t.lname} has been archived.`
+            : `${t.fname} ${t.lname} archived offline — will sync when back online.`,
+        );
+        archiveTeacher(t.id)
+          .then(() => fetchTeachers())
+          .catch((err) => {
+            showToast(err.message || "Failed to archive teacher.", true);
+          });
       },
     });
   };
@@ -308,14 +336,12 @@ function ManageTeachers() {
     XLSX.utils.book_append_sheet(wb, wsLookup, "_AdvisoryList");
 
     // ── Data validation: dropdown on column D (Advisory Class) ────────────
-    // Rows 2–200 (index 1–199) → D2:D200
-    // Uses a formula reference to the hidden sheet so the list is dynamic.
     if (!ws["!dataValidation"]) ws["!dataValidation"] = [];
     ws["!dataValidation"].push({
       sqref: "D2:D200",
       type: "list",
       formula1: "_AdvisoryList!$A$2:$A$13",
-      showDropDown: false, // false = show the arrow (Excel's counter-intuitive naming)
+      showDropDown: false,
       showErrorMessage: true,
       errorTitle: "Invalid Advisory Class",
       error:
@@ -352,7 +378,6 @@ function ManageTeachers() {
         const baseCount = teachers.length;
 
         // ── Collect advisories already taken in the existing DB list ────────
-        // (teachers state is already loaded; we use it for fast in-memory check)
         const takenAdvisoriesInDb = new Set(
           teachers
             .map((t) => (t.advisory || "").trim().toLowerCase())
@@ -388,29 +413,25 @@ function ManageTeachers() {
           if (advisory) {
             const normAdvisory = advisory.toLowerCase();
 
-            // 1. Must be one of the recognised advisory options
             const isValidOption = ADVISORY_OPTIONS.some(
               (o) => o.toLowerCase() === normAdvisory,
             );
             if (!isValidOption) {
               errs.push(`"${advisory}" is not a valid advisory class`);
             } else {
-              // 2. Already assigned to an existing teacher in the DB
               if (takenAdvisoriesInDb.has(normAdvisory)) {
                 errs.push(
                   `${advisory} is already assigned to an existing teacher`,
                 );
               }
 
-              // 3. Duplicate advisory within this import batch
               if (advisorySeenInBatch.has(normAdvisory)) {
                 errs.push(
                   `${advisory} is already used by Row ${advisorySeenInBatch.get(normAdvisory)} in this file`,
                 );
               } else {
-                // Only register it if it passed the DB check (avoids cascading dup errors)
                 if (!takenAdvisoriesInDb.has(normAdvisory)) {
-                  advisorySeenInBatch.set(normAdvisory, i + 2); // row number (header = 1)
+                  advisorySeenInBatch.set(normAdvisory, i + 2);
                 }
               }
             }
@@ -442,51 +463,89 @@ function ManageTeachers() {
     e.target.value = "";
   };
 
-  const handleImportSave = async () => {
+  // Offline-safe bulk import — see ManageStudents.jsx for full explanation.
+  const handleImportSave = () => {
     const validRows = importRows.filter((r) => r.errs.length === 0);
     if (validRows.length === 0) return;
+    guardImport(() => doImportSave(validRows));
+  };
+
+  const doImportSave = (validRows) => {
     setImportLoading(true);
-    let success = 0;
-    let failed = 0;
-    const newErrors = [...importErrors];
 
-    for (const row of validRows) {
-      try {
-        await addTeacher({
-          empId: row.empId,
-          fname: row.fname,
-          mname: row.mname,
-          lname: row.lname,
-          advisory: row.advisory,
-          contact: row.contact,
-          email: row.email,
-        });
-        success++;
-      } catch (err) {
-        newErrors.push(
-          `Row ${row.row} (${row.fname} ${row.lname}): ${err.message}`,
-        );
-        failed++;
-      }
-    }
+    const tempRows = validRows.map((row, i) => ({
+      ...row,
+      _tempId: `temp-${Date.now()}-${i}`,
+    }));
 
-    await fetchTeachers();
+    // Fire all writes now — never blocks the UI.
+    const pending = tempRows.map((row) => {
+      const payload = {
+        empId: row.empId,
+        fname: row.fname,
+        mname: row.mname,
+        lname: row.lname,
+        advisory: row.advisory,
+        contact: row.contact,
+        email: row.email,
+      };
+      return addTeacher(payload)
+        .then((created) => ({ ok: true, row, created }))
+        .catch((err) => ({ ok: false, row, error: err }));
+    });
+
+    // Optimistically show them in the table immediately.
+    setTeachers((prev) => [
+      ...prev,
+      ...tempRows.map((row) => ({
+        id: row._tempId,
+        empId: row.empId,
+        fname: row.fname,
+        mname: row.mname,
+        lname: row.lname,
+        advisory: row.advisory,
+        contact: row.contact,
+        email: row.email,
+      })),
+    ]);
+
+    // Close the import modal right away with an optimistic result.
     setImportLoading(false);
-    setImportDone({ success, failed });
+    setImportDone({ success: tempRows.length, failed: 0 });
     setImportFinished(true);
-    setImportErrors(newErrors);
+    setImportErrors([]);
     setImportRows([]);
+    showToast(
+      isOnline
+        ? `${tempRows.length} teacher${tempRows.length !== 1 ? "s" : ""} imported successfully.`
+        : `${tempRows.length} teacher${tempRows.length !== 1 ? "s" : ""} saved offline — will sync when back online.`,
+    );
 
-    if (success > 0) {
-      showToast(
-        `${success} teacher${success !== 1 ? "s" : ""} imported successfully.${
-          failed > 0 ? ` ${failed} failed.` : ""
-        }`,
-        failed > 0,
-      );
-    } else if (failed > 0) {
-      showToast(`Import failed for all ${failed} row(s).`, true);
-    }
+    // Reconcile quietly in the background once writes actually resolve.
+    Promise.allSettled(pending).then((settled) => {
+      const failMsgs = [];
+      let anyFailed = false;
+      settled.forEach((s) => {
+        const outcome = s.value;
+        if (!outcome) return;
+        if (!outcome.ok) {
+          anyFailed = true;
+          failMsgs.push(
+            `Row ${outcome.row.row} (${outcome.row.fname} ${outcome.row.lname}): ${outcome.error.message}`,
+          );
+        }
+      });
+      // Re-sync the full teacher list from the server rather than trying to
+      // splice each temp entry, since empId sequencing depends on final count.
+      fetchTeachers();
+      if (anyFailed) {
+        setImportErrors(failMsgs);
+        showToast(
+          `${failMsgs.length} imported row(s) failed to save. See details below.`,
+          true,
+        );
+      }
+    });
   };
 
   const closeImportModal = () => {
@@ -519,7 +578,7 @@ function ManageTeachers() {
 
       <main className="main-content">
         <div className="page-container">
-          <div className="toolbar">
+          <div className="toolbar-mt">
             <div>
               <h2>Teacher Masterlist</h2>
               <p>Manage school faculty and class advisers.</p>
@@ -587,7 +646,7 @@ function ManageTeachers() {
           )}
 
           <div className="table-container">
-            <table className="data-table">
+            <table className="data-table-mt">
               <thead>
                 <tr>
                   <th>Employee ID</th>
@@ -782,7 +841,7 @@ function ManageTeachers() {
                   ⚠ {formError}
                 </div>
               )}
-              <div className="modal-footer">
+              <div className="modal-footer-mt">
                 <button
                   type="button"
                   className="btn-cancel"
@@ -834,7 +893,7 @@ function ManageTeachers() {
                 </p>
               ) : (
                 <div className="table-container">
-                  <table className="data-table">
+                  <table className="data-table-mt">
                     <thead>
                       <tr>
                         <th>Subject</th>
@@ -930,7 +989,7 @@ function ManageTeachers() {
                     }}
                   >
                     <table
-                      className="data-table"
+                      className="data-table-mt"
                       style={{ fontSize: "0.8rem" }}
                     >
                       <thead>
@@ -1013,10 +1072,13 @@ function ManageTeachers() {
                   {importDone.success > 0 && (
                     <div className="import-result-ok">
                       <i className="fas fa-check-circle"></i>{" "}
-                      {importDone.success} teacher(s) imported successfully.
+                      {importDone.success} teacher(s){" "}
+                      {isOnline
+                        ? "imported successfully."
+                        : "saved offline — will sync when back online."}
                     </div>
                   )}
-                  {importDone.failed > 0 && (
+                  {importErrors.length > 0 && (
                     <div className="import-error-box">
                       {importErrors.map((e, i) => (
                         <div key={i}>⚠ {e}</div>
@@ -1027,7 +1089,7 @@ function ManageTeachers() {
               )}
             </div>
 
-            <div className="modal-footer">
+            <div className="modal-footer-mt">
               <button className="btn-cancel" onClick={closeImportModal}>
                 {importFinished ? "Close" : "Cancel"}
               </button>

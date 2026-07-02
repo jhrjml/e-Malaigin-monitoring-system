@@ -40,27 +40,3 @@ export const db = initializeFirestore(app, {
     tabManager: persistentMultipleTabManager(), // Allows offline synchronization across multiple open tabs
   }),
 });
-
-// Messaging is only available in browsers that support service workers
-export const messagingPromise = isSupported().then((supported) =>
-  supported ? getMessaging(app) : null,
-);
-
-//New one
-// 1. Safe App Initialization (prevents re-init crashes on HMR)
-/*const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-
-// 2. Safe Firestore Initialization with your Tab-Caching settings
-let dbInstance;
-try {
-  dbInstance = initializeFirestore(app, {
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager(),
-    }),
-  });
-} catch (error) {
-  // If Vite reloads and it's already initialized, gracefully fall back to the active instance
-  dbInstance = getFirestore(app);
-}
-
-export const db = dbInstance;*/

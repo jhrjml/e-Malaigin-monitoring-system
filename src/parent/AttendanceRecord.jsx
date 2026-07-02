@@ -217,8 +217,8 @@ function AttendanceRecord() {
     <div className="app-container">
       <main className="main-content">
         <div className="page-container">
-          <div className="toolbar">
-            <h2 className="section-title">Attendance Record</h2>
+          <div className="toolbar-ar">
+            <h2 className="section-title-ar">Attendance Record</h2>
           </div>
 
           {children.length === 0 ? (

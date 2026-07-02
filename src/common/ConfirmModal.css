@@ -59,12 +59,12 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--cm-icon-color, #2c3e50) 12%, white);
+  background: color-mix(in srgb, var(--cm-icon-color, #3f3f97) 12%, white);
 }
 
 .cm-title-icon {
   font-size: 1rem;
-  color: var(--cm-icon-color, #2c3e50);
+  color: var(--cm-icon-color, #3f3f97);
 }
 
 .cm-title {

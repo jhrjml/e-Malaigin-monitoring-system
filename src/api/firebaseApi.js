@@ -12,6 +12,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  setDoc,
   query,
   where,
   serverTimestamp,
@@ -987,6 +988,85 @@ export async function deleteGeneratedQr(lrn) {
   const q = await getDocs(query(col("GeneratedQR"), where("lrn", "==", lrn)));
   if (q.empty) throw new Error("No QR record found for this LRN.");
   await deleteDoc(q.docs[0].ref);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PUSH NOTIFICATIONS (Web Push — no FCM, no Blaze plan)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * getParentIdsForStudents(studentIds)
+ * Given an array of Student doc ids, returns the User doc ids (role
+ * "Parent") linked via their `studentIds` array. Works for a single
+ * student too (pass a one-element array) — used both by the bulk
+ * classwork-notification flow and the single-scan attendance flow.
+ * Deduplicates and chunks queries to respect Firestore's 30-value cap on
+ * `array-contains-any`.
+ */
+export async function getParentIdsForStudents(studentIds) {
+  const ids = [...new Set((studentIds || []).filter(Boolean))];
+  if (ids.length === 0) return [];
+
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += 30) chunks.push(ids.slice(i, i + 30));
+
+  const results = await Promise.all(
+    chunks.map((chunk) =>
+      getDocs(
+        query(
+          col("User"),
+          where("role", "==", "Parent"),
+          where("studentIds", "array-contains-any", chunk),
+        ),
+      ),
+    ),
+  );
+
+  const parentIds = new Set();
+  results.forEach((qs) => qs.docs.forEach((d) => parentIds.add(d.id)));
+  return [...parentIds];
+}
+
+/**
+ * savePushSubscription(parentId, subscriptionJSON)
+ * Saves/updates a parent's Web Push subscription for one device/browser.
+ * One doc per device — a parent using two devices gets notified on both.
+ * `parentId` is the User doc id (same id stored as localStorage "userId").
+ */
+export async function savePushSubscription(parentId, subscriptionJSON) {
+  const safeId = encodeURIComponent(subscriptionJSON.endpoint).slice(-150);
+  const ref = doc(col("PushSubscriptions"), safeId);
+  await setDoc(ref, {
+    parentId,
+    subscription: subscriptionJSON,
+    updatedAt: serverTimestamp(),
+  });
+  return { id: safeId, parentId };
+}
+
+/**
+ * queueNotification({ parentIds, title, body, url })
+ * Writes a doc to "NotificationQueue" that the Vercel cron job (see
+ * api/process-notification-queue.js) picks up and sends as a real push
+ * notification. This is a normal Firestore write, so it's offline-safe by
+ * the same persistentLocalCache mechanism as everything else — if the
+ * teacher is offline it queues locally and sends once they're back online.
+ * Intentionally fire-and-forget from the caller's perspective — never
+ * awaited on the UI thread, never blocks the classwork/attendance action
+ * it's attached to.
+ */
+export async function queueNotification({ parentIds, title, body, url }) {
+  if (!parentIds || parentIds.length === 0) return null;
+  const ref = doc(col("NotificationQueue"));
+  await setDoc(ref, {
+    parentIds,
+    title,
+    body,
+    url: url || "/",
+    status: "pending",
+    createdAt: serverTimestamp(),
+  });
+  return { id: ref.id };
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

@@ -1,4 +1,13 @@
 // ManageStudents.jsx  (Firebase version — custom modals + batch import)
+// OFFLINE-SAFE VERSION:
+//  - Single add/edit no longer awaits the network write before closing
+//    the modal. Firestore's persistentLocalCache queues the write and
+//    syncs it automatically when back online.
+//  - Bulk import no longer awaits each row sequentially (that hung
+//    forever offline on the very first row). All rows are fired at once,
+//    the import UI closes immediately with an optimistic result, and the
+//    list is reconciled quietly in the background once writes resolve.
+//  - useSubmitGuard prevents a fast double-click from creating duplicates.
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import {
@@ -10,6 +19,8 @@ import {
 import ConfirmModal from "../common/ConfirmModal";
 import Toast from "../common/Toast";
 import { useToast } from "../common/useToast.js";
+import useSubmitGuard from "../common/useSubmitGuard";
+import useNetworkStatus from "../common/useNetworkStatus"; // adjust path if different
 import "./ManageStudents.css";
 import "../Layout.css";
 import "@fortawesome/fontawesome-free/css/all.min.css";
@@ -23,8 +34,13 @@ function ManageStudents() {
   const [editingStudent, setEditingStudent] = useState(null);
   const [error, setError] = useState("");
 
-  // ── toast ────────────────────────────────────────────────────────────────
+  // ── toast / network ──────────────────────────────────────────────────────
   const { toast, showToast } = useToast();
+  const { isOnline } = useNetworkStatus();
+
+  // ── submit guards (separate locks for each action) ─────────────────────
+  const guardSubmit = useSubmitGuard();
+  const guardImport = useSubmitGuard();
 
   // ── add menu dropdown ───────────────────────────────────────────────────
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -110,9 +126,14 @@ function ManageStudents() {
     }
   };
 
-  const handleSubmit = async (e) => {
+  // ── ADD / EDIT (offline-safe) ───────────────────────────────────────────
+  const handleSubmit = (e) => {
     e.preventDefault();
     setError("");
+    guardSubmit(() => doSubmit());
+  };
+
+  const doSubmit = () => {
     const payload = {
       lrn: String(formData.lrn),
       firstName: formData.firstName,
@@ -125,38 +146,50 @@ function ManageStudents() {
       address: formData.address,
       grade: parseInt(selectedGrade, 10),
     };
-    try {
-      if (editingStudent) {
-        const updated = await updateStudent(editingStudent.id, payload);
-        setStudents(
-          students.map((s) => (s.id === editingStudent.id ? updated : s)),
-        );
+    const wasEditing = editingStudent;
+
+    // Close + reset + notify immediately — do not wait for the network.
+    // Firestore's persistentLocalCache has already queued this write and
+    // will sync it automatically the moment connectivity returns.
+    setModalOpen(false);
+    setEditingStudent(null);
+    setFormData({
+      lrn: "",
+      firstName: "",
+      middleName: "",
+      lastName: "",
+      dob: "",
+      age: "",
+      contact: "",
+      guardian: "",
+      address: "",
+    });
+    showToast(
+      isOnline
+        ? `${payload.firstName} ${payload.lastName} was ${wasEditing ? "updated" : "added"} successfully.`
+        : `${payload.firstName} ${payload.lastName} saved offline — will sync when back online.`,
+    );
+
+    const savePromise = wasEditing
+      ? updateStudent(wasEditing.id, payload)
+      : addStudent(payload);
+
+    savePromise
+      .then((result) => {
+        if (wasEditing) {
+          setStudents((prev) =>
+            prev.map((s) => (s.id === wasEditing.id ? result : s)),
+          );
+        } else {
+          setStudents((prev) => [...prev, result]);
+        }
+      })
+      .catch((err) => {
         showToast(
-          `${payload.firstName} ${payload.lastName} was updated successfully.`,
+          `Failed to save ${payload.firstName} ${payload.lastName}: ${err.message}`,
+          true,
         );
-      } else {
-        const created = await addStudent(payload);
-        setStudents([...students, created]);
-        showToast(
-          `${payload.firstName} ${payload.lastName} was added successfully.`,
-        );
-      }
-      setModalOpen(false);
-      setEditingStudent(null);
-      setFormData({
-        lrn: "",
-        firstName: "",
-        middleName: "",
-        lastName: "",
-        dob: "",
-        age: "",
-        contact: "",
-        guardian: "",
-        address: "",
       });
-    } catch (err) {
-      setError(err.message || "Error saving student.");
-    }
   };
 
   const handleArchive = (student) => {
@@ -176,17 +209,18 @@ function ManageStudents() {
       ),
       confirmText: "Yes, Archive",
       confirmColor: "danger",
-      onConfirm: async () => {
+      onConfirm: () => {
         closeConfirm();
-        try {
-          await archiveStudent(student.id);
-          setStudents(students.filter((s) => s.id !== student.id));
-          showToast(
-            `${student.firstName} ${student.lastName} has been archived.`,
-          );
-        } catch (err) {
+        // Optimistic remove — same offline-safe pattern.
+        setStudents((prev) => prev.filter((s) => s.id !== student.id));
+        showToast(
+          isOnline
+            ? `${student.firstName} ${student.lastName} has been archived.`
+            : `${student.firstName} ${student.lastName} archived offline — will sync when back online.`,
+        );
+        archiveStudent(student.id).catch((err) => {
           showToast(err.message || "Failed to archive student.", true);
-        }
+        });
       },
     });
   };
@@ -322,55 +356,107 @@ function ManageStudents() {
     e.target.value = "";
   };
 
-  const handleImportSave = async () => {
+  // Offline-safe bulk import.
+  // IMPORTANT: we do NOT `await` each addStudent() one-by-one anymore.
+  // While offline, the very first awaited write never resolves (it just
+  // sits in Firestore's local queue), which used to freeze the whole loop
+  // and the "Importing…" modal forever. Instead we fire every write at
+  // once — Firestore queues them all to its local cache synchronously —
+  // then close the modal immediately and reconcile the list quietly once
+  // the writes actually resolve (instantly if online, on reconnect if not).
+  const handleImportSave = () => {
     const validRows = importRows.filter((r) => r.errs.length === 0);
     if (validRows.length === 0) return;
+    guardImport(() => doImportSave(validRows));
+  };
+
+  const doImportSave = (validRows) => {
     setImportLoading(true);
-    let success = 0;
-    let failed = 0;
-    const newErrors = [...importErrors];
 
-    for (const row of validRows) {
-      try {
-        const payload = {
-          lrn: row.lrn,
-          firstName: row.firstName,
-          middleName: row.middleName,
-          lastName: row.lastName,
-          dob: row.dob,
-          age: parseInt(row.age, 10),
-          contact: row.contact,
-          guardian: row.guardian,
-          address: row.address,
-          grade: parseInt(selectedGrade, 10),
-        };
-        const created = await addStudent(payload);
-        setStudents((prev) => [...prev, created]);
-        success++;
-      } catch (err) {
-        newErrors.push(
-          `Row ${row.row} (${row.firstName} ${row.lastName}): ${err.message}`,
-        );
-        failed++;
-      }
-    }
+    const tempRows = validRows.map((row, i) => ({
+      ...row,
+      _tempId: `temp-${Date.now()}-${i}`,
+    }));
 
+    // Fire all writes now. Each returns a promise that resolves once
+    // synced — we never block the UI on it.
+    const pending = tempRows.map((row) => {
+      const payload = {
+        lrn: row.lrn,
+        firstName: row.firstName,
+        middleName: row.middleName,
+        lastName: row.lastName,
+        dob: row.dob,
+        age: parseInt(row.age, 10),
+        contact: row.contact,
+        guardian: row.guardian,
+        address: row.address,
+        grade: parseInt(selectedGrade, 10),
+      };
+      return addStudent(payload)
+        .then((created) => ({ ok: true, row, created }))
+        .catch((err) => ({ ok: false, row, error: err }));
+    });
+
+    // Show the optimistic rows in the table immediately.
+    setStudents((prev) => [
+      ...prev,
+      ...tempRows.map((row) => ({
+        id: row._tempId,
+        lrn: row.lrn,
+        firstName: row.firstName,
+        middleName: row.middleName,
+        lastName: row.lastName,
+        dob: row.dob,
+        age: row.age,
+        contact: row.contact,
+        guardian: row.guardian,
+        address: row.address,
+        grade: parseInt(selectedGrade, 10),
+      })),
+    ]);
+
+    // Close the import modal right away with an optimistic result.
     setImportLoading(false);
-    setImportDone({ success, failed });
+    setImportDone({ success: tempRows.length, failed: 0 });
     setImportFinished(true);
-    setImportErrors(newErrors);
+    setImportErrors([]);
     setImportRows([]);
+    showToast(
+      isOnline
+        ? `${tempRows.length} student${tempRows.length !== 1 ? "s" : ""} imported successfully.`
+        : `${tempRows.length} student${tempRows.length !== 1 ? "s" : ""} saved offline — will sync when back online.`,
+    );
 
-    if (success > 0) {
-      showToast(
-        `${success} student${success !== 1 ? "s" : ""} imported successfully.${
-          failed > 0 ? ` ${failed} failed.` : ""
-        }`,
-        failed > 0,
-      );
-    } else if (failed > 0) {
-      showToast(`Import failed for all ${failed} row(s).`, true);
-    }
+    // Reconcile quietly in the background once writes actually resolve.
+    Promise.allSettled(pending).then((settled) => {
+      const failMsgs = [];
+      setStudents((prev) => {
+        let next = [...prev];
+        settled.forEach((s) => {
+          const outcome = s.value; // each entry above always resolves (errors are caught)
+          if (!outcome) return;
+          if (outcome.ok) {
+            next = next.map((st) =>
+              st.id === outcome.row._tempId ? outcome.created : st,
+            );
+          } else {
+            next = next.filter((st) => st.id !== outcome.row._tempId);
+            failMsgs.push(
+              `Row ${outcome.row.row} (${outcome.row.firstName} ${outcome.row.lastName}): ${outcome.error.message}`,
+            );
+          }
+        });
+        return next;
+      });
+      if (failMsgs.length > 0) {
+        setImportErrors(failMsgs);
+        showToast(
+          `${failMsgs.length} imported row(s) failed to save. See details below.`,
+          true,
+        );
+      }
+    });
   };
 
   const closeImportModal = () => {
@@ -408,7 +494,7 @@ function ManageStudents() {
       {/* ── GRADE LIST ── */}
       {view === "grades" && (
         <div className="view-section active">
-          <div className="toolbar">
+          <div className="toolbar-ms">
             <div>
               <h2 style={{ color: "#000", marginBottom: "5px" }}>
                 Grade Level Masterlist
@@ -493,7 +579,7 @@ function ManageStudents() {
       {/* ── STUDENT LIST ── */}
       {view === "students" && (
         <div className="view-section">
-          <div className="toolbar">
+          <div className="toolbar-ms">
             <button className="btn-back-ms" onClick={backToGrades}>
               <i className="fas fa-arrow-left"></i>
             </button>
@@ -572,7 +658,7 @@ function ManageStudents() {
           </div>
 
           <div className="table-container">
-            <table className="data-table">
+            <table className="data-table-ms">
               <thead>
                 <tr>
                   <th>LRN</th>
@@ -776,7 +862,7 @@ function ManageStudents() {
                   />
                 </div>
               </form>
-              <div className="modal-footer">
+              <div className="modal-footer-ms">
                 <button
                   className="btn-cancel"
                   onClick={() => {
@@ -855,7 +941,7 @@ function ManageStudents() {
                     }}
                   >
                     <table
-                      className="data-table"
+                      className="data-table-ms"
                       style={{ fontSize: "0.8rem" }}
                     >
                       <thead>
@@ -916,10 +1002,13 @@ function ManageStudents() {
                   {importDone.success > 0 && (
                     <div className="import-result-ok">
                       <i className="fas fa-check-circle"></i>{" "}
-                      {importDone.success} student(s) imported successfully.
+                      {importDone.success} student(s){" "}
+                      {isOnline
+                        ? "imported successfully."
+                        : "saved offline — will sync when back online."}
                     </div>
                   )}
-                  {importDone.failed > 0 && (
+                  {importErrors.length > 0 && (
                     <div className="import-error-box">
                       {importErrors.map((e, i) => (
                         <div key={i}>⚠ {e}</div>
@@ -930,7 +1019,7 @@ function ManageStudents() {
               )}
             </div>
 
-            <div className="modal-footer">
+            <div className="modal-footer-ms">
               <button className="btn-cancel" onClick={closeImportModal}>
                 {importFinished ? "Close" : "Cancel"}
               </button>

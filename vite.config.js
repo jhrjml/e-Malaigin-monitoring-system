@@ -12,6 +12,7 @@ export default defineConfig({
       workbox: {
         maximumFileSizeToCacheInBytes: 5000000,
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        importScripts: ["push-sw.js"], // ← ADD THIS LINE
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.destination === "font",
@@ -64,18 +65,6 @@ export default defineConfig({
             purpose: "any maskable", // Works beautifully on both Desktop and Android!
           },
         ],
-        /*icons: [
-          {
-            src: "/pwa-192x192.png",
-            sizes: "192x192",
-            type: "image/png",
-          },
-          {
-            src: "/pwa-512x512.png",
-            sizes: "512x512",
-            type: "image/png",
-          },
-        ],*/
       },
     }),
   ],

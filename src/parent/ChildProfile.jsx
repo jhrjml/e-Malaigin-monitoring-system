@@ -299,8 +299,8 @@ const ChildProfile = () => {
       <div className="app-container">
         <main className="main-content">
           <div className="page-container">
-            <div className="toolbar">
-              <h2 className="section-title">My Child</h2>
+            <div className="toolbar-cp">
+              <h2 className="section-title-cp">My Child</h2>
             </div>
             <p style={{ padding: "30px", textAlign: "center", color: "#999" }}>
               No children linked to this account. Please contact the
@@ -320,8 +320,8 @@ const ChildProfile = () => {
     <div className="app-container">
       <main className="main-content">
         <div className="page-container">
-          <div className="toolbar">
-            <h2 className="section-title">My Child</h2>
+          <div className="toolbar-cp">
+            <h2 className="section-title-cp">My Child</h2>
           </div>
 
           {/* CHILD FILTER — same pattern as the admin Archive.jsx filter bar */}

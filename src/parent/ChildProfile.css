@@ -1,5 +1,5 @@
 :root {
-  --primary: #2c3e50;
+  --primary: #3f3f97;
   --accent: #a65f81;
   --success: #2ecc71;
   --danger: #e74c3c;
@@ -12,16 +12,25 @@
   --shadow-md: 0 5px 15px rgba(0, 0, 0, 0.08);
 }
 
-.toolbar {
+.toolbar-cp {
   display: flex;
-  align-items: flex-start;
-  gap: 15px;
-  margin-bottom: 20px;
+  justify-content: space-between;
+  align-items: center; /* NEW — vertically centers back button + title */
+  flex-wrap: nowrap; /* NEW — keeps them on one line */
+  margin-bottom: 25px;
 }
-.section-title {
+
+/* RESPONSIVE */
+@media (max-width: 600px) {
+  .toolbar-cp {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+.section-title-cp {
   font-size: 1.4rem;
   font-weight: 700;
-  color: var(--primary);
+  color: black;
 }
 
 /* ── CHILD FILTER (same pattern as admin Archive.jsx) ─────────────────────── */
@@ -79,13 +88,13 @@
   height: 110px;
   border-radius: 50%;
   object-fit: cover;
-  border: 4px solid var(--accent);
+  border: 4px solid #3498db;
   margin-bottom: 15px;
 }
 
 .profile-header-card h1 {
   font-size: 1.5rem;
-  color: var(--primary);
+  color: black;
   margin: 0 0 8px;
 }
 
@@ -148,7 +157,7 @@
 }
 .info-card h3 {
   font-size: 1rem;
-  color: var(--primary);
+  color: black;
   margin-bottom: 16px;
   display: flex;
   align-items: center;
@@ -179,8 +188,9 @@
   font-weight: 600;
 }
 
-/* ── ID CARD (identical markup/classes to GenerateQr.css so the exported
-   PDF matches exactly — rendered off-screen, never shown to the user) ───────── */
+/* The ID card is sized to 4.5in x 2.75in at exactly 100px per inch, so the
+   on-screen preview stays in the same proportion as the printed PDF and the
+   2x2in photo guide box below renders at its true physical size. */
 .id-card {
   width: 450px;
   height: 275px;
@@ -199,31 +209,43 @@
   padding: 6px 12px;
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-.id-card-topbar.small {
-  padding: 5px 10px;
-  justify-content: center;
+  justify-content: center; /* 🎯 Forces title text wrapper to exact center structural axis */
+  position: relative; /* ⚓ CRITICAL: Anchors the absolute positioned logo inside this box */
+  min-height: 44px; /* Gives ample breathing space for the 32px high logo content */
 }
 
+.id-card-topbar.small {
+  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative; /* Retain relative context for alternative state variant rules */
+}
+
+/* Logo is masked into a perfect circle so none of the source image's
+   square background shows around the mark. */
 .id-card-logo {
-  width: 32px;
   height: 32px;
+  width: 32px; /* 🛠️ Explicit matching width ensures square dimension aspect ratio for perfect circle clip */
   flex-shrink: 0;
   border-radius: 50%;
   object-fit: cover;
   object-position: center;
   background: white;
+
+  position: absolute; /* 🚀 Pops element out of flex formatting context flow */
+  left: 12px; /* 📌 Pin it neatly to the left wall matching parent layout padding */
 }
 
 .id-card-titles {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  text-align: center; /* Centers multi-line layout string splits if school name wraps */
 }
 .id-card-school {
   display: block;
-  font-size: 0.7rem;
+  font-size: larger;
   font-weight: 700;
   letter-spacing: 0.5px;
 }
@@ -234,6 +256,7 @@
   margin-top: 2px;
 }
 
+/* FRONT */
 .id-card-body-front {
   flex: 1;
   display: flex;
@@ -246,7 +269,7 @@
   width: 200px;
   height: 200px;
   flex-shrink: 0;
-  border: 2px dashed var(--accent);
+  border: 2px dashed black;
   border-radius: 2px;
   display: flex;
   flex-direction: column;
@@ -258,7 +281,7 @@
 }
 .id-photo-box-label {
   font-size: 1.1rem;
-  color: var(--accent);
+  color: black;
   font-weight: 700;
 }
 .id-photo-box-sublabel {
@@ -290,7 +313,7 @@
 }
 .id-info-row span {
   font-size: 0.85rem;
-  color: var(--primary);
+  color: black;
   font-weight: 600;
   word-break: break-word;
 }

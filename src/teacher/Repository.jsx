@@ -278,8 +278,8 @@ function Repository() {
 
           {currentView === "load" && (
             <div className="view-section active">
-              <div className="toolbar">
-                <h2 className="section-title">
+              <div className="toolbar-rep">
+                <h2 className="section-title-rep">
                   Select Grade - Section - Subject
                 </h2>
               </div>
@@ -324,7 +324,7 @@ function Repository() {
           {currentView === "month" && (
             <div className="view-section">
               <div
-                className="toolbar"
+                className="toolbar-rep"
                 style={{ flexWrap: "wrap", gap: "10px" }}
               >
                 <button
@@ -388,7 +388,7 @@ function Repository() {
           {currentView === "list" && (
             <div className="view-section">
               <div
-                className="toolbar"
+                className="toolbar-rep"
                 style={{ flexWrap: "wrap", gap: "10px" }}
               >
                 <button
@@ -428,7 +428,7 @@ function Repository() {
               </div>
 
               <div className="table-container matrix-container">
-                <table className="data-table matrix-table">
+                <table className="data-table-rep matrix-table">
                   <thead>
                     <tr>
                       <th rowSpan={2} className="sticky-col num-col">

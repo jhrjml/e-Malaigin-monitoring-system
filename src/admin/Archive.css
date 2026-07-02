@@ -70,7 +70,7 @@
 }
 .archive-header h2 {
   font-size: 1.4rem;
-  color: #2c3e50;
+  color: black;
   margin: 0 0 4px;
 }
 .archive-header p {
@@ -135,7 +135,7 @@
   position: relative;
   flex: 1;
   min-width: 220px;
-  max-width: 420px;
+  max-width: 280px;
 }
 .archive-search-icon {
   position: absolute;
@@ -147,32 +147,41 @@
 }
 .archive-search {
   width: 100%;
-  padding: 10px 36px 10px 36px;
-  border: 1.5px solid #dde1e7;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  outline: none;
-  transition: border-color 0.18s;
   box-sizing: border-box;
+  padding: 9px 34px 9px 34px;
+  border: 1.5px solid #a65f81;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  outline: none;
+  background: #f7f8fa;
+  color: black;
+  transition:
+    border-color 0.18s,
+    background 0.18s;
 }
 .archive-search:focus {
   border-color: #a65f81;
 }
 .archive-search-clear {
   position: absolute;
-  right: 10px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
-  background: none;
+  background: #e3e6ea;
   border: none;
-  color: #aaa;
-  font-size: 1.1rem;
-  cursor: pointer;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: #555;
+  font-size: 0.85rem;
   line-height: 1;
-  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 .archive-search-clear:hover {
-  color: #555;
+  background: #d6dae0;
 }
 
 /* ── Self-contained confirm modal ──────────────────────────────────────────── */
@@ -228,7 +237,7 @@
 .archive-modal-header h3 {
   margin: 0;
   font-size: 1.1rem;
-  color: #2c3e50;
+  color: black;
 }
 
 .archive-modal-message {
@@ -371,7 +380,7 @@
 .archive-fullname {
   display: block;
   font-weight: 600;
-  color: #2c3e50;
+  color: black;
   line-height: 1.3;
 }
 .archive-sub {
@@ -410,7 +419,7 @@
   align-items: center;
   gap: 6px;
   font-size: 0.82rem;
-  color: #2c3e50;
+  color: black;
 }
 .archive-account-info i {
   color: #a65f81;
@@ -526,7 +535,7 @@
 .archive-grade-num {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #2c3e50;
+  color: black;
 }
 
 .archive-grade-option.selected .archive-grade-num {

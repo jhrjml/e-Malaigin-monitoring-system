@@ -107,7 +107,7 @@ function ManageUsers() {
           {/* ── CATEGORY VIEW ── */}
           {currentView === "categories" && (
             <div className="view-section active">
-              <div className="toolbar">
+              <div className="toolbar-mu">
                 <div>
                   <h2 className="page-title">System Accounts</h2>
                   <p className="page-subtitle">
@@ -164,7 +164,7 @@ function ManageUsers() {
           {/* ── LIST VIEW ── */}
           {currentView === "list" && (
             <div className="view-section">
-              <div className="toolbar">
+              <div className="toolbar-mu">
                 <button
                   className="btn-back-mu"
                   onClick={() => setCurrentView("categories")}
@@ -182,7 +182,7 @@ function ManageUsers() {
                 </p>
               ) : (
                 <div className="table-container">
-                  <table className="data-table">
+                  <table className="data-table-mu">
                     <thead>
                       <tr>
                         <th>Full Name</th>
@@ -445,7 +445,7 @@ function ManageUsers() {
                 )}
             </div>
 
-            <div className="modal-footer">
+            <div className="modal-footer-mu">
               <button
                 className="btn-cancel btn-view-close"
                 onClick={closeViewModal}

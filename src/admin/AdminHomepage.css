@@ -1,5 +1,5 @@
 :root {
-  --primary: #2c3e50;
+  --primary: #3f3f97;
   --accent: #a65f81;
   --success: #2ecc71;
   --danger: #e74c3c;
@@ -39,7 +39,7 @@
   padding: 4px 6px;
   border-radius: 10px;
   transition: background 0.15s;
-  color: #2c3e50;
+  color: black;
 }
 .profile-avatar-btn:hover {
   background: #f1f3f5;
@@ -50,7 +50,7 @@
 .profile-avatar-name {
   font-weight: 600;
   font-size: 0.875rem;
-  color: #2c3e50;
+  color: black;
   max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -95,7 +95,7 @@
   border-radius: 7px;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #2c3e50;
+  color: black;
   cursor: pointer;
   text-align: left;
   transition: background 0.15s;
@@ -164,7 +164,7 @@
   font-size: 0.85rem;
   outline: none;
   background: #f7f8fa;
-  color: #2c3e50;
+  color: black;
   transition:
     border-color 0.18s,
     background 0.18s;
@@ -387,7 +387,7 @@
 }
 .mini-calendar-holiday-name {
   font-size: 0.8rem;
-  color: #2c3e50;
+  color: black;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -437,7 +437,7 @@
   padding: 4px;
 }
 .holiday-modal-close:hover {
-  color: #2c3e50;
+  color: black;
 }
 .holiday-modal-subtitle {
   font-size: 0.8rem;
@@ -474,7 +474,7 @@
   padding: 8px 10px;
   font-size: 0.85rem;
   font-weight: 500;
-  color: #2c3e50;
+  color: black;
   outline: none;
 }
 .sy-form-field input:focus {
@@ -565,7 +565,7 @@
   padding: 5px 8px;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #2c3e50;
+  color: black;
   background: #f7f8fa;
   outline: none;
   max-width: 160px;
@@ -645,7 +645,7 @@
 .mini-calendar-month-label {
   font-weight: 700;
   font-size: 0.875rem;
-  color: #2c3e50;
+  color: black;
 }
 
 .mini-calendar-weekdays {
@@ -671,7 +671,7 @@
   aspect-ratio: 1;
   border-radius: 8px;
   font-size: 0.82rem;
-  color: #2c3e50;
+  color: black;
   position: relative;
 }
 .mini-calendar-cell--empty {
@@ -772,7 +772,7 @@
 }
 .enrollment-chart-unknown-notice button {
   margin-left: auto;
-  background: #2c3e50;
+  background: #3f3f97;
   color: #fff;
   border: none;
   padding: 6px 14px;
@@ -803,67 +803,6 @@
 .enrollment-chart-canvas-wrap {
   position: relative;
   width: 100%;
-}
-
-/* --- DASHBOARD GRID (legacy nav cards) --- */
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 25px;
-  padding: 30px;
-}
-
-.card-link {
-  background: var(--white);
-  padding: 40px 30px;
-  border-radius: 12px;
-  text-align: center;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.3s ease;
-  border: 1px solid transparent;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.card-link:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-  border-color: var(--accent);
-}
-
-.card-link i {
-  margin-bottom: 15px;
-  transition: 0.3s;
-  color: #000000 !important;
-}
-
-.card-link:hover i {
-  transform: scale(1.1);
-}
-
-.dashboard-grid .card-link h3 {
-  color: #000000;
-  font-size: 1.1rem;
-  margin-bottom: 8px;
-  font-weight: 700;
-}
-
-.card-link p {
-  color: #000000 !important;
-  font-size: 0.9rem;
-  opacity: 0.8;
-}
-
-.icon-btn,
-.logout-icon-btn {
-  background: none;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
-  color: var(--text-dark);
 }
 
 .modal-overlay-admin {
@@ -948,9 +887,7 @@
   .sidebar.open {
     margin-left: 0;
   }
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
+
   .profile-avatar-name {
     display: none;
   }

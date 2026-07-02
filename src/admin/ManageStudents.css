@@ -1,6 +1,6 @@
 /* --- MODERN COLOR PALETTE --- */
 :root {
-  --primary: #2c3e50; /* Deep Blue */
+  --primary: #3f3f97; /* Deep Blue */
   --accent: #a65f81;
   --success: #2ecc71; /* Green */
   --danger: #e74c3c; /* Red */
@@ -164,17 +164,17 @@
   margin-top: 20px;
   overflow-x: auto;
 }
-.data-table {
+.data-table-ms {
   width: 100%;
   border-collapse: collapse;
 }
-.data-table th,
-.data-table td {
+.data-table-ms th,
+.data-table-ms td {
   padding: 15px;
   text-align: left;
   border-bottom: 1px solid #eee;
 }
-.data-table th {
+.data-table-ms th {
   background: #f8f9fa;
   color: #555;
   font-weight: 600;
@@ -199,6 +199,17 @@
 }
 .btn-archive-student:hover {
   background-color: #d68910;
+}
+
+@media (max-width: 600px) {
+  .data-table-ms {
+    min-width: 560px;
+  }
+  .data-table-ms th,
+  .data-table-ms td {
+    padding: 10px 8px;
+    font-size: 0.85rem;
+  }
 }
 
 /* MODAL STYLES */
@@ -251,11 +262,12 @@
   max-height: 80vh;
   overflow-y: auto;
 }
-.add-student-modal .modal-footer {
+.add-student-modal .modal-footer-ms {
   padding: 15px 20px;
   background: white;
   text-align: right;
   display: flex;
+  border-top: 1px solid #eee;
 }
 
 .add-student-modal .grid-form {
@@ -319,17 +331,6 @@
   to {
     transform: translateY(0);
     opacity: 1;
-  }
-}
-
-@media (max-width: 600px) {
-  .modal-footer-mc {
-    flex-direction: column-reverse;
-    align-items: stretch;
-  }
-  .btn-save-mc,
-  .btn-cancel-mc {
-    width: 100%;
   }
 }
 
@@ -413,4 +414,46 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .add-teacher-modal .grid-form,
+  .add-student-modal .grid-form {
+    grid-template-columns: 1fr;
+  }
+  .span-3 {
+    grid-column: span 1;
+  }
+  .modal-content-teacher,
+  .modal-content-student {
+    width: 95%;
+  }
+  .add-teacher-modal .modal-body,
+  .add-student-modal .modal-body {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 600px) {
+  .btn-back-ms {
+    padding: 8px 12px;
+    gap: 8px;
+    font-size: 1.25rem;
+  }
+}
+
+.toolbar-ms {
+  display: flex;
+  justify-content: space-between;
+  align-items: center; /* NEW — vertically centers back button + title */
+  flex-wrap: nowrap; /* NEW — keeps them on one line */
+  margin-bottom: 25px;
+}
+
+/* RESPONSIVE */
+@media (max-width: 600px) {
+  .toolbar-ms {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }

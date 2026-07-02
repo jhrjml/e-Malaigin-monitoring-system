@@ -1,6 +1,6 @@
 /* ── AttendanceMonitoring.css ── */
 :root {
-  --am-primary: #2c3e50;
+  --am-primary: #3f3f97;
   --am-accent: #a65f81;
   --am-success: #2ecc71;
   --am-danger: #e74c3c;
@@ -58,14 +58,14 @@
   margin-bottom: 24px;
 }
 .am-page-title {
-  color: var(--am-primary);
+  color: black;
   font-size: 1.5rem;
   font-weight: 700;
   margin: 0;
 }
 .am-title-block h3 {
   margin: 0;
-  color: var(--am-primary);
+  color: black;
   font-size: 1.1rem;
 }
 .am-title-block small {
@@ -93,6 +93,14 @@
   gap: 12px;
   font-size: x-large;
   font-weight: bold;
+}
+
+@media (max-width: 600px) {
+  .btn-back-am {
+    padding: 8px 12px;
+    gap: 8px;
+    font-size: 1.25rem;
+  }
 }
 
 /* Scan / Close buttons */
@@ -214,7 +222,7 @@
   border-color: var(--am-accent);
 }
 .am-card h3 {
-  color: var(--am-primary);
+  color: black;
   font-size: 1.05rem;
   margin: 12px 0 4px;
 }
@@ -275,7 +283,7 @@
   padding: 14px 16px;
   border-bottom: 1px solid #f0f0f0;
   font-size: 0.9rem;
-  color: var(--am-primary);
+  color: black;
 }
 .am-table tbody tr:last-child td {
   border-bottom: none;
@@ -378,7 +386,7 @@
 .am-scanner-header h3 {
   margin: 0;
   font-size: 1rem;
-  color: var(--am-primary);
+  color: black;
   display: flex;
   align-items: center;
   gap: 8px;

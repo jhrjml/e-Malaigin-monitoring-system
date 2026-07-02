@@ -268,8 +268,8 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
     <div className="app-container">
       <main className="main-content">
         <div className="page-container">
-          <div className="toolbar">
-            <h2 className="section-title">Academic Activity</h2>
+          <div className="toolbar-aa">
+            <h2 className="section-title-aa">Academic Activity</h2>
           </div>
 
           {children.length === 0 ? (

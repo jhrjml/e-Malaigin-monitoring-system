@@ -1,6 +1,6 @@
 /* ── ClassworkReminding.css ── */
 :root {
-  --cwr-primary: #2c3e50;
+  --cwr-primary: #3f3f97;
   --cwr-accent: #a65f81;
   --cwr-success: #2ecc71;
   --cwr-danger: #e74c3c;
@@ -59,14 +59,14 @@
   margin-bottom: 24px;
 }
 .cwr-page-title {
-  color: var(--cwr-primary);
+  color: black;
   font-size: 1.5rem;
   font-weight: 700;
   margin: 0;
 }
 .cwr-title-block h3 {
   margin: 0;
-  color: var(--cwr-primary);
+  color: black;
   font-size: 1.1rem;
 }
 .cwr-title-block small {
@@ -88,6 +88,15 @@
   font-size: x-large;
   font-weight: bold;
 }
+
+@media (max-width: 600px) {
+  .btn-back-cwr {
+    padding: 8px 12px;
+    gap: 8px;
+    font-size: 1.25rem;
+  }
+}
+
 .cwr-btn-add {
   margin-left: auto;
   background: var(--cwr-purple);
@@ -147,7 +156,7 @@
   border-color: var(--cwr-purple);
 }
 .cwr-card h3 {
-  color: var(--cwr-primary);
+  color: black;
   font-size: 1.05rem;
   margin: 12px 0 4px;
 }
@@ -262,7 +271,7 @@
 }
 .cwr-item-desc {
   margin: 0 0 8px;
-  color: var(--cwr-primary);
+  color: black;
   font-size: 0.9rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -391,7 +400,7 @@
 }
 .cwr-td-name {
   font-weight: 600;
-  color: var(--cwr-primary);
+  color: black;
 }
 .cwr-td-actions {
   display: flex;
@@ -588,7 +597,7 @@
   display: block;
   font-weight: 600;
   margin-bottom: 6px;
-  color: var(--cwr-primary);
+  color: black;
   font-size: 0.9rem;
 }
 .cwr-form-group input,

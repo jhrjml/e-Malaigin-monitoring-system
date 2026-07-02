@@ -56,7 +56,7 @@ function getSchoolYearMonths() {
 
 const ParentDashboard = () => {
   // ── Register for push notifications as soon as parent logs in ──────────
-  // usePushNotifications(); // ← This is the only change to this file
+  usePushNotifications(); // ← This is the only change to this file
 
   // ── Sidebar state — same pattern as AdminHomepage ───────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile: slide-in

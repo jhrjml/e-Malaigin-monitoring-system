@@ -1,5 +1,5 @@
 :root {
-  --primary: #2c3e50;
+  --primary: #3f3f97;
   --accent: #a65f81;
   --success: #2ecc71;
   --danger: #e74c3c;
@@ -47,95 +47,6 @@
   align-items: center;
   gap: 10px;
   white-space: nowrap;
-}
-
-/* Dashboard Grid */
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 20px;
-  width: 100%; /* FIX */
-  min-width: 0; /* FIX */
-  box-sizing: border-box;
-}
-
-/* Card Styles */
-.card-link-parent {
-  background: var(--white);
-  padding: 30px;
-  border-radius: 12px;
-  text-align: center;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.3s ease;
-  border: 1px solid transparent;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 180px;
-  box-sizing: border-box;
-}
-
-.card-link-parent:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
-  border-color: var(--accent);
-}
-
-.card-link-parent h3 {
-  color: var(--primary);
-  font-size: 1.2rem;
-  margin-bottom: 5px;
-}
-.card-link-parent p {
-  color: var(--gray);
-  font-size: 0.9rem;
-}
-
-/* Icon Boxes */
-.icon-box-p {
-  width: 70px;
-  height: 70px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-  color: var(--white);
-  margin-bottom: 15px;
-  transition: 0.3s;
-  box-shadow: 0 4px 10px rgba(142, 68, 173, 0.4);
-  background-color: var(--purple);
-}
-
-.icon-box-b {
-  width: 70px;
-  height: 70px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-  color: var(--white);
-  margin-bottom: 15px;
-  transition: 0.3s;
-  box-shadow: 0 4px 10px rgba(52, 152, 219, 0.4);
-  background: var(--accent);
-}
-
-.card-link-parent:hover .icon-box-p {
-  transform: scale(1.1);
-}
-
-/* Misc Buttons */
-.icon-btn,
-.logout-icon-btn {
-  background: none;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
-  color: var(--text-dark);
 }
 
 /* Logout Modal */
@@ -233,7 +144,7 @@
   padding: 4px 6px;
   border-radius: 10px;
   transition: background 0.15s;
-  color: #2c3e50;
+  color: black;
 }
 .profile-avatar-btn:hover {
   background: #f1f3f5;
@@ -244,7 +155,7 @@
 .profile-avatar-name {
   font-weight: 600;
   font-size: 0.875rem;
-  color: #2c3e50;
+  color: black;
   max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -289,7 +200,7 @@
   border-radius: 7px;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #2c3e50;
+  color: black;
   cursor: pointer;
   text-align: left;
   transition: background 0.15s;
@@ -349,7 +260,7 @@
   margin-bottom: 16px;
 }
 .pd-panel-header h3 {
-  color: var(--primary);
+  color: black;
   font-size: 1.05rem;
   margin: 0;
 }
@@ -414,7 +325,7 @@
 .pd-reminder-body h4 {
   margin: 0 0 6px;
   font-size: 0.92rem;
-  color: var(--primary);
+  color: black;
   font-weight: 700;
 }
 
@@ -459,7 +370,7 @@
 .pd-filter-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -547,9 +458,6 @@
   }
   .welcome-banner h1 {
     font-size: 1.5rem;
-  }
-  .dashboard-grid {
-    grid-template-columns: 1fr;
   }
 }
 
