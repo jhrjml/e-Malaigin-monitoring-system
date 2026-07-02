@@ -1046,14 +1046,12 @@ export async function savePushSubscription(parentId, subscriptionJSON) {
 
 /**
  * queueNotification({ parentIds, title, body, url })
- * Writes a doc to "NotificationQueue" that the Vercel cron job (see
- * api/process-notification-queue.js) picks up and sends as a real push
- * notification. This is a normal Firestore write, so it's offline-safe by
- * the same persistentLocalCache mechanism as everything else — if the
- * teacher is offline it queues locally and sends once they're back online.
- * Intentionally fire-and-forget from the caller's perspective — never
- * awaited on the UI thread, never blocks the classwork/attendance action
- * it's attached to.
+ * Writes a doc to "NotificationQueue" (offline-safe via persistentLocalCache),
+ * then immediately fires a non-blocking fetch to /api/process-notification-queue
+ * so the notification sends within seconds if the caller is online, instead of
+ * waiting for the once-a-day cron fallback (see api/process-notification-queue.js
+ * and NotificationQueueSync.jsx for the two other triggers that cover the
+ * "offline at time of action" case).
  */
 export async function queueNotification({ parentIds, title, body, url }) {
   if (!parentIds || parentIds.length === 0) return null;
@@ -1066,6 +1064,13 @@ export async function queueNotification({ parentIds, title, body, url }) {
     status: "pending",
     createdAt: serverTimestamp(),
   });
+
+  // Fire-and-forget: trigger immediate processing if we're online right now.
+  // Never awaited, never thrown upward — if this fails (offline, cold start,
+  // etc.) the write above is already safely queued and NotificationQueueSync
+  // will retry the moment connectivity returns.
+  fetch("/api/process-notification-queue").catch(() => {});
+
   return { id: ref.id };
 }
 
