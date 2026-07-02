@@ -25,7 +25,7 @@ export async function subscribeToPush(parentId) {
     subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(
-        import.meta.env.VAPID_PUBLIC_KEY,
+        import.meta.env.VITE_VAPID_PUBLIC_KEY,
       ),
     });
   }
