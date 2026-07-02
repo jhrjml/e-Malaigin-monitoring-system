@@ -23,6 +23,7 @@ import {
   Tooltip,
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
+import usePushNotifications from "../common/usePushNotifications";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
