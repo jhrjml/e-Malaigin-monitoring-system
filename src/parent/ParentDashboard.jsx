@@ -26,7 +26,6 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import { getMessaging, deleteToken } from "firebase/messaging";
-import { db } from "../api/firebase";
 import { usePushNotifications } from "../common/usePushNotifications";
 import { unsubscribeFromPush } from "../common/pushSubscribe";
 
