@@ -1,8 +1,5 @@
 // src/common/pushSubscribe.js
-import {
-  savePushSubscription,
-  removePushSubscription,
-} from "../api/firebaseApi";
+import { savePushSubscription } from "../api/firebaseApi";
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -35,23 +32,6 @@ export async function subscribeToPush(parentId) {
 
   await savePushSubscription(parentId, subscription.toJSON());
   return { ok: true };
-}
-
-// NEW — call this on parent logout to stop notifications on this device
-export async function unsubscribeFromPush(parentId) {
-  if (!("serviceWorker" in navigator)) return;
-  try {
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
-    if (subscription) {
-      // Remove from Firestore first so server stops sending to this endpoint
-      await removePushSubscription(parentId, subscription.endpoint);
-      // Then unsubscribe from the browser
-      await subscription.unsubscribe();
-    }
-  } catch (e) {
-    console.error("Failed to unsubscribe from push:", e);
-  }
 }
 
 export async function isPushSubscribed() {
