@@ -1044,6 +1044,25 @@ export async function savePushSubscription(parentId, subscriptionJSON) {
   return { id: safeId, parentId };
 }
 
+// Add this alongside your existing savePushSubscription
+export async function removePushSubscription(parentId, endpoint) {
+  try {
+    const userRef = doc(db, "User", parentId);
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) return;
+
+    const data = snap.data();
+    const existing = data.pushSubscriptions || [];
+
+    // Remove the subscription matching this endpoint
+    const updated = existing.filter((s) => s.endpoint !== endpoint);
+
+    await updateDoc(userRef, { pushSubscriptions: updated });
+  } catch (e) {
+    console.error("Failed to remove push subscription:", e);
+  }
+}
+
 /**
  * queueNotification({ parentIds, title, body, url })
  * Writes a doc to "NotificationQueue" (offline-safe via persistentLocalCache),

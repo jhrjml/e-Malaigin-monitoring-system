@@ -14,6 +14,8 @@ import {
   getDocs,
   query,
   where,
+  updateDoc,
+  arrayRemove,
 } from "firebase/firestore";
 import {
   Chart as ChartJS,
@@ -23,7 +25,10 @@ import {
   Tooltip,
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
-import usePushNotifications from "../common/usePushNotifications";
+import { getMessaging, deleteToken } from "firebase/messaging";
+import { db } from "../api/firebase";
+import { usePushNotifications } from "../common/usePushNotifications";
+import { unsubscribeFromPush } from "../common/pushSubscribe";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -112,7 +117,16 @@ const ParentDashboard = () => {
     }
   };
 
-  const handleLogout = () => {
+  // Replace handleLogout
+  const handleLogout = async () => {
+    const userId = localStorage.getItem("userId");
+    const role = localStorage.getItem("role");
+
+    // Only clean up push if this is a parent
+    if (role === "Parent" && userId) {
+      await unsubscribeFromPush(userId);
+    }
+
     localStorage.clear();
     setLogoutOpen(false);
     window.location.href = "/";
