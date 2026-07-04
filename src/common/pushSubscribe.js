@@ -40,3 +40,34 @@ export async function isPushSubscribed() {
   const subscription = await registration.pushManager.getSubscription();
   return !!subscription;
 }
+
+// ADD this function to src/common/pushSubscribe.js, alongside your existing
+// subscribeToPush() and isPushSubscribed() functions.
+//
+// Also add `deletePushSubscription` to your imports from "../api/firebaseApi"
+// at the top of the file:
+//
+//   import { savePushSubscription, deletePushSubscription } from "../api/firebaseApi";
+
+export async function unsubscribeFromPush() {
+  if (!("serviceWorker" in navigator)) return;
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) return; // nothing to unsubscribe
+
+    const endpoint = subscription.endpoint;
+
+    // Unsubscribe at the browser level first — this is what actually stops
+    // the browser's push service from delivering anything further.
+    await subscription.unsubscribe();
+
+    // Then remove the matching Firestore record so the server stops
+    // trying to send to a subscription that no longer exists.
+    await deletePushSubscription(endpoint);
+  } catch (err) {
+    console.error("Failed to unsubscribe from push:", err);
+    // Don't let this block logout even if it fails.
+  }
+}

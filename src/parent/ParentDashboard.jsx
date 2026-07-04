@@ -24,6 +24,7 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import usePushNotifications from "../common/usePushNotifications";
+import { unsubscribeFromPush } from "../common/pushSubscribe"; // ← ADD THIS
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -112,7 +113,13 @@ const ParentDashboard = () => {
     }
   };
 
+  // 2) Replace your existing handleLogout with this version:
   const handleLogout = () => {
+    // Fire-and-forget: don't block logout waiting for this, but do call it
+    // BEFORE clearing localStorage/redirecting, since unsubscribeFromPush()
+    // doesn't need any app state — it only touches the browser's own
+    // subscription + the matching Firestore doc.
+    unsubscribeFromPush();
     localStorage.clear();
     setLogoutOpen(false);
     window.location.href = "/";

@@ -1044,6 +1044,21 @@ export async function savePushSubscription(parentId, subscriptionJSON) {
   return { id: safeId, parentId };
 }
 
+// ADD this function to src/api/firebaseApi.js, right after savePushSubscription
+// in the "PUSH NOTIFICATIONS" section.
+
+/**
+ * deletePushSubscription(endpoint)
+ * Removes a device's push subscription record — called on logout so a
+ * browser that's no longer "logged in" as that parent stops receiving
+ * their notifications. Uses the same endpoint-derived doc id that
+ * savePushSubscription() creates, so no lookup query is needed.
+ */
+export async function deletePushSubscription(endpoint) {
+  const safeId = encodeURIComponent(endpoint).slice(-150);
+  await deleteDoc(doc(col("PushSubscriptions"), safeId));
+}
+
 /**
  * queueNotification({ parentIds, title, body, url })
  * Writes a doc to "NotificationQueue" (offline-safe via persistentLocalCache),
