@@ -155,6 +155,12 @@ function AdminHomepage() {
   return (
     <div className="app-container">
       {/* SIDEBAR */}
+      {sidebarOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       <aside
         id="sidebar"
         className={`sidebar ${sidebarOpen ? "open" : ""} ${sidebarClosed ? "closed" : ""}`}
@@ -288,12 +294,12 @@ function AdminHomepage() {
         {/* LOGOUT MODAL */}
         {logoutOpen && (
           <div className="modal-overlay-admin">
-            <div className="modal-admin logout-modal">
-              <div className="modal-header">
+            <div className="modal-admin logout-modal-admin">
+              <div className="modal-header-admin">
                 <h2>Confirm Logout</h2>
               </div>
               <p>Are you sure you want to logout?</p>
-              <div className="modal-buttons">
+              <div className="modal-buttons-admin">
                 <button
                   className="btn-cancel"
                   onClick={() => setLogoutOpen(false)}

@@ -139,6 +139,12 @@ const ParentDashboard = () => {
   return (
     <div className="app-container">
       {/* SIDEBAR */}
+      {sidebarOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       <aside
         id="sidebar"
         className={`sidebar ${sidebarOpen ? "open" : ""} ${sidebarClosed ? "closed" : ""}`}
@@ -263,12 +269,12 @@ const ParentDashboard = () => {
 
         {logoutOpen && (
           <div className="modal-overlay-parent">
-            <div className="modal-parent logout-modal">
-              <div className="modal-header">
-                <h3>Confirm Logout</h3>
+            <div className="modal-parent logout-modal-parent">
+              <div className="modal-header-parent">
+                <h2>Confirm Logout</h2>
               </div>
               <p>Are you sure you want to logout?</p>
-              <div className="modal-buttons">
+              <div className="modal-buttons-parent">
                 <button
                   className="btn-cancel"
                   onClick={() => setLogoutOpen(false)}

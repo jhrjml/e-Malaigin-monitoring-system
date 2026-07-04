@@ -172,6 +172,12 @@ function TeacherHomepage() {
   return (
     <div className="app-container">
       {/* SIDEBAR */}
+      {sidebarOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
       <aside
         className={`sidebar ${sidebarOpen ? "open" : ""} ${sidebarClosed ? "closed" : ""}`}
       >
@@ -298,12 +304,12 @@ function TeacherHomepage() {
 
       {logoutOpen && (
         <div className="modal-overlay-teacher">
-          <div className="modal-teacher logout-modal">
-            <div className="modal-header">
-              <h3>Confirm Logout</h3>
+          <div className="modal-teacher logout-modal-teacher">
+            <div className="modal-header-teacher">
+              <h2>Confirm Logout</h2>
             </div>
             <p>Are you sure you want to logout?</p>
-            <div className="modal-buttons">
+            <div className="modal-buttons-teacher">
               <button
                 className="btn-cancel"
                 onClick={() => setLogoutOpen(false)}

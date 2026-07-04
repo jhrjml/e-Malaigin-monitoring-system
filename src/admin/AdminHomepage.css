@@ -825,7 +825,7 @@
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
 }
 
-.logout-modal .modal-header {
+.logout-modal-admin .modal-header-admin {
   background: white;
   color: rgb(0, 0, 0);
   padding: 15px 25px;
@@ -834,20 +834,25 @@
   align-items: center;
 }
 
-.logout-modal p {
+.modal-header-admin h2 {
+  font-size: x-large;
+  margin: 0;
+}
+
+.logout-modal-admin p {
   font-size: 18px;
   font-weight: 500;
   color: var(--black);
 }
 
-.modal-buttons {
+.modal-buttons-admin {
   margin-top: 25px;
   display: flex;
   justify-content: center;
   gap: 15px;
 }
 
-.logout-modal .btn-confirm {
+.logout-modal-admin .btn-confirm {
   background: #2c3e50;
   color: #fff;
   padding: 10px 20px;
@@ -857,11 +862,11 @@
   font-weight: 600;
   font-size: large;
 }
-.logout-modal .btn-confirm:hover {
+.logout-modal-admin .btn-confirm:hover {
   background: #1a252f;
 }
 
-.logout-modal .btn-cancel {
+.logout-modal-admin .btn-cancel {
   background: #ecf0f1;
   color: #2c3e50;
   padding: 10px 20px;
@@ -871,24 +876,44 @@
   font-weight: 600;
   font-size: large;
 }
-.logout-modal .btn-cancel:hover {
+.logout-modal-admin .btn-cancel:hover {
   background: #dce1e7;
 }
 
 /* --- RESPONSIVE --- */
 @media (max-width: 768px) {
-  .sidebar {
-    margin-left: -260px;
-    position: fixed;
-    top: 60px; /* match your header's actual height */
-    height: calc(100% - 60px);
-    z-index: 999;
-  }
-  .sidebar.open {
-    margin-left: 0;
-  }
-
   .profile-avatar-name {
     display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-admin {
+    padding: 16px;
+    width: 88%;
+  }
+
+  .logout-modal-admin .modal-header-admin {
+    padding: 12px 12px !important;
+  }
+
+  .modal-header-admin h2 {
+    font-size: 1rem;
+  }
+
+  .logout-modal-admin p {
+    font-size: 12px !important;
+    margin-bottom: 4px;
+  }
+
+  .modal-buttons-admin {
+    margin-top: 16px;
+    gap: 10px !important;
+  }
+
+  .logout-modal-admin .btn-confirm,
+  .logout-modal-admin .btn-cancel {
+    padding: 8px 14px !important;
+    font-size: 0.85rem !important;
   }
 }

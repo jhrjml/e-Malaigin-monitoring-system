@@ -36,9 +36,6 @@ body {
   z-index: 100;
 }
 
-.sidebar.closed {
-  margin-left: -260px;
-}
 .sidebar.open {
   margin-left: 0;
 }
@@ -95,6 +92,7 @@ body {
 
 /* --- MAIN CONTENT & HEADER --- */
 .main-content {
+  flex: 1 1 auto;
   /* FIX: subtract sidebar width so content never bleeds past it */
   width: 100%;
   min-width: 0; /* critical: stops flex children from forcing overflow */
@@ -102,11 +100,6 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-}
-
-/* When sidebar is hidden, reclaim the full width */
-.sidebar.closed ~ .main-content {
-  width: 100vw;
 }
 
 header {
@@ -169,22 +162,6 @@ header .user-profile i {
   width: 100%;
 }
 
-/* --- RESPONSIVE --- */
-@media (max-width: 768px) {
-  .main-content {
-    width: 100vw;
-  }
-
-  .sidebar {
-    position: fixed;
-    height: 100%;
-  }
-
-  .page-container {
-    padding: 10px;
-  }
-}
-
 .brand-logo {
   display: flex;
   align-items: center; /* Vertically aligns logo and text group */
@@ -230,4 +207,112 @@ header .user-profile i {
   letter-spacing: 2px;
   display: block;
   margin-top: 5px;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+/* --- RESPONSIVE --- */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 220px;
+    max-width: 75vw;
+    margin-left: -100%;
+    z-index: 999;
+    overflow-y: auto;
+  }
+  .sidebar.open {
+    margin-left: 0;
+  }
+
+  .brand-logo {
+    padding: 16px 14px;
+    gap: 8px;
+  }
+
+  .brand-logo-img {
+    width: 36px;
+    height: 36px;
+  }
+
+  .brand-title {
+    font-size: 17px;
+  }
+
+  .brand-subtitle {
+    font-size: 0.6rem;
+    letter-spacing: 1px;
+  }
+
+  .menu li {
+    padding: 10px 14px;
+    font-size: 0.85rem;
+  }
+
+  .menu li i {
+    width: 20px;
+    font-size: 1rem;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 998;
+  }
+
+  .main-content {
+    width: 100vw;
+  }
+  .page-container {
+    padding: 10px;
+  }
+}
+
+/* ADD THIS — combine with your existing 480px block */
+@media (max-width: 480px) {
+  header {
+    padding: 10px 14px;
+  }
+  header .header-left .header-title {
+    font-size: 1rem;
+  }
+  header #menu-toggle {
+    font-size: 1.1rem;
+    padding: 4px;
+  }
+  .header-left {
+    gap: 10px;
+  }
+}
+
+/* Layout.css */
+@media (max-width: 768px) {
+  .app-container .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 190px;
+    max-width: 75vw;
+    margin-left: -100%;
+    z-index: 999;
+    overflow-y: auto;
+  }
+  .app-container .sidebar.open {
+    margin-left: 0;
+  }
+
+  .main-content {
+    width: 100vw;
+  }
+  .page-container {
+    padding: 10px;
+  }
 }
