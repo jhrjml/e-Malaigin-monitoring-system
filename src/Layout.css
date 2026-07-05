@@ -252,10 +252,10 @@ header .user-profile i {
     padding: 10px 14px;
   }
   header .header-left .header-title {
-    font-size: x-large;
+    font-size: larger;
   }
   header #menu-toggle {
-    font-size: x-large;
+    font-size: larger;
     padding: 4px;
   }
   .header-left {

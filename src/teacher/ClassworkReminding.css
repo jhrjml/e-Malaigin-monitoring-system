@@ -611,6 +611,7 @@
   background: #f9f9f9;
   box-sizing: border-box;
   font-family: inherit;
+  resize: none;
 }
 .cwr-form-group input:focus,
 .cwr-form-group select:focus,
