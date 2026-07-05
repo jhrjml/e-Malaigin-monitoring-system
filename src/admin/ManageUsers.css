@@ -95,23 +95,6 @@
   gap: 5px;
 }
 
-/* TABLE & TOOLBAR */
-.toolbar-mu {
-  display: flex;
-  justify-content: space-between;
-  align-items: center; /* NEW — vertically centers back button + title */
-  flex-wrap: nowrap; /* NEW — keeps them on one line */
-  margin-bottom: 25px;
-}
-
-/* RESPONSIVE */
-@media (max-width: 600px) {
-  .toolbar-mu {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
-
 .table-container {
   background: white;
   border-radius: 8px;
@@ -218,14 +201,14 @@
   background: var(--accent);
 }
 .btn-view-action:hover {
-  background: #2980b9;
+  opacity: 0.85;
 }
 
 .btn-toggle-action {
   background: var(--danger);
 }
 .btn-toggle-action:hover {
-  background: #c0392b;
+  opacity: 0.85;
 }
 
 .btn-toggle-action.activate {
@@ -291,7 +274,7 @@
   }
 }
 .add-user-modal .modal-header {
-  background: var(--dark-gray);
+  background: var(--primary);
   color: white;
   padding: 15px 20px;
   display: flex;
@@ -377,19 +360,18 @@
   display: flex;
 }
 
-/* VIEW USER MODAL SPECIFIC */
 .modal-content-view {
   background: white;
   width: 450px;
-  max-width: 90%;
+  max-width: 400px;
   border-radius: 8px;
   animation: slideDown 0.3s;
-  max-width: 400px;
   text-align: center;
   overflow-y: auto;
 }
+
 .modal-view-header {
-  background: var(--dark-gray);
+  background: var(--primary);
   color: white;
   padding: 15px 20px;
   display: flex;
@@ -426,7 +408,7 @@
   padding: 5px 20px;
 }
 .btn-view-close {
-  background: var(--primary);
+  background: var(--dark-gray);
   color: white;
   width: 100%;
   border: none;
@@ -439,7 +421,7 @@
 }
 
 .modal-view .btn-view-close:hover {
-  background: #2e577e;
+  opacity: 0.85;
 }
 
 .modal-view .close-modal {
@@ -482,4 +464,53 @@
   font-size: 1rem;
   margin-top: 2px;
   flex-shrink: 0;
+}
+
+.toolbar-mu {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 25px;
+}
+
+.toolbar-mu .list-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: break-word;
+}
+
+@media (max-width: 600px) {
+  .toolbar-mu .list-title {
+    font-size: x-large;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal-content-view {
+    width: 90%;
+    max-width: 340px;
+  }
+
+  .modal-view-header {
+    padding: 12px 16px;
+  }
+
+  .modal-view .modal-body {
+    padding: 18px;
+  }
+
+  .view-value {
+    font-size: 1rem;
+  }
+
+  .view-field label {
+    font-size: 0.75rem;
+  }
+
+  .btn-view-close {
+    padding: 9px 16px;
+    font-size: 0.9rem;
+  }
 }

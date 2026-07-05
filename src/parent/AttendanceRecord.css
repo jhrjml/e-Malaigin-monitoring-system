@@ -264,12 +264,13 @@
 
 @media (max-width: 600px) {
   .data-table-ar {
-    min-width: 560px;
+    min-width: 0;
+    width: 100%;
   }
   .data-table-ar th,
   .data-table-ar td {
-    padding: 10px 8px;
-    font-size: 0.85rem;
+    padding: 8px 6px;
+    font-size: 0.78rem;
   }
 }
 

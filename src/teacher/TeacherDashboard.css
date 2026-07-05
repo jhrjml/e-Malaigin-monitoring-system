@@ -268,7 +268,7 @@
   font-size: large;
 }
 .logout-modal-teacher .btn-confirm:hover {
-  background: #1a252f;
+  opacity: 0.85;
 }
 .logout-modal-teacher .btn-cancel {
   background: #ecf0f1;
@@ -281,7 +281,7 @@
   font-size: large;
 }
 .logout-modal-teacher .btn-cancel:hover {
-  background: #dce1e7;
+  opacity: 0.85;
 }
 
 .header-right {
@@ -407,22 +407,22 @@
   }
 
   .modal-header-teacher h2 {
-    font-size: 1rem;
+    font-size: x-large;
   }
 
   .logout-modal-teacher p {
-    font-size: 14px !important;
+    font-size: larger !important;
     margin-bottom: 4px;
   }
 
   .modal-buttons-teacher {
-    margin-top: 16px;
+    margin-top: 20px;
     gap: 10px !important;
   }
 
   .logout-modal-teacher .btn-confirm,
   .logout-modal-teacher .btn-cancel {
     padding: 8px 14px !important;
-    font-size: 0.85rem !important;
+    font-size: larger !important;
   }
 }

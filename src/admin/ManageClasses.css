@@ -20,6 +20,7 @@
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 20px;
   margin-top: 20px;
+  padding-right: 20px;
 }
 
 .class-card {
@@ -92,14 +93,6 @@
   background-color: var(--accent);
 }
 
-/* --- TABLES & BUTTONS --- */
-.toolbar-mc {
-  display: flex;
-  justify-content: space-between;
-  align-items: center; /* NEW — vertically centers back button + title */
-  flex-wrap: nowrap; /* NEW — keeps them on one line */
-  margin-bottom: 25px;
-}
 .section-title-mc {
   color: black;
 }
@@ -139,12 +132,13 @@
   gap: 8px;
 }
 
-.table-container {
+.table-container-mc {
   background: white;
   border-radius: 8px;
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   overflow-x: auto;
+  padding-right: 20px;
 }
 .data-table-mc {
   width: 100%;
@@ -298,12 +292,7 @@
   justify-content: center;
   align-items: center;
 }
-.modal-content-mc {
-  background: white;
-  width: 450px;
-  border-radius: 8px;
-  animation: slideDown 0.3s;
-}
+
 @keyframes slideDown {
   from {
     transform: translateY(-50px);
@@ -315,7 +304,7 @@
   }
 }
 .modal-header-mc {
-  background: var(--dark-gray);
+  background: var(--primary);
   color: white;
   padding: 15px 20px;
   display: flex;
@@ -413,6 +402,7 @@
   display: flex;
   flex-direction: column;
   gap: 15px;
+  padding-right: 20px;
 }
 .grade-item-container {
   width: 100%;
@@ -595,20 +585,110 @@
   gap: 8px;
 }
 
+.toolbar-mc {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 25px;
+}
+
+.toolbar-mc h2,
+.toolbar-mc h3 {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: break-word;
+}
+
+.mc-toolbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-content-mc {
+  background: white;
+  width: 450px;
+  max-width: 90%;
+  border-radius: 8px;
+  animation: slideDown 0.3s;
+}
+
+@media (max-width: 480px) {
+  .modal-content-mc {
+    width: 92%;
+  }
+
+  .modal-header-mc {
+    padding: 12px 16px;
+  }
+
+  .modal-header-mc h3 {
+    font-size: 1rem;
+  }
+
+  .modal-body-mc {
+    padding: 16px;
+  }
+
+  .form-group-mc label {
+    font-size: 0.85rem;
+  }
+
+  .form-group-mc select,
+  .form-group-mc input {
+    font-size: 0.9rem;
+    padding: 8px;
+  }
+
+  .modal-footer-mc {
+    padding: 12px;
+  }
+
+  .btn-save-mc,
+  .btn-cancel-mc {
+    padding: 8px 14px;
+    font-size: 0.9rem;
+  }
+}
+
+/* REPLACE the old mobile rule with this */
+@media (max-width: 600px) {
+  .mc-toolbar-actions {
+    margin-left: 0;
+    width: 100%;
+    margin-top: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end; /* ADD THIS */
+    padding-right: 12px;
+  }
+}
 /* RESPONSIVE */
 @media (max-width: 600px) {
   .toolbar-mc {
-    flex-direction: column;
     align-items: stretch;
   }
+  @media (max-width: 600px) {
+    .toolbar-mc h2,
+    .toolbar-mc h3 {
+      font-size: x-large;
+    }
+  }
+  .grid-container {
+    grid-template-columns: 1fr;
+  }
 }
+
 @media (max-width: 600px) {
   .data-table-mc {
-    min-width: 560px;
+    min-width: 0;
+    width: 100%;
   }
   .data-table-mc th,
   .data-table-mc td {
-    padding: 10px 8px;
-    font-size: 0.85rem;
+    padding: 8px 6px;
+    font-size: 0.78rem;
   }
 }

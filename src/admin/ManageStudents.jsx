@@ -495,7 +495,7 @@ function ManageStudents() {
       {view === "grades" && (
         <div className="view-section active">
           <div className="toolbar-ms">
-            <div>
+            <div className="toolbar-ms-title">
               <h2 style={{ color: "#000", marginBottom: "5px" }}>
                 Grade Level Masterlist
               </h2>
@@ -504,8 +504,7 @@ function ManageStudents() {
               </p>
             </div>
             <button
-              className="btn-import-ms"
-              style={{ marginLeft: "auto" }}
+              className="btn-import-ms btn-import-ms--spacing"
               onClick={() => {
                 const headers = [
                   [
@@ -585,14 +584,7 @@ function ManageStudents() {
             </button>
             <h3 style={{ marginLeft: "15px" }}>Grade {selectedGrade} List</h3>
 
-            <div
-              style={{
-                marginLeft: "auto",
-                display: "flex",
-                gap: "10px",
-                alignItems: "center",
-              }}
-            >
+            <div className="ms-toolbar-actions">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -888,7 +880,7 @@ function ManageStudents() {
           style={{ display: "flex", zIndex: 9999 }}
         >
           <div
-            className="modal-content-teacher add-teacher-modal"
+            className="modal-content-student add-student-modal"
             style={{ maxWidth: "780px", width: "95%" }}
           >
             <div className="modal-header">

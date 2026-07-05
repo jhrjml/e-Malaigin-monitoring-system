@@ -777,14 +777,7 @@ const ManageClasses = () => {
                 Manage Grade {currentGrade} – Section {currentSection}
               </h2>
             </div>
-            <div
-              className="grid-container"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "20px",
-              }}
-            >
+            <div className="grid-container">
               <div
                 className="section-card action-card"
                 onClick={() => setCurrentView("view-masterlist")}
@@ -826,15 +819,7 @@ const ManageClasses = () => {
                 style={{ display: "none" }}
                 onChange={handleStudentFileChange}
               />
-
-              <div
-                style={{
-                  marginLeft: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                }}
-              >
+              <div className="mc-toolbar-actions">
                 {selectedIds.size > 0 && (
                   <>
                     <span className="selected-count-badge">
@@ -892,7 +877,7 @@ const ManageClasses = () => {
               </div>
             </div>
 
-            <div className="table-container">
+            <div className="table-container-mc">
               <table className="data-table-mc">
                 <thead>
                   <tr>
@@ -954,7 +939,7 @@ const ManageClasses = () => {
                 className="btn-back-mc"
                 onClick={() => setCurrentView("view-action")}
               >
-                <i className="fas fa-arrow-left" /> Back
+                <i className="fas fa-arrow-left" />
               </button>
               <h3>Class Schedule</h3>
             </div>
@@ -965,7 +950,7 @@ const ManageClasses = () => {
               <strong style={{ marginLeft: "4px" }}>Sunday – Thursday</strong>
             </div>
 
-            <div className="table-container">
+            <div className="table-container-mc">
               <table className="data-table-mc">
                 <thead>
                   <tr>

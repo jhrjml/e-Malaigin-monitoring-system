@@ -108,7 +108,7 @@
   font-size: large;
 }
 .logout-modal-parent .btn-confirm:hover {
-  background: #1a252f;
+  opacity: 0.85;
 }
 
 .logout-modal-parent .btn-cancel {
@@ -122,7 +122,7 @@
   font-size: large;
 }
 .logout-modal-parent .btn-cancel:hover {
-  background: #dce1e7;
+  opacity: 0.85;
 }
 
 /* ═════════════════════════════════════════════════════════════════════════
@@ -513,22 +513,22 @@
   }
 
   .modal-header-parent h2 {
-    font-size: 1rem;
+    font-size: x-large;
   }
 
   .logout-modal-parent p {
-    font-size: 12px !important;
+    font-size: larger !important;
     margin-bottom: 4px;
   }
 
   .modal-buttons-parent {
-    margin-top: 16px;
+    margin-top: 20px;
     gap: 10px !important;
   }
 
   .logout-modal-parent .btn-confirm,
   .logout-modal-parent .btn-cancel {
     padding: 8px 14px !important;
-    font-size: 0.85rem !important;
+    font-size: larger !important;
   }
 }

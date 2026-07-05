@@ -456,6 +456,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                     Grade {classGrade} – Section {classSection}
                   </small>
                 </div>
+                <span className="cwr-toolbar-break" />
                 <button
                   className="cwr-btn-add"
                   onClick={() => setShowModal(true)}

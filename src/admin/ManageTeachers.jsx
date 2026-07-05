@@ -584,7 +584,7 @@ function ManageTeachers() {
               <p>Manage school faculty and class advisers.</p>
             </div>
 
-            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <div className="teacher-toolbar-actions">
               <button className="btn-import-mt" onClick={downloadTemplate}>
                 <i className="fas fa-download"></i> Download Template
               </button>

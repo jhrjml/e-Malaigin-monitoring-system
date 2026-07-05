@@ -79,9 +79,6 @@
   transition: 0.2s;
   font-size: large;
 }
-.btn-generate:hover {
-  background: #2980b9;
-}
 
 .tips {
   background: #fffbe6;
@@ -327,4 +324,83 @@
   font-size: 4rem;
   margin-bottom: 20px;
   opacity: 0.3;
+}
+
+@media (max-width: 900px) {
+  .qr-layout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 480px) {
+  .card {
+    padding: 18px;
+  }
+
+  .card-header-qr h3 {
+    font-size: 1.05rem;
+  }
+
+  .preview-card {
+    padding: 18px 16px;
+    box-sizing: border-box;
+  }
+
+  .id-sides-wrapper {
+    width: 100%;
+  }
+
+  .id-side-block {
+    width: 100%;
+  }
+
+  .id-card {
+    width: 100% !important;
+    max-width: 450px;
+    height: auto !important;
+    aspect-ratio: unset; /* CHANGED — let height come from actual content */
+    box-sizing: border-box;
+    overflow: visible; /* ADDED — safety net so nothing clips even if tight */
+  }
+
+  .id-card-body-front,
+  .id-card-body-back {
+    padding: 8px 10px;
+    gap: 10px;
+  }
+
+  .id-card-topbar {
+    min-height: 36px;
+    padding: 4px 10px;
+  }
+
+  .id-card-logo {
+    height: 26px;
+    width: 26px;
+  }
+
+  .id-card-school {
+    font-size: 0.85rem;
+  }
+
+  .id-photo-box {
+    width: 35%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+  }
+
+  .id-info-right {
+    gap: 6px;
+  }
+
+  .id-info-row label {
+    font-size: 0.55rem;
+  }
+
+  .id-info-row span {
+    font-size: 0.75rem;
+  }
+
+  .id-qr-right {
+    width: 100px;
+  }
 }

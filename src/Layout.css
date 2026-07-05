@@ -214,6 +214,7 @@ header .user-profile i {
 }
 
 /* --- RESPONSIVE --- */
+
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
@@ -229,36 +230,6 @@ header .user-profile i {
   .sidebar.open {
     margin-left: 0;
   }
-
-  .brand-logo {
-    padding: 16px 14px;
-    gap: 8px;
-  }
-
-  .brand-logo-img {
-    width: 36px;
-    height: 36px;
-  }
-
-  .brand-title {
-    font-size: 17px;
-  }
-
-  .brand-subtitle {
-    font-size: 0.6rem;
-    letter-spacing: 1px;
-  }
-
-  .menu li {
-    padding: 10px 14px;
-    font-size: 0.85rem;
-  }
-
-  .menu li i {
-    width: 20px;
-    font-size: 1rem;
-  }
-
   .sidebar-backdrop {
     display: block;
     position: fixed;
@@ -281,10 +252,10 @@ header .user-profile i {
     padding: 10px 14px;
   }
   header .header-left .header-title {
-    font-size: 1rem;
+    font-size: x-large;
   }
   header #menu-toggle {
-    font-size: 1.1rem;
+    font-size: x-large;
     padding: 4px;
   }
   .header-left {
@@ -299,8 +270,6 @@ header .user-profile i {
     top: 0;
     left: 0;
     height: 100%;
-    width: 190px;
-    max-width: 75vw;
     margin-left: -100%;
     z-index: 999;
     overflow-y: auto;

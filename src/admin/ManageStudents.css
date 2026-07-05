@@ -18,9 +18,10 @@
 /* --- PRETTY TABLE DESIGN --- */
 .pretty-table-container {
   margin-top: 25px;
+  overflow-x: auto;
 }
 .pretty-table {
-  width: 90%;
+  width: 100%;
   border-collapse: separate;
   border-spacing: 0 15px;
   margin: 0 auto;
@@ -241,7 +242,7 @@
 }
 
 .add-student-modal .modal-header {
-  background: var(--dark-gray);
+  background: var(--primary);
   color: white;
   padding: 15px 20px;
   display: flex;
@@ -267,6 +268,8 @@
   background: white;
   text-align: right;
   display: flex;
+  justify-content: flex-end;
+  gap: 10px;
   border-top: 1px solid #eee;
 }
 
@@ -349,6 +352,7 @@
   box-shadow: 0 4px 10px rgba(26, 188, 156, 0.3);
   transition: all 0.2s;
   font-size: 0.875rem;
+  margin-left: auto;
 }
 .btn-import-ms:hover {
   transform: translateY(-2px);
@@ -444,16 +448,42 @@
 
 .toolbar-ms {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  align-items: center; /* NEW — vertically centers back button + title */
-  flex-wrap: nowrap; /* NEW — keeps them on one line */
+  align-items: center;
+  gap: 10px;
   margin-bottom: 25px;
 }
 
-/* RESPONSIVE */
+.toolbar-ms h3 {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: break-word;
+}
+
+.ms-toolbar-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 @media (max-width: 600px) {
-  .toolbar-ms {
-    flex-direction: column;
-    align-items: stretch;
+  .ms-toolbar-actions {
+    margin-left: 0;
+    width: 100%;
+    margin-top: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    padding-right: 12px;
+  }
+  .toolbar-ms-title {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .btn-import-ms--spacing {
+    margin-top: 12px;
   }
 }

@@ -729,10 +729,12 @@ function AttendanceMonitoring() {
 
               {!todayBlocked && !scheduleEnded && timeWindow === "after" && (
                 <div className="am-alert am-alert-warning">
-                  <i className="fas fa-exclamation-triangle"></i> The class
-                  period has ended. Scanning is locked. Use{" "}
-                  <strong>Close Attendance</strong> to finalise and mark absent
-                  students.
+                  <i className="fas fa-exclamation-triangle"></i>
+                  <span>
+                    The class period has ended. Scanning is locked. Use{" "}
+                    <strong>Close Attendance</strong> to finalise and mark
+                    absent students.
+                  </span>
                 </div>
               )}
 

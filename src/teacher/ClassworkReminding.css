@@ -725,13 +725,32 @@
   .cwr-main {
     padding: 14px;
   }
+
   .cwr-toolbar {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-wrap: wrap;
   }
+
+  .cwr-title-block {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .cwr-title-block h3,
+  .cwr-title-block small {
+    overflow-wrap: break-word;
+  }
+
+  .cwr-toolbar-break {
+    flex-basis: 100%;
+    height: 0;
+  }
+
   .cwr-btn-add {
-    margin-left: 0;
+    flex: 0 1 auto;
+    width: auto;
+    margin-left: auto;
   }
+
   .cwr-td-actions {
     flex-direction: column;
   }

@@ -253,7 +253,7 @@
 }
 
 .add-teacher-modal .modal-header {
-  background: var(--dark-gray);
+  background: var(--primary);
   color: white;
   padding: 15px 25px;
   display: flex;
@@ -458,6 +458,21 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.teacher-toolbar-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-left: auto;
+}
+
+@media (max-width: 600px) {
+  .teacher-toolbar-actions {
+    margin-top: 12px;
+    flex-wrap: wrap;
+    padding-right: 12px;
+  }
 }
 
 @media (max-width: 600px) {

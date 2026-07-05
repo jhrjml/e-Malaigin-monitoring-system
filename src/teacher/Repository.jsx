@@ -323,17 +323,14 @@ function Repository() {
 
           {currentView === "month" && (
             <div className="view-section">
-              <div
-                className="toolbar-rep"
-                style={{ flexWrap: "wrap", gap: "10px" }}
-              >
+              <div className="toolbar-rep toolbar-rep--wrap">
                 <button
                   className="btn-back-rep"
                   onClick={() => setCurrentView("load")}
                 >
                   <i className="fas fa-arrow-left"></i>
                 </button>
-                <div>
+                <div className="rep-toolbar-title">
                   <h3>
                     {repoSubject} (G{repoGrade}-{repoSection})
                   </h3>
@@ -341,14 +338,14 @@ function Repository() {
                     Select a month to view logs
                   </small>
                 </div>
-                <div className="search-box" style={{ marginLeft: "auto" }}>
+                <div className="search-box rep-search">
+                  <i className="fas fa-search"></i>
                   <input
                     type="text"
                     placeholder="Search month..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
-                  <i className="fas fa-search"></i>
                 </div>
               </div>
               <div className="grid-container-rep">
@@ -387,30 +384,20 @@ function Repository() {
 
           {currentView === "list" && (
             <div className="view-section">
-              <div
-                className="toolbar-rep"
-                style={{ flexWrap: "wrap", gap: "10px" }}
-              >
+              <div className="toolbar-rep toolbar-rep--wrap">
                 <button
                   className="btn-back-rep"
                   onClick={() => setCurrentView("month")}
                 >
                   <i className="fas fa-arrow-left"></i>
                 </button>
-                <div>
+                <div className="rep-toolbar-title">
                   <h3>{selectedMonthLabel} Attendance</h3>
                   <small style={{ color: "var(--gray)" }}>
                     {repoSubject} - Grade {repoGrade} Section {repoSection}
                   </small>
                 </div>
-                <div
-                  style={{
-                    marginLeft: "auto",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "16px",
-                  }}
-                >
+                <div className="rep-list-actions">
                   {monthStudents.length > 0 && (
                     <div className="matrix-legend">
                       <span className="status-mark present">P</span> Present
