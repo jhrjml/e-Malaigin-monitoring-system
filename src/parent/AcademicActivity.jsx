@@ -7,6 +7,12 @@
 // `focusClasswork` prop: { studentId, subject, classworkId }. When that
 // prop is set, this component switches to the matching child + subject,
 // opens the classwork list, and briefly highlights the matching item.
+//
+// EDIT-TIME DISPLAY — each card now shows "Edited …" using the item's
+// `editedAt` field (set by the teacher's ClassworkReminding.jsx when they
+// edit a post). Under 24 hours old it shows a relative time ("Edited 5m
+// ago" / "Edited 3h ago"); once it passes 24 hours it switches to a plain
+// date ("Edited Jul 5") — same behavior as Google Classroom.
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "../api/firebase";
@@ -36,6 +42,41 @@ const iconFor = (subject) => {
     EPP: "fa-seedling",
   };
   return map[subject] || "fa-book-open";
+};
+
+// ── Convert a Firestore Timestamp / ISO string / Date → JS Date (or null) ──
+const toJsDate = (val) => {
+  if (!val) return null;
+  if (typeof val?.toDate === "function") return val.toDate();
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+// ── "Edited …" label — same convention as Google Classroom:
+//    under 24h old  → the actual clock time, e.g. "Edited 10:54 AM"
+//    24h or older    → a plain date, e.g. "Edited Sep 18"
+const formatEditedLabel = (editedAt) => {
+  const date = toJsDate(editedAt);
+  if (!date) return null;
+
+  const now = new Date();
+  const diffMs = now - date;
+
+  const isUnder24h = diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000;
+
+  if (isUnder24h) {
+    return `Edited ${date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    })}`;
+  }
+
+  const sameYear = date.getFullYear() === now.getFullYear();
+  return `Edited ${date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: sameYear ? undefined : "numeric",
+  })}`;
 };
 
 function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
@@ -346,51 +387,63 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
                         No classwork posted for this subject yet.
                       </div>
                     ) : (
-                      classworkList.map((cw) => (
-                        <div
-                          key={cw.id}
-                          id={`cw-${cw.id}`}
-                          className={`cw-card-aa ${
-                            cw.myStatus === "Submitted"
-                              ? "cw-submitted-aa"
-                              : cw.myStatus === "Missing"
-                                ? "cw-missed-aa"
-                                : "cw-pending-aa"
-                          }`}
-                          style={
-                            highlightId === cw.id
-                              ? {
-                                  outline: "2px solid #a65f81",
-                                  boxShadow:
-                                    "0 0 0 4px rgba(52, 152, 219, 0.18)",
-                                }
-                              : undefined
-                          }
-                        >
-                          <div className="cw-header-aa">
-                            <span className="cw-title-aa">
-                              {cw.title}: {cw.desc}
-                            </span>
-                            <span
-                              className={`cw-pill-aa ${
-                                cw.myStatus === "Submitted"
-                                  ? "pill-submitted-aa"
-                                  : cw.myStatus === "Missing"
-                                    ? "pill-missed-aa"
-                                    : "pill-pending-aa"
-                              }`}
-                            >
-                              {cw.myStatus ?? "Not Marked"}
-                            </span>
+                      classworkList.map((cw) => {
+                        const editedLabel = formatEditedLabel(cw.editedAt);
+                        return (
+                          <div
+                            key={cw.id}
+                            id={`cw-${cw.id}`}
+                            className={`cw-card-aa ${
+                              cw.myStatus === "Submitted"
+                                ? "cw-submitted-aa"
+                                : cw.myStatus === "Missing"
+                                  ? "cw-missed-aa"
+                                  : "cw-pending-aa"
+                            }`}
+                            style={
+                              highlightId === cw.id
+                                ? {
+                                    outline: "2px solid #a65f81",
+                                    boxShadow:
+                                      "0 0 0 4px rgba(52, 152, 219, 0.18)",
+                                  }
+                                : undefined
+                            }
+                          >
+                            <div className="cw-header-aa">
+                              <span className="cw-title-aa">
+                                {cw.title}: {cw.desc}
+                              </span>
+                              <span
+                                className={`cw-pill-aa ${
+                                  cw.myStatus === "Submitted"
+                                    ? "pill-submitted-aa"
+                                    : cw.myStatus === "Missing"
+                                      ? "pill-missed-aa"
+                                      : "pill-pending-aa"
+                                }`}
+                              >
+                                {cw.myStatus ?? "Not Marked"}
+                              </span>
+                            </div>
+                            <div className="cw-details-aa">
+                              <p>
+                                <strong>Due Date:</strong> {cw.date}
+                              </p>
+                              <div className="cw-details-footer-aa">
+                                <p className="cw-teacher-note-aa">
+                                  Teacher reminder posted.
+                                </p>
+                                {editedLabel && (
+                                  <span className="cw-edited-aa">
+                                    <i className="fas fa-pen"></i> {editedLabel}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div className="cw-details-aa">
-                            <p>
-                              <strong>Due Date:</strong> {cw.date}
-                            </p>
-                            <p>Teacher reminder posted.</p>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>

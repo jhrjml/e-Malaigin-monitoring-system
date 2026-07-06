@@ -22,9 +22,10 @@
 .cwr-main {
   padding: 24px;
 }
+/*
 .cwr-container {
   max-width: 1100px;
-}
+}*/
 .cwr-view {
   animation: cwrFade 0.25s ease;
 }
@@ -317,7 +318,45 @@
   flex-shrink: 0;
 }
 .cwr-btn-view:hover {
-  background: #2980b9;
+  opacity: 0.85;
+}
+
+/* ── Item actions column (Grade/View button + Edit link stacked below) ── */
+.cwr-item-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Small text-style Edit link — matches the "Edit description" pattern */
+.cwr-btn-edit-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--cwr-accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-decoration: none;
+}
+.cwr-btn-edit-link .cwr-edit-link-text {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.cwr-btn-edit-link:hover {
+  color: #7a3f5c;
+}
+.cwr-btn-edit-link i {
+  font-size: 0.72rem;
+}
+/* Variant used in toolbars (grading/detail views) instead of stacked under a button */
+.cwr-btn-edit-link--inline {
+  margin-left: auto;
 }
 
 /* Empty list */
@@ -478,7 +517,6 @@
   box-shadow: var(--cwr-shadow);
   padding: 28px 28px 20px;
   border-left: 5px solid var(--cwr-teal);
-  max-width: 680px;
 }
 .cwr-ann-header {
   display: flex;
@@ -754,5 +792,13 @@
 
   .cwr-td-actions {
     flex-direction: column;
+  }
+
+  .cwr-item {
+    flex-wrap: wrap;
+  }
+
+  .cwr-item-actions {
+    align-items: center;
   }
 }

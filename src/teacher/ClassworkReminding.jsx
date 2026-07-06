@@ -3,6 +3,8 @@
 // full explanation of the pattern used here.
 // PUSH NOTIFICATIONS — doSave() now queues a notification to parents of
 // every enrolled student in this section after posting.
+// EDIT SUPPORT — added an "Edit" link under Grade/View on each list item,
+// plus an Edit modal that updates the Classwork doc and stamps `editedAt`.
 import { useState, useEffect } from "react";
 import { db } from "../api/firebase";
 import {
@@ -60,6 +62,15 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
 
   const [showModal, setShowModal] = useState(false);
   const [newCW, setNewCW] = useState({ title: "", desc: "", date: "" });
+
+  // ── Edit modal state ───────────────────────────────────────────────────
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editCW, setEditCW] = useState({
+    id: null,
+    title: "",
+    desc: "",
+    date: "",
+  });
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -300,6 +311,54 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
     })();
   };
 
+  // ── Edit classwork / announcement (offline-safe) ─────────────────────────
+  // Opens the edit modal pre-filled with the current values.
+  const openEditModal = (cw) => {
+    setEditCW({
+      id: cw.id,
+      title: cw.title,
+      desc: cw.desc || "",
+      date: cw.date || "",
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditSave = (e) => {
+    e.preventDefault();
+    guardSave(() => doEditSave());
+  };
+
+  const doEditSave = () => {
+    const { id, title, desc, date } = editCW;
+    if (!id) return;
+
+    const editedAt = new Date().toISOString();
+    const updates = { title, desc, date, editedAt };
+
+    setShowEditModal(false);
+    showToast(
+      isOnline
+        ? "Changes saved."
+        : "Changes saved offline — will sync when back online.",
+    );
+
+    // Reflect the edit immediately in the list …
+    setClassworks((prev) =>
+      prev
+        .map((cw) => (cw.id === id ? { ...cw, ...updates } : cw))
+        .sort((a, b) => (b.date || "").localeCompare(a.date || "")),
+    );
+    // … and in the open detail/grading view if that's the item being edited.
+    setActiveCW((prev) =>
+      prev && prev.id === id ? { ...prev, ...updates } : prev,
+    );
+
+    updateDoc(doc(db, "Classwork", id), updates).catch((err) => {
+      console.error(err);
+      showToast(`Failed to save changes: ${err.message}`, true);
+    });
+  };
+
   // ── Open grading or detail view ──────────────────────────────────────────
   const openCW = async (cw) => {
     if (cw.isAnnouncement) {
@@ -519,12 +578,25 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                             </span>
                           )}
                         </div>
-                        <button
-                          className="cwr-btn-view"
-                          onClick={() => openCW(cw)}
-                        >
-                          {isAnn ? "View" : "Grade"}
-                        </button>
+
+                        <div className="cwr-item-actions">
+                          <button
+                            className="cwr-btn-view"
+                            onClick={() => openCW(cw)}
+                          >
+                            {isAnn ? "View" : "Grade"}
+                          </button>
+                          <button
+                            type="button"
+                            className="cwr-btn-edit-link"
+                            onClick={() => openEditModal(cw)}
+                          >
+                            <i className="fas fa-pen"></i>{" "}
+                            <span className="cwr-edit-link-text">
+                              Edit Post
+                            </span>
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -551,6 +623,15 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                     {classSection}
                   </small>
                 </div>
+                <span className="cwr-toolbar-break" />
+                <button
+                  type="button"
+                  className="cwr-btn-edit-link cwr-btn-edit-link--inline"
+                  onClick={() => activeCW && openEditModal(activeCW)}
+                >
+                  <i className="fas fa-pen"></i>{" "}
+                  <span className="cwr-edit-link-text">Edit</span>
+                </button>
               </div>
 
               {loadingCW ? (
@@ -701,6 +782,15 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                     Grade {classGrade} – {classSection} | {classSubject}
                   </small>
                 </div>
+                <span className="cwr-toolbar-break" />
+                <button
+                  type="button"
+                  className="cwr-btn-edit-link cwr-btn-edit-link--inline"
+                  onClick={() => openEditModal(activeCW)}
+                >
+                  <i className="fas fa-pen"></i>{" "}
+                  <span className="cwr-edit-link-text">Edit</span>
+                </button>
               </div>
 
               <div className="cwr-ann-card">
@@ -822,6 +912,103 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                     {newCW.title === "Announcement"
                       ? "Post Announcement"
                       : "Post Classwork"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT CLASSWORK / ANNOUNCEMENT MODAL ── */}
+      {showEditModal && (
+        <div className="cwr-overlay">
+          <div className="cwr-modal">
+            <div className="cwr-modal-header">
+              <h3>
+                <i className="fas fa-pen"></i> Edit Entry
+              </h3>
+              <button
+                className="cwr-modal-close"
+                onClick={() => setShowEditModal(false)}
+              >
+                &times;
+              </button>
+            </div>
+            <div className="cwr-modal-body">
+              <form onSubmit={handleEditSave}>
+                <div className="cwr-form-group">
+                  <label>Type</label>
+                  <select
+                    required
+                    value={editCW.title}
+                    onChange={(e) =>
+                      setEditCW({ ...editCW, title: e.target.value })
+                    }
+                  >
+                    <option value="" disabled>
+                      Select type…
+                    </option>
+                    {CW_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {editCW.title === "Announcement" && (
+                  <div className="cwr-ann-hint">
+                    <i className="fas fa-info-circle"></i> Announcements are
+                    visible to parents. No submission tracking will be created.
+                  </div>
+                )}
+
+                <div className="cwr-form-group">
+                  <label>
+                    {editCW.title === "Announcement"
+                      ? "Announcement Message"
+                      : "Details / Instructions"}
+                  </label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={editCW.desc}
+                    onChange={(e) =>
+                      setEditCW({ ...editCW, desc: e.target.value })
+                    }
+                    placeholder={
+                      editCW.title === "Announcement"
+                        ? "Announcement Message"
+                        : "Enter instructions or details…"
+                    }
+                  />
+                </div>
+
+                <div className="cwr-form-group">
+                  <label>
+                    {editCW.title === "Announcement" ? "Date" : "Due Date"}
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editCW.date}
+                    onChange={(e) =>
+                      setEditCW({ ...editCW, date: e.target.value })
+                    }
+                  />
+                </div>
+
+                <div className="cwr-modal-footer">
+                  <button
+                    type="button"
+                    className="cwr-btn-cancel"
+                    onClick={() => setShowEditModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="cwr-btn-save">
+                    Save Changes
                   </button>
                 </div>
               </form>

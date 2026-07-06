@@ -251,6 +251,32 @@
   font-size: 0.9rem;
 }
 
+/* ── Edited-time footer row (beside "Teacher reminder posted.") ───────────── */
+.cw-details-footer-aa {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cw-teacher-note-aa {
+  margin: 3px 0;
+  color: var(--gray);
+  font-size: 0.9rem;
+}
+.cw-edited-aa {
+  font-size: 0.78rem;
+  color: var(--gray);
+  font-style: italic;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.cw-edited-aa i {
+  font-size: 0.7rem;
+}
+
 /* ── RESPONSIVE ─────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .grid-container-aa {
@@ -259,5 +285,8 @@
   .cw-header-aa {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .cw-details-footer-aa {
+    justify-content: flex-start;
   }
 }

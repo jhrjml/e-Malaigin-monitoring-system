@@ -20,7 +20,6 @@
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 20px;
   margin-top: 20px;
-  padding-right: 20px;
 }
 
 .class-card {
@@ -138,7 +137,6 @@
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   overflow-x: auto;
-  padding-right: 20px;
 }
 .data-table-mc {
   width: 100%;
@@ -402,7 +400,6 @@
   display: flex;
   flex-direction: column;
   gap: 15px;
-  padding-right: 20px;
 }
 .grade-item-container {
   width: 100%;
