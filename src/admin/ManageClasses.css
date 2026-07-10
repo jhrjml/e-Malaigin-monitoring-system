@@ -585,7 +585,6 @@
 .toolbar-mc {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
   align-items: center;
   gap: 10px;
   margin-bottom: 25px;
@@ -688,4 +687,106 @@
     padding: 8px 6px;
     font-size: 0.78rem;
   }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   MASTERLIST SEARCH (per section) — same visual design as
+   ManageStudents' .ms-search-* classes.
+   Add this block to ManageClasses.css
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.mc-search-bar-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 14px 0;
+}
+
+.mc-search-input-wrap {
+  position: relative;
+  width: 280px;
+}
+
+.mc-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #aaa;
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+.mc-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 34px 9px 34px;
+  border: 1.5px solid #a65f81;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  outline: none;
+  background: #f7f8fa;
+  color: black;
+  transition:
+    border-color 0.18s,
+    background 0.18s;
+}
+.mc-search-input:focus {
+  border-color: #a65f81;
+  background: #fff;
+}
+
+.mc-search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #e3e6ea;
+  border: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: #555;
+  font-size: 0.85rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.mc-search-clear:hover {
+  background: #d6dae0;
+}
+
+@media (max-width: 600px) {
+  .mc-search-bar-row {
+    justify-content: stretch;
+  }
+  .mc-search-input-wrap {
+    width: 100%;
+  }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   SORTABLE TABLE HEADERS
+   Used by both the Masterlist table (LRN / Name) and the Schedule
+   table (Time / Subject / Teacher).
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.mc-th-sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.mc-th-sortable:hover {
+  color: #a65f81;
+}
+
+.mc-sort-icon {
+  font-size: 0.75rem;
+  color: #b8bcc4;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.mc-sort-icon--active {
+  color: #a65f81;
 }

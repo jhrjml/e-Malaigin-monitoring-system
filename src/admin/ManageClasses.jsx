@@ -58,6 +58,18 @@ const SUBJECTS = [
 const slotLabel = (value) =>
   TIME_SLOTS.find((s) => s.value === value)?.label ?? value;
 
+// ── Sort icon (same visual design as ManageStudents.jsx) ──────────────────
+function SortIcon({ active, direction }) {
+  if (!active) {
+    return <i className="fas fa-sort mc-sort-icon"></i>;
+  }
+  return direction === "asc" ? (
+    <i className="fas fa-sort-up mc-sort-icon mc-sort-icon--active"></i>
+  ) : (
+    <i className="fas fa-sort-down mc-sort-icon mc-sort-icon--active"></i>
+  );
+}
+
 // ── Helper: fault-tolerant section-student loader ─────────────────────────
 async function loadSectionStudents(enrolledDocs) {
   const details = (
@@ -82,6 +94,10 @@ const ManageClasses = () => {
   const [sectionStudents, setSectionStudents] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [schedules, setSchedules] = useState([]);
+  // All Schedule docs across every grade/section — used only for the
+  // "teacher already booked at this time somewhere else" conflict check
+  // in the schedule modal. Refreshed each time that modal opens.
+  const [allSchedules, setAllSchedules] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -94,6 +110,35 @@ const ManageClasses = () => {
 
   // ── bulk select ─────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // ── masterlist search (same behavior as Manage Students) ───────────────
+  const [masterlistSearch, setMasterlistSearch] = useState("");
+
+  // ── masterlist sorting ───────────────────────────────────────────────────
+  const [masterlistSort, setMasterlistSort] = useState({
+    key: "lrn",
+    direction: "asc",
+  });
+  const handleMasterlistSort = (key) => {
+    setMasterlistSort((prev) =>
+      prev.key === key
+        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" },
+    );
+  };
+
+  // ── schedule sorting (sort only, no search) ─────────────────────────────
+  const [scheduleSort, setScheduleSort] = useState({
+    key: "time",
+    direction: "asc",
+  });
+  const handleScheduleSort = (key) => {
+    setScheduleSort((prev) =>
+      prev.key === key
+        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" },
+    );
+  };
 
   // ── student add/import menu ─────────────────────────────────────────────
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -155,6 +200,9 @@ const ManageClasses = () => {
         setSectionStudents(await loadSectionStudents(enrolledDocs));
         setSchedules(await getSchedules(currentGrade, currentSection));
         setSelectedIds(new Set());
+        setMasterlistSearch("");
+        setMasterlistSort({ key: "lrn", direction: "asc" });
+        setScheduleSort({ key: "time", direction: "asc" });
       } catch (e) {
         setError(e.message);
       } finally {
@@ -244,7 +292,7 @@ const ManageClasses = () => {
       });
   };
 
-  // ── bulk select helpers ───────────────────────────────────────────────
+  // ── bulk select helpers (operate on the currently visible/filtered rows) ─
   const toggleSelectOne = (enrollId) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -252,14 +300,6 @@ const ManageClasses = () => {
       else next.add(enrollId);
       return next;
     });
-  };
-
-  const allSelected =
-    sectionStudents.length > 0 && selectedIds.size === sectionStudents.length;
-
-  const toggleSelectAll = () => {
-    if (allSelected) setSelectedIds(new Set());
-    else setSelectedIds(new Set(sectionStudents.map((s) => s.enrollId)));
   };
 
   // ── drop (single) ─────────────────────────────────────────────────────
@@ -607,6 +647,19 @@ const ManageClasses = () => {
       setFormError("Please select a teacher.");
       return;
     }
+    if (takenSubjectsInSection.has(schedForm.subject)) {
+      setFormError(
+        `${schedForm.subject} is already scheduled in this section at another time slot.`,
+      );
+      return;
+    }
+    const teacherConflict = teacherConflictMap[schedForm.teacherId];
+    if (teacherConflict) {
+      setFormError(
+        `This teacher is already teaching Grade ${teacherConflict.grade}-${teacherConflict.section} at this time slot.`,
+      );
+      return;
+    }
     guardSchedule(() => doSaveSchedule());
   };
 
@@ -652,19 +705,41 @@ const ManageClasses = () => {
       });
   };
 
-  const openEditScheduleModal = (slotValue) => {
+  const openEditScheduleModal = async (slotValue) => {
     const existing = schedules.find(
       (s) => (s.timeSlot || `${s.start}-${s.end}`) === slotValue,
     );
+
+    // Subjects already used by OTHER slots in this section — used to pick a
+    // sensible default for a brand-new schedule so it doesn't open with an
+    // already-taken (disabled) subject pre-selected.
+    const subjectsUsedElsewhere = new Set(
+      schedules
+        .filter((s) => (s.timeSlot || `${s.start}-${s.end}`) !== slotValue)
+        .map((s) => s.subject),
+    );
+    const defaultSubject =
+      existing?.subject ||
+      SUBJECTS.find((s) => !subjectsUsedElsewhere.has(s)) ||
+      SUBJECTS[0];
+
     setIsEditingSched(!!existing);
     setEditSchedId(existing ? existing.id : null);
     setSchedForm({
-      subject: existing?.subject || SUBJECTS[0],
+      subject: defaultSubject,
       timeSlot: slotValue,
       teacherId: existing?.teacherId || "",
     });
     setFormError("");
     setShowScheduleModal(true);
+
+    // Refresh the full cross-section/grade schedule list so the subject
+    // and teacher dropdowns reflect the latest conflicts, not stale data.
+    try {
+      setAllSchedules(await getSchedules());
+    } catch (e) {
+      console.error("Failed to refresh schedules for conflict check:", e);
+    }
   };
 
   const handleSelectGrade = (level) =>
@@ -683,18 +758,117 @@ const ManageClasses = () => {
   const studentDisplayName = (s) =>
     `${s.lastName}, ${s.firstName}${s.middleName ? ` ${s.middleName.charAt(0).toUpperCase()}.` : ""}`;
 
-  const scheduleRows = TIME_SLOTS.map((slot) => {
+  // ── masterlist: search filter ───────────────────────────────────────────
+  const masterlistQuery = masterlistSearch.trim().toLowerCase();
+  const filteredSectionStudents = !masterlistQuery
+    ? sectionStudents
+    : sectionStudents.filter((s) => {
+        const fullName = studentDisplayName(s).toLowerCase();
+        return (
+          fullName.includes(masterlistQuery) ||
+          String(s.lrn || "")
+            .toLowerCase()
+            .includes(masterlistQuery)
+        );
+      });
+
+  // ── masterlist: sorting ─────────────────────────────────────────────────
+  const getMasterlistSortValue = (s, key) => {
+    switch (key) {
+      case "lrn":
+        return String(s.lrn || "");
+      case "name":
+        return studentDisplayName(s).toLowerCase();
+      default:
+        return "";
+    }
+  };
+
+  const visibleSectionStudents = filteredSectionStudents
+    .slice()
+    .sort((a, b) => {
+      const va = getMasterlistSortValue(a, masterlistSort.key);
+      const vb = getMasterlistSortValue(b, masterlistSort.key);
+      const cmp = String(va).localeCompare(String(vb), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+      return masterlistSort.direction === "asc" ? cmp : -cmp;
+    });
+
+  const allSelected =
+    visibleSectionStudents.length > 0 &&
+    selectedIds.size === visibleSectionStudents.length;
+
+  const toggleSelectAll = () => {
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(visibleSectionStudents.map((s) => s.enrollId)));
+  };
+
+  // ── schedule: sorting (sort only, no search) ────────────────────────────
+  const scheduleRows = TIME_SLOTS.map((slot, index) => {
     const existing = schedules.find(
       (s) => (s.timeSlot || `${s.start}-${s.end}`) === slot.value,
     );
     return {
       timeSlot: slot.value,
       timeLabel: slot.label,
+      timeIndex: index,
       subject: existing?.subject || null,
       teacherId: existing?.teacherId || null,
       assigned: !!existing,
     };
   });
+
+  const getScheduleSortValue = (row, key) => {
+    switch (key) {
+      case "time":
+        return row.timeIndex;
+      case "subject":
+        return row.subject ? row.subject.toLowerCase() : "\uffff"; // unassigned sorts last
+      case "teacher":
+        return row.assigned
+          ? teacherName(row.teacherId).toLowerCase()
+          : "\uffff"; // unassigned sorts last
+      default:
+        return "";
+    }
+  };
+
+  const visibleScheduleRows = scheduleRows.slice().sort((a, b) => {
+    const va = getScheduleSortValue(a, scheduleSort.key);
+    const vb = getScheduleSortValue(b, scheduleSort.key);
+    let cmp;
+    if (typeof va === "number" && typeof vb === "number") {
+      cmp = va - vb;
+    } else {
+      cmp = String(va).localeCompare(String(vb), undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+    }
+    return scheduleSort.direction === "asc" ? cmp : -cmp;
+  });
+
+  // ── schedule modal: subject conflict check (within the current section) ──
+  // A subject can only appear once per section. Exclude the schedule row
+  // currently being edited so its own subject stays selectable.
+  const takenSubjectsInSection = new Set(
+    schedules.filter((s) => s.id !== editSchedId).map((s) => s.subject),
+  );
+
+  // ── schedule modal: teacher conflict check (across ALL grades/sections) ──
+  // A teacher can only be in one place during a given time slot. Map every
+  // teacherId already booked at the slot currently open in the modal to
+  // where they're booked, excluding the schedule row being edited so a
+  // teacher keeps showing as available for their own existing slot.
+  const teacherConflictMap = {};
+  allSchedules
+    .filter((s) => s.id !== editSchedId)
+    .filter((s) => (s.timeSlot || `${s.start}-${s.end}`) === schedForm.timeSlot)
+    .forEach((s) => {
+      teacherConflictMap[s.teacherId] = { grade: s.grade, section: s.section };
+    });
 
   // ════════════════════════════════════════════════════════════════════════
   // RENDER
@@ -810,7 +984,18 @@ const ManageClasses = () => {
               >
                 <i className="fas fa-arrow-left" />
               </button>
-              <h3>Section Masterlist</h3>
+              <div>
+                <h3>Section Masterlist</h3>
+                <p
+                  style={{
+                    margin: "2px 0 0",
+                    fontSize: "0.85rem",
+                    color: "#888",
+                  }}
+                >
+                  Grade {currentGrade} – {currentSection}
+                </p>
+              </div>
 
               <input
                 ref={studentFileRef}
@@ -877,6 +1062,30 @@ const ManageClasses = () => {
               </div>
             </div>
 
+            {/* ── search bar (same design as Manage Students) ── */}
+            <div className="mc-search-bar-row">
+              <div className="mc-search-input-wrap">
+                <i className="fas fa-search mc-search-icon"></i>
+                <input
+                  type="text"
+                  className="mc-search-input"
+                  placeholder="Search name or LRN…"
+                  value={masterlistSearch}
+                  onChange={(e) => setMasterlistSearch(e.target.value)}
+                />
+                {masterlistSearch && (
+                  <button
+                    type="button"
+                    className="mc-search-clear"
+                    onClick={() => setMasterlistSearch("")}
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="table-container-mc">
               <table className="data-table-mc">
                 <thead>
@@ -886,16 +1095,34 @@ const ManageClasses = () => {
                         type="checkbox"
                         checked={allSelected}
                         onChange={toggleSelectAll}
-                        disabled={sectionStudents.length === 0}
+                        disabled={visibleSectionStudents.length === 0}
                       />
                     </th>
-                    <th>LRN</th>
-                    <th>Name</th>
+                    <th
+                      className="mc-th-sortable"
+                      onClick={() => handleMasterlistSort("lrn")}
+                    >
+                      LRN{" "}
+                      <SortIcon
+                        active={masterlistSort.key === "lrn"}
+                        direction={masterlistSort.direction}
+                      />
+                    </th>
+                    <th
+                      className="mc-th-sortable"
+                      onClick={() => handleMasterlistSort("name")}
+                    >
+                      Name{" "}
+                      <SortIcon
+                        active={masterlistSort.key === "name"}
+                        direction={masterlistSort.direction}
+                      />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sectionStudents.length > 0 ? (
-                    sectionStudents.map((student) => (
+                  {visibleSectionStudents.length > 0 ? (
+                    visibleSectionStudents.map((student) => (
                       <tr
                         key={student.enrollId}
                         className={
@@ -921,7 +1148,9 @@ const ManageClasses = () => {
                         colSpan="3"
                         style={{ textAlign: "center", padding: "20px" }}
                       >
-                        No students enrolled in this section.
+                        {masterlistQuery
+                          ? `No students found for "${masterlistSearch}".`
+                          : "No students enrolled in this section."}
                       </td>
                     </tr>
                   )}
@@ -941,7 +1170,18 @@ const ManageClasses = () => {
               >
                 <i className="fas fa-arrow-left" />
               </button>
-              <h3>Class Schedule</h3>
+              <div>
+                <h3>Class Schedule</h3>
+                <p
+                  style={{
+                    margin: "2px 0 0",
+                    fontSize: "0.85rem",
+                    color: "#888",
+                  }}
+                >
+                  Grade {currentGrade} – {currentSection}
+                </p>
+              </div>
             </div>
 
             <div className="day-badge">
@@ -954,14 +1194,41 @@ const ManageClasses = () => {
               <table className="data-table-mc">
                 <thead>
                   <tr>
-                    <th>Time</th>
-                    <th>Subject</th>
-                    <th>Teacher</th>
+                    <th
+                      className="mc-th-sortable"
+                      onClick={() => handleScheduleSort("time")}
+                    >
+                      Time{" "}
+                      <SortIcon
+                        active={scheduleSort.key === "time"}
+                        direction={scheduleSort.direction}
+                      />
+                    </th>
+                    <th
+                      className="mc-th-sortable"
+                      onClick={() => handleScheduleSort("subject")}
+                    >
+                      Subject{" "}
+                      <SortIcon
+                        active={scheduleSort.key === "subject"}
+                        direction={scheduleSort.direction}
+                      />
+                    </th>
+                    <th
+                      className="mc-th-sortable"
+                      onClick={() => handleScheduleSort("teacher")}
+                    >
+                      Teacher{" "}
+                      <SortIcon
+                        active={scheduleSort.key === "teacher"}
+                        direction={scheduleSort.direction}
+                      />
+                    </th>
                     <th style={{ textAlign: "center" }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {scheduleRows.map((row) => (
+                  {visibleScheduleRows.map((row) => (
                     <tr key={row.timeSlot}>
                       <td>
                         <strong>{row.timeLabel}</strong>
@@ -1121,12 +1388,28 @@ const ManageClasses = () => {
                       setSchedForm({ ...schedForm, subject: e.target.value })
                     }
                   >
-                    {SUBJECTS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
+                    {SUBJECTS.map((s) => {
+                      const taken = takenSubjectsInSection.has(s);
+                      return (
+                        <option key={s} value={s} disabled={taken}>
+                          {s}
+                          {taken ? " — Already scheduled in this section" : ""}
+                        </option>
+                      );
+                    })}
                   </select>
+                  {takenSubjectsInSection.has(schedForm.subject) && (
+                    <p
+                      style={{
+                        color: "#e67e22",
+                        fontSize: "0.78rem",
+                        marginTop: "4px",
+                      }}
+                    >
+                      ⚠ This subject is already scheduled in this section at
+                      another time slot.
+                    </p>
+                  )}
                 </div>
 
                 <div className="form-group-mc">
@@ -1147,15 +1430,36 @@ const ManageClasses = () => {
                       }
                     >
                       <option value="">— Select a teacher —</option>
-                      {teachers.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.fname} {t.mname ? t.mname + " " : ""}
-                          {t.lname}
-                          {t.advisory ? ` (Advisory: ${t.advisory})` : ""}
-                        </option>
-                      ))}
+                      {teachers.map((t) => {
+                        const conflict = teacherConflictMap[t.id];
+                        return (
+                          <option key={t.id} value={t.id} disabled={!!conflict}>
+                            {t.fname} {t.mname ? t.mname + " " : ""}
+                            {t.lname}
+                            {t.advisory ? ` (Advisory: ${t.advisory})` : ""}
+                            {conflict
+                              ? ` — Already teaching Grade ${conflict.grade}-${conflict.section} at this time`
+                              : ""}
+                          </option>
+                        );
+                      })}
                     </select>
                   )}
+                  {schedForm.teacherId &&
+                    teacherConflictMap[schedForm.teacherId] && (
+                      <p
+                        style={{
+                          color: "#e67e22",
+                          fontSize: "0.78rem",
+                          marginTop: "4px",
+                        }}
+                      >
+                        ⚠ This teacher is already teaching Grade{" "}
+                        {teacherConflictMap[schedForm.teacherId].grade}-
+                        {teacherConflictMap[schedForm.teacherId].section} at
+                        this time slot.
+                      </p>
+                    )}
                 </div>
 
                 {formError && (
