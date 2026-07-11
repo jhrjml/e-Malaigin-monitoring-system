@@ -129,133 +129,6 @@
   gap: 24px;
 }
 
-/* ── Dashboard search ───────────────────────────────────────────────────── */
-.dashboard-search-card {
-  border-radius: 14px;
-  padding: 14px 20px;
-}
-
-.dashboard-search-bar-row {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.dashboard-search-input-wrap {
-  position: relative;
-  width: 240px;
-}
-
-.dashboard-search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #aaa;
-  font-size: 0.85rem;
-  pointer-events: none;
-}
-
-.dashboard-search-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 9px 34px 9px 34px;
-  border: 1.5px solid #a65f81;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  outline: none;
-  background: #f7f8fa;
-  color: black;
-  transition:
-    border-color 0.18s,
-    background 0.18s;
-}
-.dashboard-search-input:focus {
-  border-color: var(--accent);
-  background: #fff;
-}
-
-.dashboard-search-clear {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: #e3e6ea;
-  border: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  color: #555;
-  font-size: 0.85rem;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.dashboard-search-clear:hover {
-  background: #d6dae0;
-}
-
-@media (max-width: 600px) {
-  .dashboard-search-bar-row {
-    justify-content: stretch;
-  }
-  .dashboard-search-input-wrap {
-    width: 100%;
-  }
-}
-
-.dashboard-search-results {
-  margin-top: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.dashboard-search-status {
-  text-align: center;
-  color: var(--gray);
-  font-size: 0.85rem;
-  padding: 14px 0;
-}
-.dashboard-search-status--error {
-  color: var(--danger);
-  font-weight: 600;
-}
-
-.dashboard-search-section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #888;
-  margin-bottom: 8px;
-}
-.dashboard-search-section-title i {
-  color: var(--accent);
-}
-
-.dashboard-search-enroll-badge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 20px;
-  white-space: nowrap;
-}
-.dashboard-search-enroll-badge.enrolled {
-  background: rgba(46, 204, 113, 0.12);
-  color: #1e8449;
-}
-.dashboard-search-enroll-badge.dropped {
-  background: rgba(231, 76, 60, 0.12);
-  color: var(--danger);
-}
-
 /* ── Stat cards row ─────────────────────────────────────────────────────── */
 .stat-cards-row {
   display: grid;
@@ -335,6 +208,33 @@
 @media (max-width: 900px) {
   .overview-main-row {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ── Charts row: Enrollment/Dropout bar chart beside the Grade/Section
+   stacked chart ─────────────────────────────────────────────────────── */
+.charts-row {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+}
+
+.charts-row .enrollment-chart-card {
+  flex: 1.6;
+  min-width: 0;
+}
+
+.charts-row .gs-chart-card {
+  flex: 1.4;
+  min-width: 320px;
+}
+
+@media (max-width: 900px) {
+  .charts-row {
+    flex-direction: column;
+  }
+  .charts-row .gs-chart-card {
+    min-width: 0;
   }
 }
 
@@ -718,6 +618,7 @@
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
+  min-height: 340px;
 }
 
 .enrollment-chart-header {
@@ -803,6 +704,49 @@
 .enrollment-chart-canvas-wrap {
   position: relative;
   width: 100%;
+  flex: 1;
+  min-height: 220px;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   GRADE / SECTION STACKED BAR CHART
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.gs-chart-card {
+  background: var(--white);
+  border-radius: 14px;
+  padding: 22px 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  min-height: 340px;
+}
+
+.gs-chart-header {
+  margin-bottom: 10px;
+}
+.gs-chart-header h3 {
+  font-size: 1.05rem;
+  color: #1a1a2e;
+  margin: 0;
+}
+
+.gs-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--gray);
+  font-size: 0.875rem;
+  padding: 40px 20px;
+  flex: 1;
+}
+
+.gs-chart-canvas-wrap {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 220px;
 }
 
 .modal-overlay-admin {

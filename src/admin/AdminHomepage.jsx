@@ -9,15 +9,12 @@ import Archive from "./Archive";
 import {
   getDashboardStats,
   getEnrollmentDropoutStats,
+  getGradeSectionDistribution,
   getSchoolYears,
   addSchoolYear,
   setActiveSchoolYear,
   importPublicHolidaysForSchoolYear,
   backfillEnrollmentTimestamps,
-  getTeachers,
-  getStudents,
-  getUsers,
-  getEnrolled,
 } from "../api/firebaseApi";
 import {
   Chart as ChartJS,
@@ -62,6 +59,78 @@ const MONTH_NAMES = [
 ];
 const WEEKDAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
+// Palette cycled through for each distinct SECTION NAME in the grade/section
+// stacked bar chart — sections are sorted alphabetically once, then each
+// gets a fixed color from this list, so e.g. "Rizal" is always the same
+// blue in every grade's bar and the legend stays consistent.
+const STACK_COLORS = [
+  { bg: "#186FAF", text: "#ffffff" },
+  { bg: "#A8C8EA", text: "#1a3a55" },
+  { bg: "#378ADD", text: "#ffffff" },
+  { bg: "#E24B4A", text: "#ffffff" },
+  { bg: "#f1c40f", text: "#5c4a00" },
+  { bg: "#2ecc71", text: "#0d3d21" },
+  { bg: "#9b59b6", text: "#ffffff" },
+  { bg: "#e67e22", text: "#ffffff" },
+];
+
+/**
+ * stackValueLabelsPlugin
+ * A Chart.js plugin (scoped to just the grade/section chart via the
+ * `plugins` prop, not globally registered) that draws:
+ *   1. The raw count centered inside each stacked segment.
+ *   2. A "Total: N" label above the topmost segment of each bar.
+ * Segment counts under ~14px tall are skipped so the number never
+ * overflows a sliver-thin segment.
+ */
+const stackValueLabelsPlugin = {
+  id: "stackValueLabels",
+  afterDatasetsDraw(chart) {
+    const { ctx, data } = chart;
+
+    data.datasets.forEach((dataset, dsIndex) => {
+      const meta = chart.getDatasetMeta(dsIndex);
+      meta.data.forEach((bar, i) => {
+        const value = dataset.data[i];
+        if (!value) return;
+        const height = Math.abs(bar.base - bar.y);
+        if (height < 14) return;
+        ctx.save();
+        ctx.fillStyle = dataset.textColor || "#fff";
+        ctx.font = "600 12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(value), bar.x, (bar.y + bar.base) / 2);
+        ctx.restore();
+      });
+    });
+
+    for (let i = 0; i < data.labels.length; i++) {
+      let topY = Infinity;
+      let anchorX = null;
+      let total = 0;
+      data.datasets.forEach((dataset, dsIndex) => {
+        const meta = chart.getDatasetMeta(dsIndex);
+        const bar = meta.data[i];
+        const value = dataset.data[i];
+        if (!bar || !value) return;
+        total += value;
+        if (bar.y < topY) {
+          topY = bar.y;
+          anchorX = bar.x;
+        }
+      });
+      if (anchorX === null) continue;
+      ctx.save();
+      ctx.fillStyle = "#4a4a4a";
+      ctx.font = "600 12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`Total: ${total}`, anchorX, topY - 12);
+      ctx.restore();
+    }
+  },
+};
+
 function formatHolidayDate(dateStr) {
   const d = new Date(`${dateStr}T00:00:00`);
   return `${MONTH_NAMES[d.getMonth()].slice(0, 3)} ${d.getDate()}`;
@@ -92,14 +161,20 @@ function AdminHomepage() {
     teacherCount: 0,
   });
   const [enrollmentStats, setEnrollmentStats] = useState([]);
+  const [gradeSectionStats, setGradeSectionStats] = useState([]);
   const [dashboardLoading, setDashboardLoading] = useState(false);
 
   const loadDashboardData = useCallback(() => {
     setDashboardLoading(true);
-    return Promise.all([getDashboardStats(), getEnrollmentDropoutStats()])
-      .then(([stats, enrollment]) => {
+    return Promise.all([
+      getDashboardStats(),
+      getEnrollmentDropoutStats(),
+      getGradeSectionDistribution(),
+    ])
+      .then(([stats, enrollment, gradeSection]) => {
         setDashboardStats(stats);
         setEnrollmentStats(enrollment);
+        setGradeSectionStats(gradeSection);
       })
       .catch((e) => console.error("Failed to load dashboard data:", e))
       .finally(() => setDashboardLoading(false));
@@ -278,6 +353,7 @@ function AdminHomepage() {
             <DashboardOverview
               stats={dashboardStats}
               enrollment={enrollmentStats}
+              gradeSection={gradeSectionStats}
               loading={dashboardLoading}
               onRefresh={loadDashboardData}
             />
@@ -327,42 +403,44 @@ function AdminHomepage() {
 // DASHBOARD OVERVIEW
 // ════════════════════════════════════════════════════════════════════════════
 
-function DashboardOverview({ stats, enrollment, loading, onRefresh }) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const isSearching = searchQuery.trim().length > 0;
-
+function DashboardOverview({
+  stats,
+  enrollment,
+  gradeSection,
+  loading,
+  onRefresh,
+}) {
   return (
     <div className="overview-grid">
-      <DashboardSearch query={searchQuery} onQueryChange={setSearchQuery} />
+      <div className="overview-main-row">
+        <div className="overview-main-col">
+          <div className="stat-cards-row">
+            <StatCard
+              icon="fa-user-graduate"
+              label="Total Students"
+              value={stats.studentCount}
+              accent="purple"
+            />
+            <StatCard
+              icon="fa-chalkboard-teacher"
+              label="Total Teachers"
+              value={stats.teacherCount}
+              accent="orange"
+            />
+          </div>
 
-      {!isSearching && (
-        <div className="overview-main-row">
-          <div className="overview-main-col">
-            <div className="stat-cards-row">
-              <StatCard
-                icon="fa-user-graduate"
-                label="Total Students"
-                value={stats.studentCount}
-                accent="purple"
-              />
-              <StatCard
-                icon="fa-chalkboard-teacher"
-                label="Total Teachers"
-                value={stats.teacherCount}
-                accent="orange"
-              />
-            </div>
-
+          <div className="charts-row">
             <EnrollmentDropoutChart
               data={enrollment}
               loading={loading}
               onDataFixed={onRefresh}
             />
+            <GradeSectionStackedChart data={gradeSection} loading={loading} />
           </div>
-
-          <MiniCalendar />
         </div>
-      )}
+
+        <MiniCalendar />
+      </div>
     </div>
   );
 }
@@ -376,309 +454,6 @@ function StatCard({ icon, label, value, accent }) {
       <div className="stat-card-body">
         <span className="stat-card-value">{value}</span>
         <span className="stat-card-label">{label}</span>
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// DASHBOARD SEARCH
-// ════════════════════════════════════════════════════════════════════════════
-
-const fullStudentName = (s) =>
-  `${s.lastName}, ${s.firstName}${s.middleName ? " " + s.middleName : ""}`;
-
-const fullTeacherName = (t) =>
-  `${t.lname}, ${t.fname}${t.mname ? " " + t.mname : ""}`;
-
-function DashboardSearch({ query, onQueryChange }) {
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-
-  const [teachers, setTeachers] = useState([]);
-  const [teacherUsers, setTeacherUsers] = useState([]);
-  const [students, setStudents] = useState([]);
-  const [parentUsers, setParentUsers] = useState([]);
-  const [enrolledByStudent, setEnrolledByStudent] = useState({});
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    Promise.all([
-      getTeachers(),
-      getUsers("Teacher"),
-      getStudents(),
-      getUsers("Parent"),
-      getEnrolled(),
-    ])
-      .then(
-        ([
-          teacherList,
-          teacherUserList,
-          studentList,
-          parentUserList,
-          enrolledList,
-        ]) => {
-          if (cancelled) return;
-          setTeachers(teacherList);
-          setTeacherUsers(teacherUserList);
-          setStudents(studentList);
-          setParentUsers(parentUserList);
-
-          const map = {};
-          enrolledList.forEach((e) => {
-            const existing = map[e.studentId];
-            if (
-              !existing ||
-              (existing.status !== "Enrolled" && e.status === "Enrolled")
-            ) {
-              map[e.studentId] = e;
-            }
-          });
-          setEnrolledByStudent(map);
-        },
-      )
-      .catch((err) => {
-        console.error("Dashboard search load error:", err);
-        if (!cancelled) setLoadError("Couldn't load search data.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const q = query.trim().toLowerCase();
-
-  const matchedTeachers = !q
-    ? []
-    : teachers
-        .map((teacher) => ({
-          teacher,
-          teacherUser:
-            teacherUsers.find((u) => u.teacherId === teacher.id) || null,
-        }))
-        .filter(
-          ({ teacher, teacherUser }) =>
-            fullTeacherName(teacher).toLowerCase().includes(q) ||
-            (teacher.empId || "").toLowerCase().includes(q) ||
-            (teacherUser?.username || "").toLowerCase().includes(q),
-        );
-
-  const matchedStudents = !q
-    ? []
-    : students
-        .map((student) => ({
-          student,
-          parentUser:
-            parentUsers.find((u) =>
-              (u.studentIds || []).includes(student.id),
-            ) || null,
-          enrollment: enrolledByStudent[student.id] || null,
-        }))
-        .filter(
-          ({ student, parentUser }) =>
-            fullStudentName(student).toLowerCase().includes(q) ||
-            (student.lrn || "").toLowerCase().includes(q) ||
-            (student.guardian || "").toLowerCase().includes(q) ||
-            (parentUser?.username || "").toLowerCase().includes(q),
-        );
-
-  const hasResults = matchedTeachers.length > 0 || matchedStudents.length > 0;
-
-  return (
-    <div className="dashboard-search-card">
-      <div className="dashboard-search-bar-row">
-        <div className="dashboard-search-input-wrap">
-          <i className="fas fa-search dashboard-search-icon"></i>
-          <input
-            type="text"
-            className="dashboard-search-input"
-            placeholder="Search…"
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-          />
-          {query && (
-            <button
-              type="button"
-              className="dashboard-search-clear"
-              onClick={() => onQueryChange("")}
-              aria-label="Clear search"
-            >
-              ×
-            </button>
-          )}
-        </div>
-      </div>
-
-      {q && (
-        <div className="dashboard-search-results">
-          {loading ? (
-            <div className="dashboard-search-status">
-              <i className="fas fa-spinner fa-spin"></i> Loading…
-            </div>
-          ) : loadError ? (
-            <div className="dashboard-search-status dashboard-search-status--error">
-              {loadError}
-            </div>
-          ) : !hasResults ? (
-            <div className="dashboard-search-status">
-              No teachers, students, or parents found for "{query}".
-            </div>
-          ) : (
-            <>
-              {matchedTeachers.length > 0 && (
-                <TeacherSearchResults results={matchedTeachers} />
-              )}
-              {matchedStudents.length > 0 && (
-                <StudentSearchResults results={matchedStudents} />
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TeacherSearchResults({ results }) {
-  return (
-    <div className="dashboard-search-section">
-      <div className="dashboard-search-section-title">
-        <i className="fas fa-chalkboard-teacher"></i> Teachers ({results.length}
-        )
-      </div>
-      <div className="archive-table-wrap">
-        <table className="archive-table">
-          <thead>
-            <tr>
-              <th>Teacher</th>
-              <th>Employee ID</th>
-              <th>Teacher Account</th>
-              <th>Account Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {results.map(({ teacher, teacherUser }) => (
-              <tr key={teacher.id}>
-                <td>
-                  <div className="archive-name">
-                    <div className="archive-avatar teacher">
-                      {teacher.lname?.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <span className="archive-fullname">
-                        {fullTeacherName(teacher)}
-                      </span>
-                      <span className="archive-sub">
-                        {teacher.contact || "No contact"}
-                      </span>
-                    </div>
-                  </div>
-                </td>
-                <td className="archive-mono">{teacher.empId || "—"}</td>
-                <td>
-                  {teacherUser ? (
-                    <div className="archive-account-info">
-                      <i className="fas fa-user-circle"></i>
-                      <span>{teacherUser.username}</span>
-                    </div>
-                  ) : (
-                    <span className="archive-no-account">No account</span>
-                  )}
-                </td>
-                <td>
-                  <span
-                    className={`archive-status-badge ${(teacherUser?.status || "none").toLowerCase()}`}
-                  >
-                    {teacherUser?.status || "—"}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function StudentSearchResults({ results }) {
-  return (
-    <div className="dashboard-search-section">
-      <div className="dashboard-search-section-title">
-        <i className="fas fa-user-graduate"></i> Students &amp; Parents (
-        {results.length})
-      </div>
-      <div className="archive-table-wrap">
-        <table className="archive-table">
-          <thead>
-            <tr>
-              <th>Student</th>
-              <th>LRN</th>
-              <th>Parent</th>
-              <th>Parent Account</th>
-              <th>Account</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {results.map(({ student, parentUser, enrollment }) => (
-              <tr key={student.id}>
-                <td>
-                  <div className="archive-name">
-                    <div className="archive-avatar student">
-                      {student.lastName?.charAt(0).toUpperCase()}
-                    </div>
-                    <span className="archive-fullname">
-                      {fullStudentName(student)}
-                    </span>
-                  </div>
-                </td>
-                <td className="archive-mono">{student.lrn || "—"}</td>
-                <td>{student.guardian || "—"}</td>
-                <td>
-                  {parentUser ? (
-                    <div className="archive-account-info">
-                      <i className="fas fa-user-circle"></i>
-                      <span>{parentUser.username}</span>
-                    </div>
-                  ) : (
-                    <span className="archive-no-account">No account</span>
-                  )}
-                </td>
-                <td>
-                  <span
-                    className={`archive-status-badge ${(parentUser?.status || "none").toLowerCase()}`}
-                  >
-                    {parentUser?.status || "—"}
-                  </span>
-                </td>
-                <td>
-                  {enrollment ? (
-                    <span
-                      className={`dashboard-search-enroll-badge ${
-                        enrollment.status === "Enrolled"
-                          ? "enrolled"
-                          : "dropped"
-                      }`}
-                    >
-                      {enrollment.status === "Enrolled"
-                        ? "Enrolled"
-                        : "Dropped"}{" "}
-                      — Grade {enrollment.grade}
-                      {enrollment.section ? `-${enrollment.section}` : ""}
-                    </span>
-                  ) : (
-                    <span className="archive-no-account">Not enrolled</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </div>
   );
@@ -1172,8 +947,6 @@ function EnrollmentDropoutChart({ data, loading, onDataFixed }) {
     },
   };
 
-  const canvasHeight = Math.max(220, data.length * 55 + 80);
-
   return (
     <div className="enrollment-chart-card">
       <div className="enrollment-chart-header">
@@ -1218,13 +991,164 @@ function EnrollmentDropoutChart({ data, loading, onDataFixed }) {
         </div>
       ) : (
         <>
-          <div
-            className="enrollment-chart-canvas-wrap"
-            style={{ height: canvasHeight }}
-          >
+          <div className="enrollment-chart-canvas-wrap">
             <Bar data={chartData} options={chartOptions} />
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GRADE / SECTION STACKED BAR CHART — one bar per grade level (1–6), stacked
+// by section, with the count printed inside each segment and the grade's
+// total printed above the bar. Sits beside the Enrollment & Dropout chart.
+// ════════════════════════════════════════════════════════════════════════════
+
+const GRADE_LEVELS = [1, 2, 3, 4, 5, 6];
+
+function GradeSectionStackedChart({ data, loading }) {
+  const hasData = data.length > 0;
+
+  // Look up count for a given grade + section, 0 if that section doesn't
+  // exist for that grade.
+  const countsByGradeSection = {};
+  data.forEach((d) => {
+    countsByGradeSection[`${d.grade}|${d.section}`] = d.count;
+  });
+
+  // Every distinct section name across the whole school, sorted so the
+  // color assigned to a section is always the same no matter which grade
+  // it appears in — this is what makes the legend meaningful: "Rizal" is
+  // always the same blue everywhere on the chart, in every grade's bar.
+  const sectionNames = [...new Set(data.map((d) => d.section))].sort();
+
+  // One dataset PER SECTION NAME (not per stacking "slot"). Each dataset
+  // holds that section's count for every grade level (0 where the section
+  // doesn't exist in that grade), which is what lets Chart.js draw a
+  // correct, real legend using dataset.label.
+  const datasets = sectionNames.map((section, i) => {
+    const palette = STACK_COLORS[i % STACK_COLORS.length];
+    return {
+      label: section,
+      data: GRADE_LEVELS.map(
+        (g) => countsByGradeSection[`${g}|${section}`] || 0,
+      ),
+      backgroundColor: palette.bg,
+      textColor: palette.text,
+      borderRadius: 4,
+      // Wider bars + wider category slots than before (was 0.55 / 0.7,
+      // which is what made the bars look razor-thin) — the chart now
+      // matches roughly a 60px+ bar width in a normal 280px-tall card.
+      barPercentage: 0.75,
+      categoryPercentage: 0.85,
+    };
+  });
+
+  const chartData = {
+    labels: GRADE_LEVELS.map((g) => `Grade ${g}`),
+    datasets,
+  };
+
+  // Round the y-axis max up to a friendly step above the tallest total, so
+  // gridlines land on clean numbers instead of Chart.js picking something
+  // like "37".
+  const totals = GRADE_LEVELS.map((g) =>
+    sectionNames.reduce(
+      (sum, s) => sum + (countsByGradeSection[`${g}|${s}`] || 0),
+      0,
+    ),
+  );
+  const maxTotal = Math.max(0, ...totals);
+  const step =
+    maxTotal <= 10 ? 2 : maxTotal <= 20 ? 5 : maxTotal <= 60 ? 10 : 20;
+  const suggestedMax = Math.ceil((maxTotal + 1) / step) * step;
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: { padding: { top: 18 } },
+    plugins: {
+      legend: {
+        display: true,
+        position: "top",
+        align: "end",
+        labels: {
+          boxWidth: 10,
+          boxHeight: 10,
+          usePointStyle: true,
+          pointStyle: "rectRounded",
+          font: { size: 11, weight: 600 },
+          color: "#555",
+          padding: 10,
+        },
+      },
+      tooltip: {
+        filter: (item) => item.raw > 0,
+        callbacks: {
+          label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
+        },
+      },
+    },
+    scales: {
+      x: {
+        stacked: true,
+        title: {
+          display: true,
+          text: "Grade Level",
+          font: { size: 12, weight: 600 },
+          color: "#666",
+          padding: { top: 8 },
+        },
+        grid: { display: false },
+        border: { display: false },
+        ticks: { font: { size: 11 }, color: "#888" },
+      },
+      y: {
+        stacked: true,
+        display: true,
+        beginAtZero: true,
+        suggestedMax,
+        title: {
+          display: true,
+          text: "Number of Students",
+          font: { size: 12, weight: 600 },
+          color: "#666",
+        },
+        border: { display: false },
+        grid: { color: "rgba(0,0,0,0.06)" },
+        ticks: {
+          font: { size: 11 },
+          color: "#888",
+          stepSize: step,
+          precision: 0,
+        },
+      },
+    },
+  };
+
+  return (
+    <div className="gs-chart-card">
+      <div className="gs-chart-header">
+        <h3>Students by Grade &amp; Section</h3>
+      </div>
+
+      {loading ? (
+        <div className="gs-chart-empty">Loading…</div>
+      ) : !hasData ? (
+        <div className="gs-chart-empty">
+          No enrolled students yet. Data will appear here once students are
+          enrolled into a section.
+        </div>
+      ) : (
+        <div className="gs-chart-canvas-wrap">
+          <Bar
+            data={chartData}
+            options={chartOptions}
+            plugins={[stackValueLabelsPlugin]}
+          />
+        </div>
       )}
     </div>
   );
