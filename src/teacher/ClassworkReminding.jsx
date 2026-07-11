@@ -3,8 +3,25 @@
 // full explanation of the pattern used here.
 // PUSH NOTIFICATIONS — doSave() now queues a notification to parents of
 // every enrolled student in this section after posting.
-// EDIT SUPPORT — added an "Edit" link under Grade/View on each list item,
-// plus an Edit modal that updates the Classwork doc and stamps `editedAt`.
+// EDIT SUPPORT — the ONLY place to edit a post is the "Edit Post" link in
+// the classwork list, right below the Mark/View button. The grading and
+// announcement-detail views are read/marking-only and no longer have an
+// inline edit control.
+// SORT ORDER — the list is ordered by most-recent-post-first (using the
+// `createdAt` timestamp stamped at post time), not by due date, so a newly
+// posted item always appears at the top regardless of its due date.
+// EDITED LABEL — each list item now shows an "Edited …" timestamp beside
+// its type badge (Assignment, Project, Exam, Announcement, etc.) whenever
+// `editedAt` is set, using the same relative/absolute formatting as the
+// parent's AcademicActivity.jsx ("Edited 5m ago" under 24h, "Edited Jul 5"
+// after that).
+// SCHOOL-YEAR SCOPING — every classwork/announcement is stamped with the
+// admin-configured active school year at post time (schoolYear field,
+// same label as Enrolled records use — see getActiveSchoolYearLabel() in
+// firebaseApi.js). The list query filters on it too, so a teacher who's
+// assigned the same Grade/Section/Subject again next school year sees a
+// clean, empty list instead of last year's leftover posts — grade/section
+// labels get reused every year, but the classwork shouldn't be.
 import { useState, useEffect } from "react";
 import { db } from "../api/firebase";
 import {
@@ -17,7 +34,11 @@ import {
   updateDoc,
   getDoc,
 } from "firebase/firestore";
-import { queueNotification, getParentIdsForStudents } from "../api/firebaseApi";
+import {
+  queueNotification,
+  getParentIdsForStudents,
+  getActiveSchoolYearLabel,
+} from "../api/firebaseApi";
 import useSubmitGuard from "../common/useSubmitGuard";
 import useNetworkStatus from "../common/useNetworkStatus"; // adjust path if different
 import "@fortawesome/fontawesome-free/css/all.min.css";
@@ -45,6 +66,50 @@ const TYPE_META = {
   Announcement: { icon: "fa-bullhorn", cls: "cwr-teal" },
 };
 
+// Sorts classwork/announcement entries with the most recently POSTED item
+// first, using the `createdAt` timestamp stamped when the entry was
+// created. Falls back to the due-date field for any legacy entries that
+// predate `createdAt` being stamped.
+const sortMostRecentFirst = (a, b) => {
+  const ca = a.createdAt || "";
+  const cb = b.createdAt || "";
+  if (ca && cb) return cb.localeCompare(ca);
+  if (ca && !cb) return -1;
+  if (!ca && cb) return 1;
+  return (b.date || "").localeCompare(a.date || "");
+};
+
+// ── Convert a Firestore Timestamp / ISO string / Date → JS Date (or null) ──
+const toJsDate = (val) => {
+  if (!val) return null;
+  if (typeof val?.toDate === "function") return val.toDate();
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+// ── "Edited …" label — shows both the date and time the post was last
+// edited, e.g. "Edited Jul 9, 10:54 AM" (adds the year only if it isn't
+// the current year, e.g. "Edited Jul 9, 2025, 10:54 AM").
+const formatEditedLabel = (editedAt) => {
+  const date = toJsDate(editedAt);
+  if (!date) return null;
+
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+
+  const datePart = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: sameYear ? undefined : "numeric",
+  });
+  const timePart = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return `Edited ${datePart}, ${timePart}`;
+};
+
 function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   const [currentView, setCurrentView] = useState("load");
 
@@ -56,6 +121,11 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   const [students, setStudents] = useState([]);
   const [classworks, setClassworks] = useState([]);
   const [activeCW, setActiveCW] = useState(null);
+
+  // The admin-configured active school year label (e.g. "2026-2027"),
+  // used to stamp new posts and to scope the classwork list so old
+  // school years' posts don't leak into a reused Grade/Section/Subject.
+  const [activeSchoolYear, setActiveSchoolYear] = useState("");
 
   // Tracks whether we're re-fetching the active CW from Firestore
   const [loadingCW, setLoadingCW] = useState(false);
@@ -86,6 +156,13 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   // ── network + submit guard ───────────────────────────────────────────────
   const { isOnline } = useNetworkStatus();
   const guardSave = useSubmitGuard();
+
+  // ── 0. Load the active school year label once ────────────────────────────
+  useEffect(() => {
+    getActiveSchoolYearLabel()
+      .then(setActiveSchoolYear)
+      .catch((e) => console.error("Failed to load active school year:", e));
+  }, []);
 
   // ── 1. Load teacher's schedules ──────────────────────────────────────────
   useEffect(() => {
@@ -153,21 +230,24 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
     load();
   }, [classGrade, classSection]);
 
-  // ── 3. Load classworks when subject changes ──────────────────────────────
-  const loadClassworks = async (grade, section, subject) => {
+  // ── 3. Load classworks when subject (or the active school year) changes ──
+  // Scoped to the current school year — see the SCHOOL-YEAR SCOPING note at
+  // the top of the file. Waits for activeSchoolYear to resolve at least
+  // once before querying so it never fires an unscoped (all-years) query.
+  const loadClassworks = async (grade, section, subject, schoolYear) => {
     try {
-      const snap = await getDocs(
-        query(
-          col("Classwork"),
-          where("grade", "==", grade),
-          where("section", "==", section),
-          where("subject", "==", subject),
-        ),
-      );
+      const constraints = [
+        where("grade", "==", grade),
+        where("section", "==", section),
+        where("subject", "==", subject),
+      ];
+      if (schoolYear) constraints.push(where("schoolYear", "==", schoolYear));
+
+      const snap = await getDocs(query(col("Classwork"), ...constraints));
       setClassworks(
         snap.docs
           .map((d) => ({ id: d.id, ...d.data() }))
-          .sort((a, b) => (b.date || "").localeCompare(a.date || "")),
+          .sort(sortMostRecentFirst),
       );
     } catch (e) {
       console.error(e);
@@ -175,9 +255,10 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   };
 
   useEffect(() => {
-    if (!classGrade || !classSection || !classSubject) return;
-    loadClassworks(classGrade, classSection, classSubject);
-  }, [classGrade, classSection, classSubject]);
+    if (!classGrade || !classSection || !classSubject || !activeSchoolYear)
+      return;
+    loadClassworks(classGrade, classSection, classSubject, activeSchoolYear);
+  }, [classGrade, classSection, classSubject, activeSchoolYear]);
 
   // ── 4. Jump straight to a specific item from the Homepage Reminder panel ─
   useEffect(() => {
@@ -263,6 +344,9 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
       isAnnouncement,
       studentStatus: isAnnouncement ? null : {},
       createdAt: new Date().toISOString(),
+      // Stamped so this post only ever shows up under the school year it
+      // was actually posted in — see the SCHOOL-YEAR SCOPING note above.
+      schoolYear: activeSchoolYear,
     };
 
     // Create the doc reference client-side so we have a stable id right
@@ -277,9 +361,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
         : `${payload.title} saved offline — will sync when back online.`,
     );
     setClassworks((prev) =>
-      [{ id: ref.id, ...payload }, ...prev].sort((a, b) =>
-        (b.date || "").localeCompare(a.date || ""),
-      ),
+      [{ id: ref.id, ...payload }, ...prev].sort(sortMostRecentFirst),
     );
 
     setDoc(ref, payload).catch((err) => {
@@ -312,7 +394,8 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   };
 
   // ── Edit classwork / announcement (offline-safe) ─────────────────────────
-  // Opens the edit modal pre-filled with the current values.
+  // Opens the edit modal pre-filled with the current values. This is now
+  // only ever triggered from the "Edit Post" link in the list view.
   const openEditModal = (cw) => {
     setEditCW({
       id: cw.id,
@@ -342,11 +425,12 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
         : "Changes saved offline — will sync when back online.",
     );
 
-    // Reflect the edit immediately in the list …
+    // Reflect the edit immediately in the list … (order stays keyed on
+    // createdAt, so editing doesn't reshuffle the list — only new posts do)
     setClassworks((prev) =>
       prev
         .map((cw) => (cw.id === id ? { ...cw, ...updates } : cw))
-        .sort((a, b) => (b.date || "").localeCompare(a.date || "")),
+        .sort(sortMostRecentFirst),
     );
     // … and in the open detail/grading view if that's the item being edited.
     setActiveCW((prev) =>
@@ -416,8 +500,8 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   const submittedCount = (cw) =>
     Object.values(cw.studentStatus || {}).filter((s) => s === "Submitted")
       .length;
-  const missingCount = (cw) =>
-    Object.values(cw.studentStatus || {}).filter((s) => s === "Missing").length;
+  const missedCount = (cw) =>
+    Object.values(cw.studentStatus || {}).filter((s) => s === "Missed").length;
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
@@ -513,6 +597,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                   <h3>{classSubject} — Classwork & Reminders</h3>
                   <small>
                     Grade {classGrade} – Section {classSection}
+                    {activeSchoolYear ? ` | S.Y. ${activeSchoolYear}` : ""}
                   </small>
                 </div>
                 <span className="cwr-toolbar-break" />
@@ -540,6 +625,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                   {classworks.map((cw) => {
                     const meta = TYPE_META[cw.title] || TYPE_META["Assignment"];
                     const isAnn = cw.isAnnouncement;
+                    const editedLabel = formatEditedLabel(cw.editedAt);
                     return (
                       <div
                         key={cw.id}
@@ -553,6 +639,17 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                             <span className={`cwr-type-badge ${meta.cls}`}>
                               {cw.title}
                             </span>
+                            {editedLabel && (
+                              <span
+                                className="cwr-edited-badge"
+                                style={{
+                                  color: "#8a8a8a",
+                                  fontStyle: "italic",
+                                }}
+                              >
+                                ({editedLabel})
+                              </span>
+                            )}
                             <span className="cwr-item-date">
                               <i className="fas fa-calendar-day"></i>{" "}
                               {cw.date || "—"}
@@ -567,7 +664,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                               </span>
                               <span className="cwr-stat-miss">
                                 <i className="fas fa-times-circle"></i>{" "}
-                                {missingCount(cw)} Missing
+                                {missedCount(cw)} Missed
                               </span>
                             </div>
                           )}
@@ -584,7 +681,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                             className="cwr-btn-view"
                             onClick={() => openCW(cw)}
                           >
-                            {isAnn ? "View" : "Grade"}
+                            {isAnn ? "View" : "Mark"}
                           </button>
                           <button
                             type="button"
@@ -623,15 +720,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                     {classSection}
                   </small>
                 </div>
-                <span className="cwr-toolbar-break" />
-                <button
-                  type="button"
-                  className="cwr-btn-edit-link cwr-btn-edit-link--inline"
-                  onClick={() => activeCW && openEditModal(activeCW)}
-                >
-                  <i className="fas fa-pen"></i>{" "}
-                  <span className="cwr-edit-link-text">Edit</span>
-                </button>
               </div>
 
               {loadingCW ? (
@@ -664,7 +752,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                               className={
                                 status === "Submitted"
                                   ? "cwr-row-submitted"
-                                  : status === "Missing"
+                                  : status === "Missed"
                                     ? "cwr-row-missing"
                                     : ""
                               }
@@ -682,10 +770,10 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                                   <i className="fas fa-check"></i> Submitted
                                 </button>
                                 <button
-                                  className={`cwr-toggle-btn ${status === "Missing" ? "cwr-toggle-miss" : ""}`}
-                                  onClick={() => markStudent(s.id, "Missing")}
+                                  className={`cwr-toggle-btn ${status === "Missed" ? "cwr-toggle-miss" : ""}`}
+                                  onClick={() => markStudent(s.id, "Missed")}
                                 >
-                                  <i className="fas fa-times"></i> Missing
+                                  <i className="fas fa-times"></i> Missed
                                 </button>
                                 {status && (
                                   <button
@@ -747,10 +835,10 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                         }
                       </span>
                       <span className="cwr-gs-miss">
-                        <i className="fas fa-times-circle"></i> Missing:{" "}
+                        <i className="fas fa-times-circle"></i> Missed:{" "}
                         {
                           Object.values(activeCW?.studentStatus || {}).filter(
-                            (s) => s === "Missing",
+                            (s) => s === "Missed",
                           ).length
                         }
                       </span>
@@ -782,15 +870,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                     Grade {classGrade} – {classSection} | {classSubject}
                   </small>
                 </div>
-                <span className="cwr-toolbar-break" />
-                <button
-                  type="button"
-                  className="cwr-btn-edit-link cwr-btn-edit-link--inline"
-                  onClick={() => openEditModal(activeCW)}
-                >
-                  <i className="fas fa-pen"></i>{" "}
-                  <span className="cwr-edit-link-text">Edit</span>
-                </button>
               </div>
 
               <div className="cwr-ann-card">
