@@ -1537,7 +1537,13 @@ function resolveSchoolYearByDate(date, schoolYears) {
 /**
  * getEnrollmentDropoutStats()
  * Returns enrollment vs. dropout counts bucketed by school year, for the
- * dashboard's bar chart.
+ * dashboard's bar chart. Both numbers reflect CURRENT status, not history:
+ *   - "Enrolled" counts records whose status is currently "Enrolled".
+ *   - "Dropped" counts records whose status is currently "Dropped".
+ * This means dropping a student moves them out of "Enrolled" and into
+ * "Dropped" immediately, and re-enrolling them moves them back — the chart
+ * always reflects who's actually enrolled/dropped right now, not a
+ * historical tally of enrollment events that never goes back down.
  *
  * Resolution order for each record's year (most to least reliable):
  *   1. The explicit `schoolYear` / `droppedSchoolYear` field — set by
@@ -1573,16 +1579,20 @@ export async function getEnrollmentDropoutStats() {
   enrolledSnap.docs.forEach((d) => {
     const data = d.data();
 
-    // Count the enrollment event
-    const enrolledDate = toDate(data.enrolledAt);
-    const enrolledYear =
-      data.schoolYear ||
-      resolveSchoolYearByDate(enrolledDate, schoolYears) ||
-      (enrolledDate ? schoolYearLabel(enrolledDate) : "Unknown");
-    ensure(enrolledYear).enrolled += 1;
-
-    // Count the dropout event, if this record was ever dropped
-    if (data.status === "Dropped") {
+    if (data.status === "Enrolled") {
+      // Count against the year this record is CURRENTLY enrolled under.
+      // Checking status here (instead of counting every record
+      // unconditionally) is what makes dropping a student move them out
+      // of this bucket, and re-enrolling move them back in — otherwise
+      // "Enrolled" silently became a historical "ever enrolled" total
+      // that never went back down after a drop.
+      const enrolledDate = toDate(data.enrolledAt);
+      const enrolledYear =
+        data.schoolYear ||
+        resolveSchoolYearByDate(enrolledDate, schoolYears) ||
+        (enrolledDate ? schoolYearLabel(enrolledDate) : "Unknown");
+      ensure(enrolledYear).enrolled += 1;
+    } else if (data.status === "Dropped") {
       const droppedDate = toDate(data.droppedAt);
       const droppedYear =
         data.droppedSchoolYear ||
@@ -1597,4 +1607,38 @@ export async function getEnrollmentDropoutStats() {
     if (b.year === "Unknown") return 1;
     return a.year.localeCompare(b.year);
   });
+}
+
+/**
+ * getGradeSectionDistribution()
+ * Returns the CURRENT distribution of enrolled students across every
+ * grade level + section, for the dashboard's grade/section chart.
+ *
+ * Only counts "Enrolled" (i.e. not "Dropped") records from the "Enrolled"
+ * collection — this reflects where students are actually seated right now,
+ * which is more accurate than grouping by Student.grade alone since a
+ * student's grade can be bumped by promoteStudent()/graduateStudent()
+ * independently of which section they're currently placed in.
+ *
+ * Shape: [{ label: "Grade 3 - Rizal", grade: 3, section: "Rizal", count: 28 }, ...]
+ * Sorted by grade ascending, then section name.
+ */
+export async function getGradeSectionDistribution() {
+  const enrolledSnap = await getDocs(
+    query(col("Enrolled"), where("status", "==", "Enrolled")),
+  );
+
+  const buckets = {}; // "grade|section" -> { grade, section, count }
+  enrolledSnap.docs.forEach((d) => {
+    const data = d.data();
+    const grade = data.grade;
+    const section = data.section || "Unassigned";
+    const key = `${grade}|${section}`;
+    if (!buckets[key]) buckets[key] = { grade, section, count: 0 };
+    buckets[key].count += 1;
+  });
+
+  return Object.values(buckets)
+    .map((b) => ({ ...b, label: `Grade ${b.grade} - ${b.section}` }))
+    .sort((a, b) => a.grade - b.grade || a.section.localeCompare(b.section));
 }
