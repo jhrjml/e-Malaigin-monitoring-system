@@ -1437,9 +1437,19 @@ const ManageClasses = () => {
                             {t.fname} {t.mname ? t.mname + " " : ""}
                             {t.lname}
                             {t.advisory ? ` (Advisory: ${t.advisory})` : ""}
-                            {conflict
-                              ? ` — Already teaching Grade ${conflict.grade}-${conflict.section} at this time`
-                              : ""}
+                            {/* CHANGED: shortened from the full
+                                "— Already teaching Grade X-Y at this time"
+                                sentence. Native <select>/<option> elements
+                                are rendered by the OS/browser widget, not
+                                by page CSS — white-space, max-width, and
+                                overflow rules don't apply inside <option>
+                                text, so a long label just pushes the whole
+                                dropdown wider than the modal (and the
+                                viewport). The full explanation is still
+                                shown to the admin below, in the warning
+                                <p> under this <select>, which is a normal
+                                DOM element and wraps correctly. */}
+                            {conflict ? " — Unavailable" : ""}
                           </option>
                         );
                       })}
