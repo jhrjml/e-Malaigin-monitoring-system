@@ -1,5 +1,8 @@
 // AttendanceRecord.jsx  (Firebase version)
-// Parent views their child's attendance records, subject by subject.
+// Parent lands directly on a calendar + "attendance for this day" view.
+// Left side: time / subject / status table for whichever date is selected
+// (defaults to today). Right side: a calendar — clicking a date reloads
+// the left side with that day's attendance across all subjects.
 // If the parent has more than one child, a filter bar at the top lets
 // them switch between children — same UI pattern as admin Archive.jsx.
 
@@ -18,19 +21,24 @@ import "./AttendanceRecord.css";
 
 const col = (name) => collection(db, name);
 
-const iconFor = (subject) => {
-  const map = {
-    Math: "fa-calculator",
-    Mathematics: "fa-calculator",
-    English: "fa-book",
-    Science: "fa-flask",
-    Filipino: "fa-flag",
-    "Araling Panlipunan": "fa-globe",
-    MAPEH: "fa-music",
-    TLE: "fa-tools",
-    EPP: "fa-seedling",
-  };
-  return map[subject] || "fa-book-open";
+// Schedule documents have NO per-weekday field — ManageClasses.jsx always
+// writes days: "Sunday – Thursday" for every schedule entry, meaning every
+// subject in a section's schedule runs on every school day. The only thing
+// that varies by date is whether it's a school day at all (weekend = off),
+// which matches the same Fri/Sat check used in AttendanceMonitoring.jsx.
+const isWeekend = (date) => {
+  const dow = date.getDay();
+  return dow === 5 || dow === 6; // Fri=5, Sat=6
+};
+
+// Builds a YYYY-MM-DD string from the LOCAL date parts.
+// (Deliberately NOT using d.toISOString() — that converts to UTC first,
+// which shifts the date back a day for any timezone ahead of UTC, e.g. PHT.)
+const toISO = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 };
 
 function AttendanceRecord() {
@@ -39,20 +47,37 @@ function AttendanceRecord() {
   const [selectedChild, setSelectedChild] = useState(null);
   const [childrenLoading, setChildrenLoading] = useState(true);
 
-  // view state
-  const [currentView, setCurrentView] = useState("select-subject");
-  const [subjects, setSubjects] = useState([]);
-  const [currentSubject, setCurrentSubject] = useState("");
-  const [availableMonths, setAvailableMonths] = useState([]);
-  const [selectedMonth, setSelectedMonth] = useState("");
-  const [attendanceLogs, setAttendanceLogs] = useState([]);
-  const [today, setToday] = useState("");
+  // schedule + full attendance history for the selected child
+  const [schedule, setSchedule] = useState([]); // [{ subject, start, end, teacherId, days }]
+  const [attendanceLogs, setAttendanceLogs] = useState([]); // all logs, any subject/date
   const [loading, setLoading] = useState(false);
+
+  const today = toISO(new Date());
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+
+  // Click-to-pick month/year panel, opened by tapping the header label
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const MONTH_NAMES = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
 
   // ── load children linked to this parent ──────────────────────────────
   useEffect(() => {
-    setToday(new Date().toISOString().split("T")[0]);
-
     const userId = localStorage.getItem("userId");
     if (!userId) {
       setChildrenLoading(false);
@@ -109,20 +134,23 @@ function AttendanceRecord() {
     load();
   }, []);
 
-  // ── load subjects for whichever child is currently selected ──────────
-  const loadSubjects = useCallback(async (child) => {
+  // ── load schedule + full attendance history for whichever child is selected ──
+  const loadChildData = useCallback(async (child) => {
     if (!child) return;
     setLoading(true);
     try {
-      const snap = await getDocs(
-        query(
-          col("Schedule"),
-          where("grade", "==", child.enrolledGrade),
-          where("section", "==", child.enrolledSection),
+      const [scheduleSnap, attendanceSnap] = await Promise.all([
+        getDocs(
+          query(
+            col("Schedule"),
+            where("grade", "==", child.enrolledGrade),
+            where("section", "==", child.enrolledSection),
+          ),
         ),
-      );
-      const subs = [...new Set(snap.docs.map((d) => d.data().subject))];
-      setSubjects(subs.map((name) => ({ name, icon: iconFor(name) })));
+        getDocs(query(col("Attendance"), where("studentId", "==", child.id))),
+      ]);
+      setSchedule(scheduleSnap.docs.map((d) => d.data()));
+      setAttendanceLogs(attendanceSnap.docs.map((d) => d.data()));
     } catch (e) {
       console.error(e);
     } finally {
@@ -132,74 +160,70 @@ function AttendanceRecord() {
 
   useEffect(() => {
     if (!selectedChild) return;
-    setCurrentView("select-subject");
-    setCurrentSubject("");
-    setAvailableMonths([]);
-    setAttendanceLogs([]);
-    loadSubjects(selectedChild);
-  }, [selectedChild, loadSubjects]);
+    setSelectedDate(today);
+    setCalendarMonth(() => {
+      const d = new Date();
+      return new Date(d.getFullYear(), d.getMonth(), 1);
+    });
+    loadChildData(selectedChild);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedChild, loadChildData]);
 
   const switchChild = (child) => {
     if (child.id === selectedChild?.id) return;
     setSelectedChild(child);
   };
 
-  // ── select subject → load distinct months with records ───────────────
-  const selectSubject = async (subjectName) => {
-    setCurrentSubject(subjectName);
-    setLoading(true);
-    try {
-      const snap = await getDocs(
-        query(
-          col("Attendance"),
-          where("studentId", "==", selectedChild.id),
-          where("subject", "==", subjectName),
-        ),
-      );
-      const logs = snap.docs.map((d) => d.data());
-      const months = [...new Set(logs.map((l) => l.date.substring(0, 7)))]
-        .map((m) => ({
-          id: m,
-          name: new Date(m + "-01").toLocaleDateString("en-US", {
-            month: "long",
-            year: "numeric",
-          }),
-        }))
-        .sort((a, b) => b.id.localeCompare(a.id));
-      setAvailableMonths(months);
-      setCurrentView("select-month");
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+  // ── rows for the currently selected date ──────────────────────────────
+  const selectedDateObj = new Date(selectedDate + "T00:00:00");
+
+  // Every Schedule entry runs Sun–Thu (see ManageClasses.jsx), so the only
+  // date-dependent question is "is this a school day at all?" — not which
+  // specific subjects meet today. Weekend → no classes; otherwise → the
+  // full schedule, each subject cross-referenced against that day's log.
+  const rows = isWeekend(selectedDateObj)
+    ? []
+    : schedule
+        .map((s) => {
+          const log = attendanceLogs.find(
+            (l) => l.subject === s.subject && l.date === selectedDate,
+          );
+          return {
+            time: s.start && s.end ? `${s.start} – ${s.end}` : "—",
+            sortKey: s.start || "",
+            subject: s.subject,
+            status: log ? log.status : "No Record",
+          };
+        })
+        .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+
+  // dates that have at least one attendance record, for the calendar dots
+  const attendanceDateSet = new Set(attendanceLogs.map((l) => l.date));
+
+  // ── calendar grid for calendarMonth ───────────────────────────────────
+  const year = calendarMonth.getFullYear();
+  const month = calendarMonth.getMonth();
+  const firstDayIndex = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < firstDayIndex; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const goToPrevMonth = () => setCalendarMonth(new Date(year, month - 1, 1));
+  const goToNextMonth = () => setCalendarMonth(new Date(year, month + 1, 1));
+
+  const pickMonth = (newMonth) => {
+    setCalendarMonth(new Date(year, newMonth, 1));
+  };
+  const pickYear = (newYear) => {
+    setCalendarMonth(new Date(newYear, month, 1));
   };
 
-  const selectMonth = async (monthId) => {
-    setSelectedMonth(monthId);
-    setLoading(true);
-    try {
-      const snap = await getDocs(
-        query(
-          col("Attendance"),
-          where("studentId", "==", selectedChild.id),
-          where("subject", "==", currentSubject),
-        ),
-      );
-      const logs = snap.docs
-        .map((d) => d.data())
-        .filter((l) => l.date.startsWith(monthId))
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
-      setAttendanceLogs(logs);
-      setCurrentView("attendance");
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+  const pickDate = (day) => {
+    if (!day) return;
+    setSelectedDate(toISO(new Date(year, month, day)));
+    setPickerOpen(false);
   };
-
-  const todayLog = attendanceLogs.find((l) => l.date === today);
 
   if (childrenLoading) {
     return (
@@ -243,141 +267,147 @@ function AttendanceRecord() {
 
               {loading && <p className="ar-loading-text">Loading…</p>}
 
-              {/* SELECT SUBJECT */}
-              {currentView === "select-subject" && (
-                <div className="view-section-ar">
-                  <h3 className="ar-sub-title">
-                    {selectedChild?.firstName} {selectedChild?.lastName} —
-                    Select Subject
-                  </h3>
-                  <div className="grid-container-ar">
-                    {subjects.length === 0 ? (
-                      <p className="ar-empty-text">
-                        No subjects found for this class.
-                      </p>
-                    ) : (
-                      subjects.map((sub) => (
-                        <div
-                          key={sub.name}
-                          className="subject-card-ar"
-                          onClick={() => selectSubject(sub.name)}
-                        >
-                          <div className="subject-icon-ar">
-                            <i className={`fas ${sub.icon}`}></i>
-                          </div>
-                          <div className="subject-info-ar">
-                            <h4>{sub.name}</h4>
-                            <small>Tap to view attendance</small>
-                          </div>
-                          <i className="fas fa-chevron-right"></i>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* SELECT MONTH */}
-              {currentView === "select-month" && (
-                <div className="view-section-ar">
-                  <div className="toolbar-inner-ar">
-                    <button
-                      className="btn-back-ar"
-                      onClick={() => setCurrentView("select-subject")}
-                    >
-                      <i className="fas fa-arrow-left"></i>
-                    </button>
-                    <h3>{currentSubject} Attendance</h3>
-                  </div>
-                  <div className="grid-container-ar">
-                    {availableMonths.length === 0 ? (
-                      <p className="ar-empty-text">
-                        No attendance records yet.
-                      </p>
-                    ) : (
-                      availableMonths.map((m) => (
-                        <div
-                          key={m.id}
-                          className="choice-card-ar"
-                          onClick={() => selectMonth(m.id)}
-                        >
-                          <div className="icon-box-ar">
-                            <i className="fas fa-calendar-alt"></i>
-                          </div>
-                          <h3>{m.name}</h3>
-                          <p>View Records</p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* ATTENDANCE LOGS */}
-              {currentView === "attendance" && (
-                <div className="view-section-ar">
-                  <div className="toolbar-inner-ar">
-                    <button
-                      className="btn-back-ar"
-                      onClick={() => setCurrentView("select-month")}
-                    >
-                      <i className="fas fa-arrow-left"></i>
-                    </button>
-                    <h3>{currentSubject} Attendance</h3>
-                  </div>
-
+              <div className="ar-layout">
+                {/* LEFT: attendance for the selected date */}
+                <div className="ar-left">
                   <div className="today-status-card-ar">
-                    <h4>Today's Attendance ({today})</h4>
-                    <div
-                      className={`status-badge-ar ${todayLog ? `status-${todayLog.status.toLowerCase()}` : ""}`}
-                    >
-                      {todayLog ? todayLog.status : "No Record Yet"}
-                    </div>
+                    <h4>Today's Attendance</h4>
+                    <p className="ar-selected-date">{selectedDate}</p>
                   </div>
 
                   <div className="table-container-ar">
                     <table className="data-table-ar">
                       <thead>
                         <tr>
-                          <th>Date</th>
-                          <th>Day</th>
+                          <th>Time</th>
+                          <th>Subject</th>
                           <th style={{ textAlign: "center" }}>Status</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {attendanceLogs.length === 0 ? (
+                        {rows.length === 0 ? (
                           <tr>
                             <td colSpan="3" style={{ textAlign: "center" }}>
-                              No records for this month.
+                              No classes scheduled for this day.
                             </td>
                           </tr>
                         ) : (
-                          attendanceLogs.map((log, i) => {
-                            const dayName = new Date(
-                              log.date,
-                            ).toLocaleDateString("en-US", {
-                              weekday: "long",
-                            });
-                            return (
-                              <tr key={i}>
-                                <td>{log.date}</td>
-                                <td>{dayName}</td>
-                                <td style={{ textAlign: "center" }}>
-                                  <span
-                                    className={`status-${log.status.toLowerCase()}`}
-                                  >
-                                    {log.status}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })
+                          rows.map((row, i) => (
+                            <tr key={i}>
+                              <td>{row.time}</td>
+                              <td>{row.subject}</td>
+                              <td style={{ textAlign: "center" }}>
+                                <span
+                                  className={`status-${row.status
+                                    .toLowerCase()
+                                    .replace(/\s+/g, "-")}`}
+                                >
+                                  {row.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
                         )}
                       </tbody>
                     </table>
                   </div>
                 </div>
-              )}
+
+                {/* RIGHT: calendar */}
+                <div className="ar-right">
+                  <div className="ar-calendar-card">
+                    <div className="ar-calendar-header">
+                      <button className="ar-cal-nav" onClick={goToPrevMonth}>
+                        <i className="fas fa-chevron-left"></i>
+                      </button>
+                      <button
+                        type="button"
+                        className="ar-cal-month-label"
+                        onClick={() => setPickerOpen((o) => !o)}
+                      >
+                        {calendarMonth.toLocaleDateString("en-US", {
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </button>
+                      <button className="ar-cal-nav" onClick={goToNextMonth}>
+                        <i className="fas fa-chevron-right"></i>
+                      </button>
+                    </div>
+
+                    {pickerOpen && (
+                      <div className="ar-cal-picker">
+                        <div className="ar-cal-picker-year-row">
+                          <span className="ar-cal-picker-year">{year}</span>
+                          <div className="ar-cal-picker-year-arrows">
+                            <button
+                              type="button"
+                              className="ar-cal-year-arrow"
+                              onClick={() => pickYear(year - 1)}
+                              aria-label="Previous year"
+                            >
+                              <i className="fas fa-chevron-up"></i>
+                            </button>
+                            <button
+                              type="button"
+                              className="ar-cal-year-arrow"
+                              onClick={() => pickYear(year + 1)}
+                              aria-label="Next year"
+                            >
+                              <i className="fas fa-chevron-down"></i>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="ar-cal-picker-month-grid">
+                          {MONTH_NAMES.map((name, i) => (
+                            <button
+                              type="button"
+                              key={name}
+                              className={`ar-cal-picker-month ${i === month ? "selected" : ""}`}
+                              onClick={() => {
+                                pickMonth(i);
+                                setPickerOpen(false);
+                              }}
+                            >
+                              {name.slice(0, 3)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="ar-calendar-weekdays">
+                      {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((w) => (
+                        <span key={w}>{w}</span>
+                      ))}
+                    </div>
+
+                    <div className="ar-calendar-grid">
+                      {cells.map((day, i) => {
+                        if (!day)
+                          return <div key={i} className="ar-cal-cell empty" />;
+                        const iso = toISO(new Date(year, month, day));
+                        const isSelected = iso === selectedDate;
+                        const isToday = iso === today;
+                        const hasRecord = attendanceDateSet.has(iso);
+                        return (
+                          <div
+                            key={i}
+                            className={`ar-cal-cell ${isSelected ? "selected" : ""} ${
+                              isToday ? "today" : ""
+                            }`}
+                            onClick={() => pickDate(day)}
+                          >
+                            {day}
+                            {hasRecord && <span className="ar-cal-dot" />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </>
           )}
         </div>
