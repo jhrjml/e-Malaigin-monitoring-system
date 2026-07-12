@@ -7,7 +7,7 @@
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* changed: keeps icon aligned to top when text wraps */
   gap: 10px;
   padding: 13px 22px;
   border-radius: 10px;
@@ -15,10 +15,14 @@
   font-weight: 600;
   z-index: 99999;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  width: max-content; /* changed: size to content up to max-width */
   min-width: 300px;
-  max-width: 500px;
+  max-width: min(
+    500px,
+    90vw
+  ); /* changed: never overflow small screens either */
   animation: app-toast-slide-in 0.25s ease-out;
-  white-space: nowrap;
+  white-space: normal; /* changed: allow text to wrap */
 }
 .app-toast.success {
   background: #eafaf1;
@@ -33,6 +37,12 @@
 .app-toast i {
   font-size: 1.1rem;
   flex-shrink: 0;
+  margin-top: 2px; /* added: nudge icon to align with first line of text */
+}
+.app-toast span {
+  flex: 1 1 auto; /* added */
+  min-width: 0; /* added: lets the text actually wrap inside flex */
+  word-break: break-word; /* added: safety net for very long unbroken strings */
 }
 @keyframes app-toast-slide-in {
   from {
