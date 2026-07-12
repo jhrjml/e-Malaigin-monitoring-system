@@ -1,10 +1,11 @@
 // ChildProfile.jsx  (Firebase version)
 // Reads the logged-in parent's linked studentIds from Firestore,
 // then fetches each student's full profile and enrollment info.
-// Also resolves the adviser (homeroom teacher) of the child's section,
-// and lets the parent re-download the student's ID card (same format as
-// the admin GenerateQr.jsx) — but only once the admin has actually
-// generated it (i.e. a matching GeneratedQR record exists).
+// Also resolves the adviser (homeroom teacher) of the child's section.
+//
+// NOTE: ID card download has been removed from this view. That
+// functionality now lives in the teacher-facing StudentProfile.jsx
+// (only for the teacher's Advisory class).
 import "../Layout.css";
 import React, { useState, useEffect } from "react";
 import { db } from "../api/firebase";
@@ -16,18 +17,10 @@ import {
   where,
   getDocs,
 } from "firebase/firestore";
-import QRCode from "react-qr-code";
-import { toPng } from "html-to-image";
-import jsPDF from "jspdf";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./ChildProfile.css";
 
 const col = (name) => collection(db, name);
-
-// Same physical card size used by the admin GenerateQr.jsx, so the
-// downloaded PDF here is identical to the one admins produce.
-const CARD_WIDTH_IN = 4.5;
-const CARD_HEIGHT_IN = 2.75;
 
 // ── resolve the adviser of a grade+section from the Teacher collection ──────
 async function getSectionAdvisor(grade, section) {
@@ -65,23 +58,6 @@ async function getSectionAdvisor(grade, section) {
   }
 }
 
-// ── check whether the admin has already generated this student's ID ────────
-// Mirrors GenerateQr.jsx / firebaseApi.js: a generated ID is recorded as a
-// GeneratedQR doc keyed by lrn. No record = no ID has ever been printed,
-// so there's nothing valid for the parent to re-download yet.
-async function checkIdGenerated(lrn) {
-  if (!lrn) return false;
-  try {
-    const snap = await getDocs(
-      query(col("GeneratedQR"), where("lrn", "==", lrn)),
-    );
-    return !snap.empty;
-  } catch (e) {
-    console.error("Failed to check ID generation status:", e);
-    return false;
-  }
-}
-
 const ChildProfile = () => {
   const [children, setChildren] = useState([]); // array — a parent can have multiple children
   const [selected, setSelected] = useState(null); // currently displayed child
@@ -89,10 +65,6 @@ const ChildProfile = () => {
 
   const [advisorName, setAdvisorName] = useState("");
   const [advisorLoading, setAdvisorLoading] = useState(false);
-
-  const [idGenerated, setIdGenerated] = useState(false);
-  const [checkingId, setCheckingId] = useState(false);
-  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     const userId = localStorage.getItem("userId");
@@ -180,25 +152,6 @@ const ChildProfile = () => {
     };
   }, [selected]);
 
-  // ── check whether this child's ID has actually been generated ────────────
-  useEffect(() => {
-    if (!selected) {
-      setIdGenerated(false);
-      return;
-    }
-    let active = true;
-    setCheckingId(true);
-    checkIdGenerated(selected.lrn).then((generated) => {
-      if (active) {
-        setIdGenerated(generated);
-        setCheckingId(false);
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [selected]);
-
   // ── avatar helper (same canvas approach as GenerateQr) ────────────────
   const avatarUrl = (name) => {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "Student")}&background=3498db&color=fff&size=120`;
@@ -214,67 +167,6 @@ const ChildProfile = () => {
       });
     } catch {
       return dob;
-    }
-  };
-
-  // ── download the ID card (front + back) as a single PDF ─────────────────
-  // Guarded: only proceeds if the admin has already generated this
-  // student's ID (idGenerated). The button is also hidden/disabled in the
-  // UI, but this check stays here too in case it's ever called directly.
-  const downloadIDCard = async () => {
-    if (!selected || downloading || !idGenerated) return;
-
-    const frontNode = document.getElementById("profile-id-card-front");
-    const backNode = document.getElementById("profile-id-card-back");
-    if (!frontNode || !backNode) return;
-
-    setDownloading(true);
-    try {
-      const [frontPng, backPng] = await Promise.all([
-        toPng(frontNode, { pixelRatio: 3, backgroundColor: "#ffffff" }),
-        toPng(backNode, { pixelRatio: 3, backgroundColor: "#ffffff" }),
-      ]);
-
-      const PAGE_WIDTH_IN = 8.5;
-      const PAGE_HEIGHT_IN = 11;
-      const GAP_IN = 0.4;
-
-      const pdf = new jsPDF({
-        unit: "in",
-        format: [PAGE_WIDTH_IN, PAGE_HEIGHT_IN],
-      });
-
-      const marginX = (PAGE_WIDTH_IN - CARD_WIDTH_IN) / 2;
-      const totalContentHeight = CARD_HEIGHT_IN * 2 + GAP_IN;
-      const marginTop = (PAGE_HEIGHT_IN - totalContentHeight) / 2;
-
-      pdf.addImage(
-        frontPng,
-        "PNG",
-        marginX,
-        marginTop,
-        CARD_WIDTH_IN,
-        CARD_HEIGHT_IN,
-      );
-      pdf.addImage(
-        backPng,
-        "PNG",
-        marginX,
-        marginTop + CARD_HEIGHT_IN + GAP_IN,
-        CARD_WIDTH_IN,
-        CARD_HEIGHT_IN,
-      );
-
-      const fullName = `${selected.lastName}, ${selected.firstName}${selected.middleName ? " " + selected.middleName : ""}`;
-      const safeName = fullName
-        .replace(/,/g, "")
-        .replace(/\s+/g, "_")
-        .replace(/[^a-zA-Z0-9_]/g, "");
-      pdf.save(`${safeName}_Grade${selected.enrolledGrade}_ID.pdf`);
-    } catch (err) {
-      console.error("ID card download error:", err);
-    } finally {
-      setDownloading(false);
     }
   };
 
@@ -359,27 +251,6 @@ const ChildProfile = () => {
                     ? "Loading adviser…"
                     : `Adviser: ${advisorName || "—"}`}
                 </p>
-
-                {checkingId ? (
-                  <p className="id-status-note">
-                    <i className="fas fa-spinner fa-spin"></i> Checking ID
-                    status…
-                  </p>
-                ) : idGenerated ? (
-                  <button
-                    className="btn-download-id"
-                    onClick={downloadIDCard}
-                    disabled={downloading}
-                  >
-                    <i className="fas fa-download"></i>{" "}
-                    {downloading ? "Generating PDF…" : "Download ID Card"}
-                  </button>
-                ) : (
-                  <p className="id-not-ready-note">
-                    <i className="fas fa-info-circle"></i> The school has not
-                    generated this student's ID card yet.
-                  </p>
-                )}
               </div>
 
               <div className="profile-details-grid grid-two-columns">
@@ -416,96 +287,6 @@ const ChildProfile = () => {
                       <strong>Guardian:</strong> {selected.guardian || "—"}
                     </li>
                   </ul>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* HIDDEN ID CARD — rendered off-screen so it can be captured by
-              html-to-image on demand. Only meaningful once idGenerated is
-              true, but it's harmless to keep mounted either way. */}
-          {selected && (
-            <div
-              style={{
-                position: "absolute",
-                top: "-9999px",
-                left: "-9999px",
-                pointerEvents: "none",
-              }}
-              aria-hidden="true"
-            >
-              <div id="profile-id-card-front" className="id-card">
-                <div className="id-card-topbar">
-                  <img
-                    src="/logo.jpg"
-                    alt="School Logo"
-                    className="id-card-logo"
-                  />
-                  <div className="id-card-titles">
-                    <span className="id-card-school">
-                      MALAIG ELEMENTARY SCHOOL
-                    </span>
-                    <span className="id-card-type">
-                      STUDENT IDENTIFICATION CARD
-                    </span>
-                  </div>
-                </div>
-                <div className="id-card-body-front">
-                  <div className="id-photo-box" aria-label="2x2 photo guide">
-                    <span className="id-photo-box-label">2×2</span>
-                    <span className="id-photo-box-sublabel">
-                      PASTE PHOTO HERE
-                    </span>
-                  </div>
-                  <div className="id-info-right">
-                    <div className="id-info-row">
-                      <label>Name</label>
-                      <span>{fullName}</span>
-                    </div>
-                    <div className="id-info-row">
-                      <label>Birthdate</label>
-                      <span>{selected.birthdate || selected.dob || "—"}</span>
-                    </div>
-                    <div className="id-info-row">
-                      <label>LRN</label>
-                      <span>{selected.lrn}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div id="profile-id-card-back" className="id-card">
-                <div className="id-card-topbar small">
-                  <span className="id-card-school">
-                    MALAIG ELEMENTARY SCHOOL
-                  </span>
-                </div>
-                <div className="id-card-body-back">
-                  <div className="id-emergency-left">
-                    <h4>EMERGENCY CONTACT</h4>
-                    <div className="id-info-row">
-                      <label>Guardian</label>
-                      <span>{selected.guardian || "—"}</span>
-                    </div>
-                    <div className="id-info-row">
-                      <label>Contact No.</label>
-                      <span>
-                        {selected.guardianContact || selected.contact || "—"}
-                      </span>
-                    </div>
-                    <div className="id-info-row">
-                      <label>Address</label>
-                      <span>{selected.address || "—"}</span>
-                    </div>
-                  </div>
-                  <div className="id-qr-right">
-                    <QRCode
-                      value={selected.lrn || ""}
-                      size={110}
-                      viewBox="0 0 256 256"
-                      style={{ height: "auto", width: "100%" }}
-                    />
-                  </div>
                 </div>
               </div>
             </div>
