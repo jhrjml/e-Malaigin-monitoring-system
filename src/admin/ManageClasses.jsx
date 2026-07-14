@@ -645,6 +645,16 @@ const ManageClasses = () => {
 
     // Refresh the full cross-section/grade schedule list so the subject
     // and teacher dropdowns reflect the latest conflicts, not stale data.
+  
+ async function refresherSchedules(){
+    try {
+      setAllSchedules(await getSchedules());
+    } catch (e) {
+      console.error("Failed to refresh schedules for conflict check:", e);
+    }
+  };
+
+  async function checkConflicts(){
     try {
       setAllSchedules(await getSchedules());
     } catch (e) {
@@ -1524,5 +1534,5 @@ const ManageClasses = () => {
     </main>
   );
 };
-
+}
 export default ManageClasses;
