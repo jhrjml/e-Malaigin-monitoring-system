@@ -541,7 +541,7 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* ── Import badges / errors (shared with import modals) ── */
+/* ── Import badges / errors ── */
 .import-badge {
   padding: 4px 12px;
   border-radius: 20px;
@@ -602,7 +602,7 @@
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .modal-content-mc {
@@ -651,14 +651,13 @@
   }
 }
 
-/* REPLACE the old mobile rule with this */
 @media (max-width: 600px) {
   .mc-toolbar-actions {
     margin-left: 0;
     width: 100%;
     margin-top: 12px;
     flex-wrap: wrap;
-    justify-content: flex-end; /* ADD THIS */
+    justify-content: flex-end; 
     padding-right: 12px;
   }
 }
@@ -687,5 +686,107 @@
   .data-table-mc td {
     padding: 8px 6px;
     font-size: 0.78rem;
+  }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   INLINE COLUMN HEADER SORTING DESIGN CONTROL (COPIED FROM TEACHERS)
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.sortable-table-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s;
+}
+
+.sortable-table-header:hover {
+  background-color: #f1f3f5 !important;
+}
+
+.sortable-table-header i {
+  margin-left: 8px;
+  font-size: 0.8rem;
+  vertical-align: middle;
+}
+
+.mt-header-unsorted {
+  color: #ccc;
+}
+
+.mt-header-sorted {
+  color: var(--accent);
+}
+
+.mt-sort-hint-label {
+  font-size: 0.75rem;
+  color: #a65f81; 
+  margin-left: 6px;
+  /* font-style: italic; */
+  font-weight: 500;
+  text-transform: none;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   INTEGRATED TOOLBAR STUDENT SEARCH FIELD
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.mc-student-search-container {
+  position: relative;
+  width: 250px;
+  display: flex;
+  align-items: center;
+}
+
+.mc-student-search-icon {
+  position: absolute;
+  left: 14px;
+  color: var(--gray);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+.mc-student-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 34px 10px 36px !important;
+  border: 1.5px solid #a65f81;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  outline: none;
+  background: #f7f8fa;
+  color: black;
+  transition: border-color 0.18s, background-color 0.18s;
+}
+
+.mc-student-search-input:focus {
+  border-color: var(--primary);
+  background: var(--white);
+}
+
+.mc-student-search-clear {
+  position: absolute;
+  right: 12px;
+  background: #e3e6ea;
+  border: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: #555;
+  font-size: 0.85rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.mc-student-search-clear:hover {
+  background: #d6dae0;
+}
+
+@media (max-width: 600px) {
+  .mc-student-search-container {
+    width: 100%;
+    margin-bottom: 4px;
   }
 }

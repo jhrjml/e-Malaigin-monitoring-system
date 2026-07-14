@@ -25,6 +25,14 @@ const formatDate = (val) => {
   return isNaN(d) ? "—" : d.toLocaleDateString();
 };
 
+// Safe date extraction helper for sorting Firestore Timestamps or ISO strings chronologically
+const getTimeValue = (val) => {
+  if (!val) return 0;
+  if (typeof val?.toDate === "function") return val.toDate().getTime();
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+};
+
 const GRADE_LEVELS = [1, 2, 3, 4, 5, 6];
 
 // ── Toast component ───────────────────────────────────────────────────────────
@@ -121,6 +129,11 @@ const Archive = () => {
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // ── Sorting State Containers ──────────────────────────────────────────────
+  const [studentSortField, setStudentSortField] = useState("name"); // "name" or "archivedAt"
+  const [studentSortOrder, setStudentSortOrder] = useState("asc");
+  const [teacherSortOrder, setTeacherSortOrder] = useState("asc"); // Teachers sort by name directly
+
   // For teachers: direct confirm modal target
   const [confirmTarget, setConfirmTarget] = useState(null); // { type, id, name }
 
@@ -186,7 +199,7 @@ const Archive = () => {
         studentConfirmTarget.targetGrade,
       );
       showToast(
-        `${studentConfirmTarget.name} has been restored to Grade ${studentConfirmTarget.targetGrade} in Manage Students.`,
+        `${studentConfirmTarget.name} has been restored to Grade ${studentConfirmTarget.targetGrade} in Manage Students.`
       );
       setStudents((prev) =>
         prev.filter((r) => r.student.id !== studentConfirmTarget.id),
@@ -222,7 +235,21 @@ const Archive = () => {
     }
   };
 
-  // ── search ─────────────────────────────────────────────────────────────────
+  // ── Sorting Toggles ────────────────────────────────────────────────────────
+  const handleStudentSortToggle = (field) => {
+    if (studentSortField === field) {
+      setStudentSortOrder(studentSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setStudentSortField(field);
+      setStudentSortOrder("asc");
+    }
+  };
+
+  const handleTeacherSortToggle = () => {
+    setTeacherSortOrder(teacherSortOrder === "asc" ? "desc" : "asc");
+  };
+
+  // ── search & sort pipeline logic execution ─────────────────────────────────
   const q = search.toLowerCase().trim();
 
   const filteredStudents = students.filter((r) => {
@@ -244,7 +271,28 @@ const Archive = () => {
     );
   });
 
-  const records = filter === "students" ? filteredStudents : filteredTeachers;
+  // Apply sorting pipeline rules to arrays before compiling DOM rows
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    if (studentSortField === "name") {
+      const nameA = fullStudentName(a.student).toLowerCase();
+      const nameB = fullStudentName(b.student).toLowerCase();
+      return studentSortOrder === "asc" ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+    }
+    if (studentSortField === "archivedAt") {
+      const timeA = getTimeValue(a.student.archivedAt);
+      const timeB = getTimeValue(b.student.archivedAt);
+      return studentSortOrder === "asc" ? timeA - timeB : timeB - timeA;
+    }
+    return 0;
+  });
+
+  const sortedTeachers = [...filteredTeachers].sort((a, b) => {
+    const nameA = fullTeacherName(a.teacher).toLowerCase();
+    const nameB = fullTeacherName(b.teacher).toLowerCase();
+    return teacherSortOrder === "asc" ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+  });
+
+  const records = filter === "students" ? sortedStudents : sortedTeachers;
   const isEmpty = !loading && records.length === 0;
 
   // ── render ─────────────────────────────────────────────────────────────────
@@ -333,17 +381,32 @@ const Archive = () => {
             <table className="archive-table">
               <thead>
                 <tr>
-                  <th>Student</th>
+                  {/* Sortable Header Components */}
+                  <th 
+                    onClick={() => handleStudentSortToggle("name")} 
+                    className="sortable-table-header"
+                  >
+                    Student
+                    <i className={`fas ${studentSortField === "name" ? (studentSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
+                    <span className="mt-sort-hint-label">(sort)</span>
+                  </th>
                   <th>LRN</th>
                   <th>Grade</th>
-                  <th>Archived On</th>
+                  <th 
+                    onClick={() => handleStudentSortToggle("archivedAt")} 
+                    className="sortable-table-header"
+                  >
+                    Archived On
+                    <i className={`fas ${studentSortField === "archivedAt" ? (studentSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
+                    <span className="mt-sort-hint-label">(sort)</span>
+                  </th>
                   <th>Parent Account</th>
                   <th>Account Status</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {filteredStudents.map(({ student, parentUser }) => (
+                {sortedStudents.map(({ student, parentUser }) => (
                   <tr key={student.id}>
                     <td>
                       <div className="archive-name">
@@ -410,7 +473,15 @@ const Archive = () => {
             <table className="archive-table">
               <thead>
                 <tr>
-                  <th>Teacher</th>
+                  {/* Sortable Header Components */}
+                  <th 
+                    onClick={handleTeacherSortToggle} 
+                    className="sortable-table-header"
+                  >
+                    Teacher
+                    <i className={`fas ${teacherSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted"}`}></i>
+                    <span className="mt-sort-hint-label">(sort)</span>
+                  </th>
                   <th>Employee ID</th>
                   <th>Advisory</th>
                   <th>Teacher Account</th>
@@ -419,7 +490,7 @@ const Archive = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredTeachers.map(({ teacher, teacherUser }) => (
+                {sortedTeachers.map(({ teacher, teacherUser }) => (
                   <tr key={teacher.id}>
                     <td>
                       <div className="archive-name">

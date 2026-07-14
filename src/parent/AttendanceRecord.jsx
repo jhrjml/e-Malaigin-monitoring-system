@@ -1,58 +1,60 @@
-// AttendanceRecord.jsx  (Firebase version)
-// Parent views their child's attendance records, subject by subject.
-// If the parent has more than one child, a filter bar at the top lets
-// them switch between children — same UI pattern as admin Archive.jsx.
-
-import { useState, useEffect, useCallback } from "react";
+// AttendanceRecord.jsx (Firebase version)
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { db } from "../api/firebase";
 import {
   doc,
   getDoc,
   collection,
+  getDocs,
   query,
   where,
-  getDocs,
 } from "firebase/firestore";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./AttendanceRecord.css";
 
 const col = (name) => collection(db, name);
 
-const iconFor = (subject) => {
-  const map = {
-    Math: "fa-calculator",
-    Mathematics: "fa-calculator",
-    English: "fa-book",
-    Science: "fa-flask",
-    Filipino: "fa-flag",
-    "Araling Panlipunan": "fa-globe",
-    MAPEH: "fa-music",
-    TLE: "fa-tools",
-    EPP: "fa-seedling",
-  };
-  return map[subject] || "fa-book-open";
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+// Helper: Formats 24h standard strings (e.g., "13:45") to clean 12h formats ("1:45 PM") — Matched with Admin Portal
+const formatTimeLabel = (timeStr) => {
+  if (!timeStr) return "—";
+  const [hrs, mins] = timeStr.split(":");
+  let h = parseInt(hrs, 10);
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${mins} ${ampm}`;
 };
 
 function AttendanceRecord() {
-  // children / filter
+  // Children state management
   const [children, setChildren] = useState([]);
   const [selectedChild, setSelectedChild] = useState(null);
   const [childrenLoading, setChildrenLoading] = useState(true);
+  const [childSchedules, setChildSchedules] = useState([]); 
 
-  // view state
-  const [currentView, setCurrentView] = useState("select-subject");
-  const [subjects, setSubjects] = useState([]);
-  const [currentSubject, setCurrentSubject] = useState("");
-  const [availableMonths, setAvailableMonths] = useState([]);
-  const [selectedMonth, setSelectedMonth] = useState("");
+  // Selected date tracks 'YYYY-MM-DD'
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+
+  // Calendar view month tracking
+  const todayObj = useMemo(() => new Date(), []);
+  const [viewYear, setViewYear] = useState(todayObj.getFullYear());
+  const [viewMonth, setViewMonth] = useState(todayObj.getMonth());
+
   const [attendanceLogs, setAttendanceLogs] = useState([]);
-  const [today, setToday] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ── load children linked to this parent ──────────────────────────────
-  useEffect(() => {
-    setToday(new Date().toISOString().split("T")[0]);
+  const pad = (n) => String(n).padStart(2, "0");
 
+  // 1. Load children linked to this parent account
+  useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (!userId) {
       setChildrenLoading(false);
@@ -101,7 +103,7 @@ function AttendanceRecord() {
         setChildren(enriched);
         setSelectedChild(enriched[0] || null);
       } catch (e) {
-        console.error(e);
+        console.error("Failed to load children logs:", e);
       } finally {
         setChildrenLoading(false);
       }
@@ -109,22 +111,27 @@ function AttendanceRecord() {
     load();
   }, []);
 
-  // ── load subjects for whichever child is currently selected ──────────
-  const loadSubjects = useCallback(async (child) => {
+  // 2. Load schedules and filter locally to handle dynamic cross-collection data types
+  const loadSubjectsAndSchedules = useCallback(async (child) => {
     if (!child) return;
     setLoading(true);
     try {
-      const snap = await getDocs(
-        query(
-          col("Schedule"),
-          where("grade", "==", child.enrolledGrade),
-          where("section", "==", child.enrolledSection),
-        ),
-      );
-      const subs = [...new Set(snap.docs.map((d) => d.data().subject))];
-      setSubjects(subs.map((name) => ({ name, icon: iconFor(name) })));
+      const snap = await getDocs(collection(db, "Schedule"));
+      const allScheds = snap.docs.map((d) => d.data());
+      
+      // Loosely filter schedule slots to catch mixed casing or string/number structures
+      const matchedScheds = allScheds.filter((s) => {
+        const sGrade = String(s.grade || "").trim();
+        const cGrade = String(child.enrolledGrade || "").trim();
+        const sSection = String(s.section || "").trim().toLowerCase();
+        const cSection = String(child.enrolledSection || "").trim().toLowerCase();
+        
+        return sGrade === cGrade && sSection === cSection;
+      });
+      
+      setChildSchedules(matchedScheds); 
     } catch (e) {
-      console.error(e);
+      console.error("Schedule matching error:", e);
     } finally {
       setLoading(false);
     }
@@ -132,256 +139,237 @@ function AttendanceRecord() {
 
   useEffect(() => {
     if (!selectedChild) return;
-    setCurrentView("select-subject");
-    setCurrentSubject("");
-    setAvailableMonths([]);
     setAttendanceLogs([]);
-    loadSubjects(selectedChild);
-  }, [selectedChild, loadSubjects]);
+    loadSubjectsAndSchedules(selectedChild);
+  }, [selectedChild, loadSubjectsAndSchedules]);
+
+  // 3. Query attendance status entries for the chosen date
+  const loadDayAttendance = useCallback(async (childId, dateStr) => {
+    setLoading(true);
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, "Attendance"),
+          where("studentId", "==", childId),
+          where("date", "==", dateStr)
+        )
+      );
+      
+      setAttendanceLogs(snap.docs.map((d) => d.data()));
+    } catch (e) {
+      console.error("Failed to fetch day records:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedChild && selectedDate) {
+      loadDayAttendance(selectedChild.id, selectedDate);
+    }
+  }, [selectedChild, selectedDate, loadDayAttendance]);
+
+  // Calendar Grid Builder Operations
+  const firstOfMonth = new Date(viewYear, viewMonth, 1);
+  const firstWeekday = firstOfMonth.getDay(); 
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  const cells = useMemo(() => {
+    const tempCells = [];
+    for (let i = 0; i < firstWeekday; i++) tempCells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) tempCells.push(d);
+    return tempCells;
+  }, [firstWeekday, daysInMonth]);
+
+  const handleDayClick = (day) => {
+    if (!day) return;
+    const targetDate = `${viewYear}-${pad(viewMonth + 1)}-${pad(day)}`;
+    setSelectedDate(targetDate);
+  };
+
+  const goPrevMonth = () => {
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear((y) => y - 1);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
+  };
+
+  const goNextMonth = () => {
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear((y) => y + 1);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
+  };
+
+  const isSelectedCell = (d) => {
+    if (!d) return false;
+    const currentCellStr = `${viewYear}-${pad(viewMonth + 1)}-${pad(d)}`;
+    return selectedDate === currentCellStr;
+  };
 
   const switchChild = (child) => {
     if (child.id === selectedChild?.id) return;
     setSelectedChild(child);
   };
 
-  // ── select subject → load distinct months with records ───────────────
-  const selectSubject = async (subjectName) => {
-    setCurrentSubject(subjectName);
-    setLoading(true);
-    try {
-      const snap = await getDocs(
-        query(
-          col("Attendance"),
-          where("studentId", "==", selectedChild.id),
-          where("subject", "==", subjectName),
-        ),
-      );
-      const logs = snap.docs.map((d) => d.data());
-      const months = [...new Set(logs.map((l) => l.date.substring(0, 7)))]
-        .map((m) => ({
-          id: m,
-          name: new Date(m + "-01").toLocaleDateString("en-US", {
-            month: "long",
-            year: "numeric",
-          }),
-        }))
-        .sort((a, b) => b.id.localeCompare(a.id));
-      setAvailableMonths(months);
-      setCurrentView("select-month");
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const getDayLabelHeader = useMemo(() => {
+    const todayFormatted = `${todayObj.getFullYear()}-${pad(todayObj.getMonth() + 1)}-${pad(todayObj.getDate())}`;
+    return selectedDate === todayFormatted ? "Today's Attendance" : "Attendance Record";
+  }, [selectedDate, todayObj]);
 
-  const selectMonth = async (monthId) => {
-    setSelectedMonth(monthId);
-    setLoading(true);
-    try {
-      const snap = await getDocs(
-        query(
-          col("Attendance"),
-          where("studentId", "==", selectedChild.id),
-          where("subject", "==", currentSubject),
-        ),
-      );
-      const logs = snap.docs
-        .map((d) => d.data())
-        .filter((l) => l.date.startsWith(monthId))
-        .sort((a, b) => new Date(b.date) - new Date(a.date));
-      setAttendanceLogs(logs);
-      setCurrentView("attendance");
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const todayLog = attendanceLogs.find((l) => l.date === today);
+  // Sort child class schedules sequentially from morning to afternoon
+  const sortedSchedules = useMemo(() => {
+    return [...childSchedules].sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+  }, [childSchedules]);
 
   if (childrenLoading) {
     return (
-      <div className="app-container">
-        <main className="main-content">
-          <div className="page-container">
-            <p className="ar-loading-text">Loading…</p>
-          </div>
-        </main>
+      <div className="ar-wrapper">
+        <p className="ar-loading-text"><i className="fas fa-spinner fa-spin"></i> Loading attendance setup...</p>
       </div>
     );
   }
 
   return (
-    <div className="app-container">
-      <main className="main-content">
-        <div className="page-container">
-          <div className="toolbar-ar">
-            <h2 className="section-title-ar">Attendance Record</h2>
-          </div>
+    <div className="ar-wrapper">
+      <div className="toolbar-ar">
+        <h2 className="section-title-ar">Attendance Record</h2>
+      </div>
 
-          {children.length === 0 ? (
-            <p className="ar-empty-text">No children linked to this account.</p>
-          ) : (
-            <>
-              {/* CHILD FILTER — same pattern as admin Archive.jsx */}
-              {children.length > 1 && (
-                <div className="ar-filter-group">
-                  {children.map((c) => (
-                    <button
-                      key={c.id}
-                      className={`ar-filter-btn ${selectedChild?.id === c.id ? "active" : ""}`}
-                      onClick={() => switchChild(c)}
-                    >
-                      <i className="fas fa-user-graduate"></i>
-                      {c.firstName} {c.lastName}
-                    </button>
+      {children.length === 0 ? (
+        <p className="ar-empty-text">No children linked to this account.</p>
+      ) : (
+        <>
+          {/* Child Filter Buttons Tab */}
+          {children.length > 1 && (
+            <div className="ar-filter-group">
+              {children.map((c) => (
+                <button
+                  key={c.id}
+                  className={`ar-filter-btn ${selectedChild?.id === c.id ? "active" : ""}`}
+                  onClick={() => switchChild(c)}
+                >
+                  <i className="fas fa-user-graduate"></i>
+                  {c.firstName} {c.lastName}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Core Split Screen Dashboard Layout */}
+          <div className="ar-dashboard-grid-matrix">
+            
+            {/* LEFT BLOCK: Daily Schedules + Status Overlay */}
+            <div className="ar-left-logs-column">
+              <div className="ar-today-status-card-deck">
+                <h4>{getDayLabelHeader}</h4>
+                <span className="ar-date-pill-badge">{selectedDate}</span>
+              </div>
+
+              {loading ? (
+                <div className="ar-table-loading-notice"><i className="fas fa-spinner fa-spin"></i> Fetching records...</div>
+              ) : (
+                <div className="ar-table-container-wrap">
+                  <table className="ar-custom-data-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: "220px", textAlign: "left" }}>Time</th>
+                        <th style={{ textAlign: "center" }}>Subject</th>
+                        <th style={{ width: "120px", textAlign: "center" }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedSchedules.length > 0 ? (
+                        sortedSchedules.map((sched, i) => {
+                          // Match logged attendance statuses by subject string keys
+                          const matchLog = attendanceLogs.find(
+                            (log) => String(log.subject || "").trim().toLowerCase() === String(sched.subject || "").trim().toLowerCase()
+                          );
+                          const statusText = matchLog ? matchLog.status : "Pending";
+
+                          return (
+                            <tr key={i}>
+                              <td className="ar-font-monospace" style={{ textAlign: "left" }}>
+                                {/* Formatted dynamically using premium 12h labels to match Admin ManageClasses */}
+                                {formatTimeLabel(sched.start)} – {formatTimeLabel(sched.end)}
+                              </td>
+                              <td style={{ textAlign: "center", fontWeight: "600", color: "#111" }}>
+                                {sched.subject}
+                              </td>
+                              <td style={{ textAlign: "center" }}>
+                                <span className={`ar-status-pill-badge ar-badge-${statusText.toLowerCase()}`}>
+                                  {statusText}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan="3" className="ar-table-empty-fallback-row">
+                            No class schedule configured for this section.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT BLOCK: Interactive Navigation Calendar Card */}
+            <div className="ar-right-calendar-column">
+              <div className="ar-mini-calendar-card">
+                <div className="ar-mini-calendar-nav">
+                  <button onClick={goPrevMonth} aria-label="Previous month">
+                    <i className="fas fa-chevron-left"></i>
+                  </button>
+                  <span className="ar-mini-calendar-month-label">
+                    {MONTH_NAMES[viewMonth]} {viewYear}
+                  </span>
+                  <button onClick={goNextMonth} aria-label="Next month">
+                    <i className="fas fa-chevron-right"></i>
+                  </button>
+                </div>
+
+                <div className="ar-mini-calendar-weekdays">
+                  {WEEKDAY_LABELS.map((w) => (
+                    <span key={w}>{w}</span>
                   ))}
                 </div>
-              )}
 
-              {loading && <p className="ar-loading-text">Loading…</p>}
-
-              {/* SELECT SUBJECT */}
-              {currentView === "select-subject" && (
-                <div className="view-section-ar">
-                  <h3 className="ar-sub-title">
-                    {selectedChild?.firstName} {selectedChild?.lastName} —
-                    Select Subject
-                  </h3>
-                  <div className="grid-container-ar">
-                    {subjects.length === 0 ? (
-                      <p className="ar-empty-text">
-                        No subjects found for this class.
-                      </p>
-                    ) : (
-                      subjects.map((sub) => (
-                        <div
-                          key={sub.name}
-                          className="subject-card-ar"
-                          onClick={() => selectSubject(sub.name)}
-                        >
-                          <div className="subject-icon-ar">
-                            <i className={`fas ${sub.icon}`}></i>
-                          </div>
-                          <div className="subject-info-ar">
-                            <h4>{sub.name}</h4>
-                            <small>Tap to view attendance</small>
-                          </div>
-                          <i className="fas fa-chevron-right"></i>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                <div className="ar-mini-calendar-grid">
+                  {cells.map((d, i) => {
+                    if (d === null) {
+                      return (
+                        <span
+                          key={`blank-${i}`}
+                          className="ar-mini-calendar-cell ar-mini-calendar-cell--empty"
+                        />
+                      );
+                    }
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        className={`ar-mini-calendar-cell ${isSelectedCell(d) ? "ar-mini-calendar-cell--selected" : ""}`}
+                        onClick={() => handleDayClick(d)}
+                      >
+                        {d}
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            </div>
 
-              {/* SELECT MONTH */}
-              {currentView === "select-month" && (
-                <div className="view-section-ar">
-                  <div className="toolbar-inner-ar">
-                    <button
-                      className="btn-back-ar"
-                      onClick={() => setCurrentView("select-subject")}
-                    >
-                      <i className="fas fa-arrow-left"></i>
-                    </button>
-                    <h3>{currentSubject} Attendance</h3>
-                  </div>
-                  <div className="grid-container-ar">
-                    {availableMonths.length === 0 ? (
-                      <p className="ar-empty-text">
-                        No attendance records yet.
-                      </p>
-                    ) : (
-                      availableMonths.map((m) => (
-                        <div
-                          key={m.id}
-                          className="choice-card-ar"
-                          onClick={() => selectMonth(m.id)}
-                        >
-                          <div className="icon-box-ar">
-                            <i className="fas fa-calendar-alt"></i>
-                          </div>
-                          <h3>{m.name}</h3>
-                          <p>View Records</p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* ATTENDANCE LOGS */}
-              {currentView === "attendance" && (
-                <div className="view-section-ar">
-                  <div className="toolbar-inner-ar">
-                    <button
-                      className="btn-back-ar"
-                      onClick={() => setCurrentView("select-month")}
-                    >
-                      <i className="fas fa-arrow-left"></i>
-                    </button>
-                    <h3>{currentSubject} Attendance</h3>
-                  </div>
-
-                  <div className="today-status-card-ar">
-                    <h4>Today's Attendance ({today})</h4>
-                    <div
-                      className={`status-badge-ar ${todayLog ? `status-${todayLog.status.toLowerCase()}` : ""}`}
-                    >
-                      {todayLog ? todayLog.status : "No Record Yet"}
-                    </div>
-                  </div>
-
-                  <div className="table-container-ar">
-                    <table className="data-table-ar">
-                      <thead>
-                        <tr>
-                          <th>Date</th>
-                          <th>Day</th>
-                          <th style={{ textAlign: "center" }}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {attendanceLogs.length === 0 ? (
-                          <tr>
-                            <td colSpan="3" style={{ textAlign: "center" }}>
-                              No records for this month.
-                            </td>
-                          </tr>
-                        ) : (
-                          attendanceLogs.map((log, i) => {
-                            const dayName = new Date(
-                              log.date,
-                            ).toLocaleDateString("en-US", {
-                              weekday: "long",
-                            });
-                            return (
-                              <tr key={i}>
-                                <td>{log.date}</td>
-                                <td>{dayName}</td>
-                                <td style={{ textAlign: "center" }}>
-                                  <span
-                                    className={`status-${log.status.toLowerCase()}`}
-                                  >
-                                    {log.status}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </main>
+          </div>
+        </>
+      )}
     </div>
   );
 }

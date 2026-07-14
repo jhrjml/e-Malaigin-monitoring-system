@@ -1,6 +1,5 @@
 :root {
   --primary: #3f3f97;
-  /* --accent: #3498db;*/
   --accent: #a65f81;
   --success: #2ecc71;
   --danger: #e74c3c;
@@ -189,7 +188,6 @@
   flex-shrink: 0;
 }
 
-/* ── Month filter row (above charts) ──────────────────────────────────── */
 .th-filter-row {
   display: flex;
   justify-content: flex-end;
@@ -424,5 +422,90 @@
   .logout-modal-teacher .btn-cancel {
     padding: 8px 14px !important;
     font-size: larger !important;
+  }
+}
+
+/* ── HIGHLIGHTED LATEST POST ALERT BANNER ── */
+.th-latest-post-alert-banner {
+  background: var(--white);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  border: 1px solid #eaedf1;
+  border-left: 5px solid var(--accent);
+}
+
+.th-latest-post-alert-banner:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.th-latest-banner-badge {
+  background: rgba(166, 95, 129, 0.1);
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-right: 18px;
+  white-space: nowrap;
+  letter-spacing: 0.4px;
+}
+
+.th-latest-banner-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
+}
+
+.th-latest-banner-icon {
+  color: var(--accent);
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.th-latest-banner-text {
+  color: #111;
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.th-latest-banner-text span {
+  color: var(--gray);
+}
+
+.th-latest-banner-arrow {
+  color: #ccc;
+  font-size: 0.85rem;
+  margin-left: 14px;
+  transition: color 0.15s, transform 0.15s;
+}
+
+.th-latest-post-alert-banner:hover .th-latest-banner-arrow {
+  color: var(--accent);
+  transform: translateX(2px);
+}
+
+@media (max-width: 600px) {
+  .th-latest-post-alert-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .th-latest-banner-badge {
+    margin-right: 0;
+  }
+  .th-latest-banner-arrow {
+    display: none;
   }
 }

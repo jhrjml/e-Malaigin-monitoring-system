@@ -62,6 +62,10 @@ function ManageTeachers() {
   const [error, setError] = useState(null);
   const [formError, setFormError] = useState("");
 
+  // ── Sorting State Containers ──────────────────────────────────────────────
+  const [sortField, setSortField] = useState("empId"); 
+  const [sortOrder, setSortOrder] = useState("asc");   
+
   // ── toast / network ──────────────────────────────────────────────────────
   const { toast, showToast } = useToast();
   const { isOnline } = useNetworkStatus();
@@ -110,7 +114,7 @@ function ManageTeachers() {
     contact: "",
     email: "",
   };
-  const [form, setForm] = useState(emptyForm);
+  const [form = form, setForm] = useState(emptyForm);
 
   useEffect(() => {
     fetchTeachers();
@@ -131,15 +135,7 @@ function ManageTeachers() {
     setError(null);
     try {
       const data = await getTeachers();
-      const sortedData = data.sort((a, b) => {
-        const idA = a.empId || "";
-        const idB = b.empId || "";
-        return idA.localeCompare(idB, undefined, {
-          numeric: true,
-          sensitivity: "base",
-        });
-      });
-      setTeachers(sortedData);
+      setTeachers(data);
     } catch {
       setError("Could not load teachers.");
     } finally {
@@ -209,7 +205,6 @@ function ManageTeachers() {
     const wasEditing = isEditing;
     const editingId = editId;
 
-    // Close + notify immediately — don't wait for the network.
     closeModal();
     showToast(
       isOnline
@@ -266,7 +261,6 @@ function ManageTeachers() {
       confirmColor: "danger",
       onConfirm: () => {
         closeConfirm();
-        // Optimistic remove — same offline-safe pattern.
         setTeachers((prev) => prev.filter((x) => x.id !== t.id));
         showToast(
           isOnline
@@ -304,7 +298,6 @@ function ManageTeachers() {
   const downloadTemplate = () => {
     const wb = XLSX.utils.book_new();
 
-    // ── Sheet 1: Template (data entry sheet) ──────────────────────────────
     const headers = [
       [
         "First Name",
@@ -325,7 +318,6 @@ function ManageTeachers() {
       { wch: 28 },
     ];
 
-    // ── Sheet 2: Hidden lookup list for the dropdown ───────────────────────
     const lookupData = [
       ["Advisory Options"],
       ...ADVISORY_OPTIONS.map((o) => [o]),
@@ -335,7 +327,6 @@ function ManageTeachers() {
     XLSX.utils.book_append_sheet(wb, ws, "Teachers");
     XLSX.utils.book_append_sheet(wb, wsLookup, "_AdvisoryList");
 
-    // ── Data validation: dropdown on column D (Advisory Class) ────────────
     if (!ws["!dataValidation"]) ws["!dataValidation"] = [];
     ws["!dataValidation"].push({
       sqref: "D2:D200",
@@ -377,15 +368,13 @@ function ManageTeachers() {
 
         const baseCount = teachers.length;
 
-        // ── Collect advisories already taken in the existing DB list ────────
         const takenAdvisoriesInDb = new Set(
           teachers
             .map((t) => (t.advisory || "").trim().toLowerCase())
             .filter(Boolean),
         );
 
-        // ── Track advisories seen so far within this batch ──────────────────
-        const advisorySeenInBatch = new Map(); // normalised → row number (1-based)
+        const advisorySeenInBatch = new Map(); 
 
         const parsed = rows.map((r, i) => {
           const fname = String(r[0] || "").trim();
@@ -409,7 +398,6 @@ function ManageTeachers() {
           if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
             errs.push("Invalid email");
 
-          // Advisory validations (only when an advisory is provided)
           if (advisory) {
             const normAdvisory = advisory.toLowerCase();
 
@@ -463,7 +451,6 @@ function ManageTeachers() {
     e.target.value = "";
   };
 
-  // Offline-safe bulk import — see ManageStudents.jsx for full explanation.
   const handleImportSave = () => {
     const validRows = importRows.filter((r) => r.errs.length === 0);
     if (validRows.length === 0) return;
@@ -478,7 +465,6 @@ function ManageTeachers() {
       _tempId: `temp-${Date.now()}-${i}`,
     }));
 
-    // Fire all writes now — never blocks the UI.
     const pending = tempRows.map((row) => {
       const payload = {
         empId: row.empId,
@@ -494,7 +480,6 @@ function ManageTeachers() {
         .catch((err) => ({ ok: false, row, error: err }));
     });
 
-    // Optimistically show them in the table immediately.
     setTeachers((prev) => [
       ...prev,
       ...tempRows.map((row) => ({
@@ -509,7 +494,6 @@ function ManageTeachers() {
       })),
     ]);
 
-    // Close the import modal right away with an optimistic result.
     setImportLoading(false);
     setImportDone({ success: tempRows.length, failed: 0 });
     setImportFinished(true);
@@ -521,7 +505,6 @@ function ManageTeachers() {
         : `${tempRows.length} teacher${tempRows.length !== 1 ? "s" : ""} saved offline — will sync when back online.`,
     );
 
-    // Reconcile quietly in the background once writes actually resolve.
     Promise.allSettled(pending).then((settled) => {
       const failMsgs = [];
       let anyFailed = false;
@@ -535,8 +518,6 @@ function ManageTeachers() {
           );
         }
       });
-      // Re-sync the full teacher list from the server rather than trying to
-      // splice each temp entry, since empId sequencing depends on final count.
       fetchTeachers();
       if (anyFailed) {
         setImportErrors(failMsgs);
@@ -559,6 +540,35 @@ function ManageTeachers() {
 
   const validCount = importRows.filter((r) => r.errs.length === 0).length;
   const invalidCount = importRows.filter((r) => r.errs.length > 0).length;
+
+  // ── COLUMN SORTING LOGIC ──
+  const handleSortToggle = (field) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
+    }
+  };
+
+  const sortedTeachers = [...teachers].sort((a, b) => {
+    if (sortField === "empId") {
+      const idA = a.empId || "";
+      const idB = b.empId || "";
+      return sortOrder === "asc"
+        ? idA.localeCompare(idB, undefined, { numeric: true })
+        : idB.localeCompare(idA, undefined, { numeric: true });
+    }
+
+    if (sortField === "name") {
+      const nameA = `${a.lname || ""} ${a.fname || ""}`.toLowerCase();
+      const nameB = `${b.lname || ""} ${b.fname || ""}`.toLowerCase();
+      return sortOrder === "asc" 
+        ? nameA.localeCompare(nameB) 
+        : nameB.localeCompare(nameA);
+    }
+    return 0;
+  });
 
   return (
     <>
@@ -649,8 +659,23 @@ function ManageTeachers() {
             <table className="data-table-mt">
               <thead>
                 <tr>
-                  <th>Employee ID</th>
-                  <th>Teacher Name</th>
+                  {/* ── STREAMLINED FIXED SORT LABELS ── */}
+                  <th 
+                    onClick={() => handleSortToggle("empId")} 
+                    className="sortable-table-header"
+                  >
+                    Employee ID
+                    <i className={`fas ${sortField === "empId" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
+                    <span className="mt-sort-hint-label">(sort)</span>
+                  </th>
+                  <th 
+                    onClick={() => handleSortToggle("name")} 
+                    className="sortable-table-header"
+                  >
+                    Teacher Name
+                    <i className={`fas ${sortField === "name" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
+                    <span className="mt-sort-hint-label">(sort)</span>
+                  </th>
                   <th>Advisory Class</th>
                   <th>Contact No.</th>
                   <th>Actions</th>
@@ -663,14 +688,14 @@ function ManageTeachers() {
                       Loading...
                     </td>
                   </tr>
-                ) : teachers.length === 0 ? (
+                ) : sortedTeachers.length === 0 ? (
                   <tr>
                     <td colSpan="5" style={{ textAlign: "center" }}>
                       No teachers found.
                     </td>
                   </tr>
                 ) : (
-                  teachers.map((t) => (
+                  sortedTeachers.map((t) => (
                     <tr key={t.id}>
                       <td>{t.empId}</td>
                       <td>
