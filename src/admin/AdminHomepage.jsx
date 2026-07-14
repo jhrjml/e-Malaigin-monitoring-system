@@ -9,6 +9,7 @@ import Archive from "./Archive";
 import {
   getDashboardStats,
   getEnrollmentDropoutStats,
+  getGradeSectionDistribution,
   getSchoolYears,
   addSchoolYear,
   setActiveSchoolYear,
@@ -58,6 +59,78 @@ const MONTH_NAMES = [
   "December",
 ];
 const WEEKDAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+
+// Palette cycled through for each distinct SECTION NAME in the grade/section
+// stacked bar chart — sections are sorted alphabetically once, then each
+// gets a fixed color from this list, so e.g. "Rizal" is always the same
+// blue in every grade's bar and the legend stays consistent.
+const STACK_COLORS = [
+  { bg: "#186FAF", text: "#ffffff" },
+  { bg: "#A8C8EA", text: "#1a3a55" },
+  { bg: "#378ADD", text: "#ffffff" },
+  { bg: "#E24B4A", text: "#ffffff" },
+  { bg: "#f1c40f", text: "#5c4a00" },
+  { bg: "#2ecc71", text: "#0d3d21" },
+  { bg: "#9b59b6", text: "#ffffff" },
+  { bg: "#e67e22", text: "#ffffff" },
+];
+
+/**
+ * stackValueLabelsPlugin
+ * A Chart.js plugin (scoped to just the grade/section chart via the
+ * `plugins` prop, not globally registered) that draws:
+ *   1. The raw count centered inside each stacked segment.
+ *   2. A "Total: N" label above the topmost segment of each bar.
+ * Segment counts under ~14px tall are skipped so the number never
+ * overflows a sliver-thin segment.
+ */
+const stackValueLabelsPlugin = {
+  id: "stackValueLabels",
+  afterDatasetsDraw(chart) {
+    const { ctx, data } = chart;
+
+    data.datasets.forEach((dataset, dsIndex) => {
+      const meta = chart.getDatasetMeta(dsIndex);
+      meta.data.forEach((bar, i) => {
+        const value = dataset.data[i];
+        if (!value) return;
+        const height = Math.abs(bar.base - bar.y);
+        if (height < 14) return;
+        ctx.save();
+        ctx.fillStyle = dataset.textColor || "#fff";
+        ctx.font = "600 12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(value), bar.x, (bar.y + bar.base) / 2);
+        ctx.restore();
+      });
+    });
+
+    for (let i = 0; i < data.labels.length; i++) {
+      let topY = Infinity;
+      let anchorX = null;
+      let total = 0;
+      data.datasets.forEach((dataset, dsIndex) => {
+        const meta = chart.getDatasetMeta(dsIndex);
+        const bar = meta.data[i];
+        const value = dataset.data[i];
+        if (!bar || !value) return;
+        total += value;
+        if (bar.y < topY) {
+          topY = bar.y;
+          anchorX = bar.x;
+        }
+      });
+      if (anchorX === null) continue;
+      ctx.save();
+      ctx.fillStyle = "#4a4a4a";
+      ctx.font = "600 12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`Total: ${total}`, anchorX, topY - 12);
+      ctx.restore();
+    }
+  },
+};
 
 function formatHolidayDate(dateStr) {
   const d = new Date(`${dateStr}T00:00:00`);
@@ -392,6 +465,7 @@ function DashboardOverview({ stats, enrollment, distribution, loading, onRefresh
               value={stats.teacherCount}
               accent="orange"
             />
+            <GradeSectionStackedChart data={gradeSection} loading={loading} />
           </div>
 
           <StudentDistributionChart chartData={distribution} loading={loading} />
@@ -1004,8 +1078,6 @@ function EnrollmentDropoutChart({ data, loading, onDataFixed }) {
     },
   };
 
-  const canvasHeight = Math.max(220, data.length * 55 + 80);
-
   return (
     <div className="enrollment-chart-card">
       <div className="enrollment-chart-header">
@@ -1050,10 +1122,7 @@ function EnrollmentDropoutChart({ data, loading, onDataFixed }) {
         </div>
       ) : (
         <>
-          <div
-            className="enrollment-chart-canvas-wrap"
-            style={{ height: canvasHeight }}
-          >
+          <div className="enrollment-chart-canvas-wrap">
             <Bar data={chartData} options={chartOptions} />
           </div>
         </>

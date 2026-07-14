@@ -9,6 +9,7 @@ import {
   where,
   getDocs,
 } from "firebase/firestore";
+import { getActiveSchoolYearLabel } from "../api/firebaseApi";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./AcademicActivity.css";
 
@@ -188,19 +189,23 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
     setCurrentSubject(subjectName);
     setLoading(true);
     try {
+      const activeYear = schoolYear || (await getActiveSchoolYearLabel());
       const snap = await getDocs(
         query(
           col("Classwork"),
           where("grade", "==", selectedChild.enrolledGrade),
           where("section", "==", selectedChild.enrolledSection),
           where("subject", "==", subjectName),
+          where("schoolYear", "==", activeYear),
         ),
       );
-      const cws = snap.docs.map((d) => {
-        const data = d.data();
-        const status = data.studentStatus?.[selectedChild.id] ?? null;
-        return { id: d.id, ...data, myStatus: status };
-      });
+      const cws = snap.docs
+        .map((d) => {
+          const data = d.data();
+          const status = data.studentStatus?.[selectedChild.id] ?? null;
+          return { id: d.id, ...data, myStatus: status };
+        })
+        .sort(sortMostRecentFirst);
       setClassworkList(cws);
       setCurrentView("academic");
     } catch (e) {
@@ -234,19 +239,23 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
         }
         setCurrentSubject(focusClasswork.subject);
 
+        const activeYear = schoolYear || (await getActiveSchoolYearLabel());
         const snap = await getDocs(
           query(
             col("Classwork"),
             where("grade", "==", target.enrolledGrade),
             where("section", "==", target.enrolledSection),
             where("subject", "==", focusClasswork.subject),
+            where("schoolYear", "==", activeYear),
           ),
         );
-        const cws = snap.docs.map((d) => {
-          const data = d.data();
-          const status = data.studentStatus?.[target.id] ?? null;
-          return { id: d.id, ...data, myStatus: status };
-        });
+        const cws = snap.docs
+          .map((d) => {
+            const data = d.data();
+            const status = data.studentStatus?.[target.id] ?? null;
+            return { id: d.id, ...data, myStatus: status };
+          })
+          .sort(sortMostRecentFirst);
 
         if (cancelled) return;
         setClassworkList(cws);
@@ -412,7 +421,7 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
                             className={`cw-card-aa ${
                               cw.myStatus === "Submitted"
                                 ? "cw-submitted-aa"
-                                : cw.myStatus === "Missing"
+                                : cw.myStatus === "Missed"
                                   ? "cw-missed-aa"
                                   : "cw-pending-aa"
                             }`}
@@ -434,7 +443,7 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
                                 className={`cw-pill-aa ${
                                   cw.myStatus === "Submitted"
                                     ? "pill-submitted-aa"
-                                    : cw.myStatus === "Missing"
+                                    : cw.myStatus === "Missed"
                                       ? "pill-missed-aa"
                                       : "pill-pending-aa"
                                 }`}

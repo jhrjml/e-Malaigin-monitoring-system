@@ -53,6 +53,50 @@ const ADVISORY_OPTIONS = [
 const slotLabel = (value) =>
   TIME_SLOTS.find((s) => s.value === value)?.label ?? value ?? "—";
 
+// Normalizes a string for "fuzzy" advisory matching — strips ALL whitespace
+// and lowercases, so "grade1-sectiona", "Grade 1-SectionA", and
+// "Grade 1 - Section A" all resolve to the same canonical option.
+const normalizeForMatch = (s) =>
+  String(s || "")
+    .toLowerCase()
+    .replace(/\s+/g, "");
+
+// Given any raw advisory text, returns the canonically-formatted option from
+// ADVISORY_OPTIONS (matching regardless of case/spacing), or null if it
+// doesn't match any known advisory class.
+const matchAdvisoryOption = (raw) => {
+  const norm = normalizeForMatch(raw);
+  if (!norm) return null;
+  return ADVISORY_OPTIONS.find((o) => normalizeForMatch(o) === norm) || null;
+};
+
+// ── Gender options (single source of truth) ───────────────────────────────
+const GENDER_OPTIONS = ["Male", "Female"];
+
+// Matches raw gender text ("M", "m", "male", "Female", "f", ...) to the
+// canonical "Male" / "Female" label used everywhere else. Returns null if
+// the text doesn't resolve to either.
+const matchGenderOption = (raw) => {
+  const norm = String(raw || "")
+    .trim()
+    .toLowerCase();
+  if (!norm) return null;
+  if (norm === "m" || norm === "male") return "Male";
+  if (norm === "f" || norm === "female") return "Female";
+  return null;
+};
+
+function SortIcon({ active, direction }) {
+  if (!active) {
+    return <i className="fas fa-sort mt-sort-icon"></i>;
+  }
+  return direction === "asc" ? (
+    <i className="fas fa-sort-up mt-sort-icon mt-sort-icon--active"></i>
+  ) : (
+    <i className="fas fa-sort-down mt-sort-icon mt-sort-icon--active"></i>
+  );
+}
+
 function ManageTeachers() {
   const [modalOpen, setModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -110,6 +154,7 @@ function ManageTeachers() {
     fname: "",
     mname: "",
     lname: "",
+    gender: "",
     advisory: "",
     contact: "",
     email: "",
@@ -150,6 +195,18 @@ function ManageTeachers() {
     return `T-${year}-${nextNum}`;
   };
 
+  // ── Advisory classes already assigned to another teacher ────────────────
+  // Used to disable those options in the Add/Edit dropdown so an advisory
+  // that's already taken can't be picked again. When editing, the teacher's
+  // own current advisory is excluded from this "taken" set so it stays
+  // selectable for them.
+  const takenAdvisories = new Set(
+    teachers
+      .filter((t) => t.id !== editId)
+      .map((t) => (t.advisory || "").trim())
+      .filter(Boolean),
+  );
+
   const openModal = () => {
     setIsEditing(false);
     setEditId(null);
@@ -164,6 +221,7 @@ function ManageTeachers() {
   };
 
   const validateForm = () => {
+    if (!form.gender) return "Please select a gender.";
     if (!/^\d{11}$/.test(form.contact))
       return "Contact number must be exactly 11 digits.";
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
@@ -198,6 +256,9 @@ function ManageTeachers() {
       fname: form.fname,
       mname: form.mname || "",
       lname: form.lname,
+      gender: form.gender || "",
+      // Explicitly "" clears the advisory back to Subject Teacher — this is
+      // a real, intentional value, not something to skip/omit.
       advisory: form.advisory || "",
       contact: form.contact,
       email: form.email || "",
@@ -212,6 +273,16 @@ function ManageTeachers() {
         : `${form.fname} ${form.lname} saved offline — will sync when back online.`,
     );
 
+    // Optimistically reflect the edit in the table right away (including
+    // clearing the advisory to Subject Teacher) instead of waiting for the
+    // network round-trip — this is what makes the change to "Subject
+    // Teacher" (or any other change) visibly stick immediately.
+    if (wasEditing) {
+      setTeachers((prev) =>
+        prev.map((t) => (t.id === editingId ? { ...t, ...payload } : t)),
+      );
+    }
+
     const savePromise = wasEditing
       ? updateTeacher(editingId, payload)
       : addTeacher(payload);
@@ -219,6 +290,8 @@ function ManageTeachers() {
     savePromise
       .then(() => fetchTeachers())
       .catch((err) => {
+        // Roll back the optimistic change since the save didn't go through.
+        if (wasEditing) setTeachers(previousTeachers);
         showToast(
           `Failed to save ${form.fname} ${form.lname}: ${err.message}`,
           true,
@@ -227,12 +300,23 @@ function ManageTeachers() {
   };
 
   const editTeacher_ = (t) => {
+    // If the stored advisory doesn't exactly match a dropdown option (e.g.
+    // it was saved with different casing/spacing before the import
+    // normalization fix), resolve it to the canonical option so it shows up
+    // correctly selected instead of silently falling back to "Subject
+    // Teacher" in the dropdown. Falls back to the raw value if it truly
+    // doesn't match anything, so no data is lost.
+    const resolvedAdvisory = t.advisory
+      ? matchAdvisoryOption(t.advisory) || t.advisory
+      : "";
+
     setForm({
       empId: t.empId || "",
       fname: t.fname || "",
       mname: t.mname || "",
       lname: t.lname || "",
-      advisory: t.advisory || "",
+      gender: matchGenderOption(t.gender) || t.gender || "",
+      advisory: resolvedAdvisory,
       contact: t.contact || "",
       email: t.email || "",
     });
@@ -279,6 +363,7 @@ function ManageTeachers() {
   const viewTeacher_ = async (t) => {
     setViewTeacher(t);
     setTeacherSchedules([]);
+    setScheduleSortConfig({ key: "time", direction: "asc" });
     setViewModalOpen(true);
     setScheduleLoading(true);
     try {
@@ -303,6 +388,7 @@ function ManageTeachers() {
         "First Name",
         "Middle Name",
         "Last Name",
+        "Gender (Male/Female)",
         "Advisory Class",
         "Contact (11 digits — format as Text)",
         "Email Address",
@@ -313,6 +399,7 @@ function ManageTeachers() {
       { wch: 16 },
       { wch: 16 },
       { wch: 16 },
+      { wch: 18 },
       { wch: 28 },
       { wch: 30 },
       { wch: 28 },
@@ -328,8 +415,25 @@ function ManageTeachers() {
     XLSX.utils.book_append_sheet(wb, wsLookup, "_AdvisoryList");
 
     if (!ws["!dataValidation"]) ws["!dataValidation"] = [];
+
+    // ── Data validation: dropdown on column D (Gender) ─────────────────────
     ws["!dataValidation"].push({
       sqref: "D2:D200",
+      type: "list",
+      formula1: '"Male,Female"',
+      showDropDown: false,
+      showErrorMessage: true,
+      errorTitle: "Invalid Gender",
+      error: "Please select Male or Female from the dropdown.",
+      errorStyle: "warning",
+      showInputMessage: true,
+      promptTitle: "Gender",
+      prompt: "Select Male or Female.",
+    });
+
+    // ── Data validation: dropdown on column E (Advisory Class) ─────────────
+    ws["!dataValidation"].push({
+      sqref: "E2:E200",
       type: "list",
       formula1: "_AdvisoryList!$A$2:$A$13",
       showDropDown: false,
@@ -380,12 +484,13 @@ function ManageTeachers() {
           const fname = String(r[0] || "").trim();
           const mname = String(r[1] || "").trim();
           const lname = String(r[2] || "").trim();
-          const advisory = String(r[3] || "").trim();
-          const contact = String(r[4] || "")
+          const genderRaw = String(r[3] || "").trim();
+          const advisoryRaw = String(r[4] || "").trim();
+          const contact = String(r[5] || "")
             .replace(/\D/g, "")
             .padStart(11, "0")
             .slice(0, 11);
-          const email = String(r[5] || "").trim();
+          const email = String(r[6] || "").trim();
 
           const year = new Date().getFullYear();
           const seqNum = (baseCount + i + 1).toString().padStart(3, "0");
@@ -404,18 +509,36 @@ function ManageTeachers() {
             const isValidOption = ADVISORY_OPTIONS.some(
               (o) => o.toLowerCase() === normAdvisory,
             );
-            if (!isValidOption) {
-              errs.push(`"${advisory}" is not a valid advisory class`);
+          } else {
+            gender = matchedGender;
+          }
+
+          // ── Advisory normalization + validation ──────────────────────────
+          // Matches regardless of case or missing spaces (e.g.
+          // "grade1-sectiona" or "GRADE 1-SECTION A" both resolve to the
+          // canonical "Grade 1 - Section A"), then stores/displays the
+          // canonical, dropdown-formatted value. A blank cell simply means
+          // "Subject Teacher" — no advisory assigned, which is a valid,
+          // error-free default.
+          let advisory = "";
+          if (advisoryRaw) {
+            const matchedOption = matchAdvisoryOption(advisoryRaw);
+
+            if (!matchedOption) {
+              errs.push(`"${advisoryRaw}" is not a valid advisory class`);
             } else {
+              advisory = matchedOption; // canonical formatting
+              const normAdvisory = matchedOption.toLowerCase();
+
               if (takenAdvisoriesInDb.has(normAdvisory)) {
                 errs.push(
-                  `${advisory} is already assigned to an existing teacher`,
+                  `${matchedOption} is already assigned to an existing teacher`,
                 );
               }
 
               if (advisorySeenInBatch.has(normAdvisory)) {
                 errs.push(
-                  `${advisory} is already used by Row ${advisorySeenInBatch.get(normAdvisory)} in this file`,
+                  `${matchedOption} is already used by Row ${advisorySeenInBatch.get(normAdvisory)} in this file`,
                 );
               } else {
                 if (!takenAdvisoriesInDb.has(normAdvisory)) {
@@ -424,6 +547,7 @@ function ManageTeachers() {
               }
             }
           }
+          // advisory stays "" (Subject Teacher) whenever the cell was left blank.
 
           return {
             row: i + 2,
@@ -431,6 +555,7 @@ function ManageTeachers() {
             fname,
             mname,
             lname,
+            gender,
             advisory,
             contact,
             email,
@@ -471,6 +596,7 @@ function ManageTeachers() {
         fname: row.fname,
         mname: row.mname,
         lname: row.lname,
+        gender: row.gender,
         advisory: row.advisory,
         contact: row.contact,
         email: row.email,
@@ -488,6 +614,7 @@ function ManageTeachers() {
         fname: row.fname,
         mname: row.mname,
         lname: row.lname,
+        gender: row.gender,
         advisory: row.advisory,
         contact: row.contact,
         email: row.email,
@@ -655,6 +782,30 @@ function ManageTeachers() {
             <div style={{ color: "red", marginBottom: "1rem" }}>{error}</div>
           )}
 
+          {/* ── search bar (same design as the admin dashboard search) ── */}
+          <div className="mt-search-bar-row">
+            <div className="mt-search-input-wrap">
+              <i className="fas fa-search mt-search-icon"></i>
+              <input
+                type="text"
+                className="mt-search-input"
+                placeholder="Search name, employee ID, advisory, or contact…"
+                value={teacherSearch}
+                onChange={(e) => setTeacherSearch(e.target.value)}
+              />
+              {teacherSearch && (
+                <button
+                  type="button"
+                  className="mt-search-clear"
+                  onClick={() => setTeacherSearch("")}
+                  aria-label="Clear search"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="table-container">
             <table className="data-table-mt">
               <thead>
@@ -684,14 +835,16 @@ function ManageTeachers() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="5" style={{ textAlign: "center" }}>
+                    <td colSpan="6" style={{ textAlign: "center" }}>
                       Loading...
                     </td>
                   </tr>
                 ) : sortedTeachers.length === 0 ? (
                   <tr>
-                    <td colSpan="5" style={{ textAlign: "center" }}>
-                      No teachers found.
+                    <td colSpan="6" style={{ textAlign: "center" }}>
+                      {teacherQuery
+                        ? `No teachers found for "${teacherSearch}".`
+                        : "No teachers found."}
                     </td>
                   </tr>
                 ) : (
@@ -708,6 +861,7 @@ function ManageTeachers() {
                         <br />
                         <small>{t.email || "No Email"}</small>
                       </td>
+                      <td>{t.gender || "—"}</td>
                       <td>
                         {t.advisory ? (
                           <strong>{t.advisory} Adviser</strong>
@@ -813,6 +967,22 @@ function ManageTeachers() {
                   />
                 </div>
                 <div className="form-group">
+                  <label>Gender</label>
+                  <select
+                    name="gender"
+                    value={form.gender}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="">-- Select Gender --</option>
+                    {GENDER_OPTIONS.map((g) => (
+                      <option key={g} value={g}>
+                        {g}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
                   <label>Advisory Class</label>
                   <select
                     name="advisory"
@@ -820,9 +990,16 @@ function ManageTeachers() {
                     onChange={handleChange}
                   >
                     <option value="">-- Subject Teacher --</option>
-                    {ADVISORY_OPTIONS.map((o) => (
-                      <option key={o}>{o}</option>
-                    ))}
+                    {ADVISORY_OPTIONS.map((o) => {
+                      const isTaken =
+                        takenAdvisories.has(o) && o !== form.advisory;
+                      return (
+                        <option key={o} value={o} disabled={isTaken}>
+                          {o}
+                          {isTaken ? " (Already assigned)" : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div className="form-group">
@@ -921,14 +1098,50 @@ function ManageTeachers() {
                   <table className="data-table-mt">
                     <thead>
                       <tr>
-                        <th>Subject</th>
-                        <th>Grade & Section</th>
-                        <th>Days</th>
-                        <th>Time</th>
+                        <th
+                          className="mt-th-sortable"
+                          onClick={() => handleScheduleSort("subject")}
+                        >
+                          Subject{" "}
+                          <SortIcon
+                            active={scheduleSortConfig.key === "subject"}
+                            direction={scheduleSortConfig.direction}
+                          />
+                        </th>
+                        <th
+                          className="mt-th-sortable"
+                          onClick={() => handleScheduleSort("gradeSection")}
+                        >
+                          Grade & Section{" "}
+                          <SortIcon
+                            active={scheduleSortConfig.key === "gradeSection"}
+                            direction={scheduleSortConfig.direction}
+                          />
+                        </th>
+                        <th
+                          className="mt-th-sortable"
+                          onClick={() => handleScheduleSort("days")}
+                        >
+                          Days{" "}
+                          <SortIcon
+                            active={scheduleSortConfig.key === "days"}
+                            direction={scheduleSortConfig.direction}
+                          />
+                        </th>
+                        <th
+                          className="mt-th-sortable"
+                          onClick={() => handleScheduleSort("time")}
+                        >
+                          Time{" "}
+                          <SortIcon
+                            active={scheduleSortConfig.key === "time"}
+                            direction={scheduleSortConfig.direction}
+                          />
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {teacherSchedules.map((s) => (
+                      {visibleSchedules.map((s) => (
                         <tr key={s.id}>
                           <td>{s.subject}</td>
                           <td>
@@ -1023,6 +1236,7 @@ function ManageTeachers() {
                           <th>Emp ID (Auto)</th>
                           <th>First Name</th>
                           <th>Last Name</th>
+                          <th>Gender</th>
                           <th>Advisory</th>
                           <th>Contact</th>
                           <th>Status</th>
@@ -1042,6 +1256,7 @@ function ManageTeachers() {
                             </td>
                             <td>{r.fname}</td>
                             <td>{r.lname}</td>
+                            <td>{r.gender || "—"}</td>
                             <td>
                               {r.advisory ? (
                                 <span

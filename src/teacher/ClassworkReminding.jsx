@@ -11,7 +11,11 @@ import {
   updateDoc,
   getDoc,
 } from "firebase/firestore";
-import { queueNotification, getParentIdsForStudents } from "../api/firebaseApi";
+import {
+  queueNotification,
+  getParentIdsForStudents,
+  getActiveSchoolYearLabel,
+} from "../api/firebaseApi";
 import useSubmitGuard from "../common/useSubmitGuard";
 import useNetworkStatus from "../common/useNetworkStatus";
 import "@fortawesome/fontawesome-free/css/all.min.css";
@@ -26,6 +30,50 @@ const TYPE_META = {
   Quiz: { icon: "fa-question-circle", cls: "cwr-orange" },
   Exam: { icon: "fa-file-alt", cls: "cwr-red" },
   Announcement: { icon: "fa-bullhorn", cls: "cwr-teal" },
+};
+
+// Sorts classwork/announcement entries with the most recently POSTED item
+// first, using the `createdAt` timestamp stamped when the entry was
+// created. Falls back to the due-date field for any legacy entries that
+// predate `createdAt` being stamped.
+const sortMostRecentFirst = (a, b) => {
+  const ca = a.createdAt || "";
+  const cb = b.createdAt || "";
+  if (ca && cb) return cb.localeCompare(ca);
+  if (ca && !cb) return -1;
+  if (!ca && cb) return 1;
+  return (b.date || "").localeCompare(a.date || "");
+};
+
+// ── Convert a Firestore Timestamp / ISO string / Date → JS Date (or null) ──
+const toJsDate = (val) => {
+  if (!val) return null;
+  if (typeof val?.toDate === "function") return val.toDate();
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+// ── "Edited …" label — shows both the date and time the post was last
+// edited, e.g. "Edited Jul 9, 10:54 AM" (adds the year only if it isn't
+// the current year, e.g. "Edited Jul 9, 2025, 10:54 AM").
+const formatEditedLabel = (editedAt) => {
+  const date = toJsDate(editedAt);
+  if (!date) return null;
+
+  const now = new Date();
+  const sameYear = date.getFullYear() === now.getFullYear();
+
+  const datePart = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: sameYear ? undefined : "numeric",
+  });
+  const timePart = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return `Edited ${datePart}, ${timePart}`;
 };
 
 function ClassworkReminding({ focusClasswork, onFocusConsumed }) {

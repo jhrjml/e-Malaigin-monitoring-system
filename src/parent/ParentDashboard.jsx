@@ -15,6 +15,7 @@ import {
   query,
   where,
 } from "firebase/firestore";
+import { getActiveSchoolYearLabel } from "../api/firebaseApi";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -53,6 +54,19 @@ function getSchoolYearMonths() {
     });
   }
   return months;
+}
+
+// Sorts reminder entries with the most recently POSTED item first, using
+// the `createdAt` timestamp stamped when the classwork/announcement was
+// created. Falls back to the due-date field for any legacy entries that
+// predate `createdAt` being stamped.
+function sortMostRecentFirst(a, b) {
+  const ca = a.createdAt || "";
+  const cb = b.createdAt || "";
+  if (ca && cb) return cb.localeCompare(ca);
+  if (ca && !cb) return -1;
+  if (!ca && cb) return 1;
+  return (b.date || "9999-99-99").localeCompare(a.date || "9999-99-99");
 }
 
 const ParentDashboard = () => {
@@ -308,6 +322,20 @@ function DashboardOverview({ onOpenReminder }) {
     setSelectedMonth(defaultMonth);
   }, [defaultMonth]);
 
+  // The admin-configured active school year label (e.g. "2026-2027").
+  // Fetched once here and passed down to the Reminder panel and Classwork
+  // chart, both of which query the "Classwork" collection by
+  // grade+section+subject only — without this, a child placed in the same
+  // Grade+Section+Subject combo a previous student once had would show
+  // that student's old reminders and completion counts mixed into this
+  // year's dashboard.
+  const [schoolYear, setSchoolYear] = useState("");
+  useEffect(() => {
+    getActiveSchoolYearLabel()
+      .then(setSchoolYear)
+      .catch((e) => console.error("Failed to load active school year:", e));
+  }, []);
+
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (!userId) {
@@ -380,6 +408,10 @@ function DashboardOverview({ onOpenReminder }) {
       setRemindersBusy(false);
       return;
     }
+    // Wait for the active school year label to resolve before querying —
+    // it starts as "" on first render, and querying with an empty string
+    // would just return zero results instead of waiting for the real value.
+    if (!schoolYear) return;
 
     let cancelled = false;
     setRemindersBusy(true);
@@ -432,7 +464,7 @@ function DashboardOverview({ onOpenReminder }) {
         const items = perChild.flat().filter((it) => {
           const markedStatus = it.studentStatus?.[it.studentId];
           const isMarked =
-            markedStatus === "Submitted" || markedStatus === "Missing";
+            markedStatus === "Submitted" || markedStatus === "Missed";
           if (isMarked) return false;
           if (it.date && it.date < today) return false;
           return true;
@@ -752,6 +784,10 @@ function ParentClassworkChart({ child, monthId }) {
       setLoading(false);
       return;
     }
+    // Wait for the active school year label to resolve before querying
+    // (see ParentReminderPanel above for why).
+    if (!schoolYear) return;
+
     let cancelled = false;
     setLoading(true);
 
@@ -762,6 +798,7 @@ function ParentClassworkChart({ child, monthId }) {
             collection(db, "Classwork"),
             where("grade", "==", child.enrolledGrade),
             where("section", "==", child.enrolledSection),
+            where("schoolYear", "==", schoolYear),
           ),
         );
 
@@ -772,7 +809,7 @@ function ParentClassworkChart({ child, monthId }) {
           if (!data.date || !data.date.startsWith(monthId)) return;
 
           const status = data.studentStatus?.[child.id];
-          if (status !== "Submitted" && status !== "Missing") return;
+          if (status !== "Submitted" && status !== "Missed") return;
 
           if (!map.has(data.subject))
             map.set(data.subject, { submitted: 0, missing: 0 });
@@ -798,7 +835,13 @@ function ParentClassworkChart({ child, monthId }) {
     return () => {
       cancelled = true;
     };
-  }, [child?.id, child?.enrolledGrade, child?.enrolledSection, monthId]);
+  }, [
+    child?.id,
+    child?.enrolledGrade,
+    child?.enrolledSection,
+    monthId,
+    schoolYear,
+  ]);
 
   const chartData = {
     labels: perSubject.map((c) => c.subject),
@@ -812,7 +855,7 @@ function ParentClassworkChart({ child, monthId }) {
         categoryPercentage: 0.7,
       },
       {
-        label: "Missing",
+        label: "Missed",
         data: perSubject.map((c) => c.missing),
         backgroundColor: "#BA7517",
         borderRadius: 4,
@@ -880,7 +923,7 @@ function ParentClassworkChart({ child, monthId }) {
                 className="pd-chart-legend-dot"
                 style={{ background: "#BA7517" }}
               />
-              Missing
+              Missed
             </span>
           </div>
           <div

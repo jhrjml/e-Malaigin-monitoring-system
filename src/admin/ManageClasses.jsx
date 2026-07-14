@@ -52,6 +52,18 @@ const formatTimeLabel = (timeStr) => {
   return `${h}:${mins} ${ampm}`;
 };
 
+// ── Sort icon (same visual design as ManageStudents.jsx) ──────────────────
+function SortIcon({ active, direction }) {
+  if (!active) {
+    return <i className="fas fa-sort mc-sort-icon"></i>;
+  }
+  return direction === "asc" ? (
+    <i className="fas fa-sort-up mc-sort-icon mc-sort-icon--active"></i>
+  ) : (
+    <i className="fas fa-sort-down mc-sort-icon mc-sort-icon--active"></i>
+  );
+}
+
 // ── Helper: fault-tolerant section-student loader ─────────────────────────
 async function loadSectionStudents(enrolledDocs) {
   const details = (
@@ -76,6 +88,10 @@ const ManageClasses = () => {
   const [sectionStudents, setSectionStudents] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [schedules, setSchedules] = useState([]);
+  // All Schedule docs across every grade/section — used only for the
+  // "teacher already booked at this time somewhere else" conflict check
+  // in the schedule modal. Refreshed each time that modal opens.
+  const [allSchedules, setAllSchedules] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -93,6 +109,35 @@ const ManageClasses = () => {
 
   // ── bulk select ─────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState(new Set());
+
+  // ── masterlist search (same behavior as Manage Students) ───────────────
+  const [masterlistSearch, setMasterlistSearch] = useState("");
+
+  // ── masterlist sorting ───────────────────────────────────────────────────
+  const [masterlistSort, setMasterlistSort] = useState({
+    key: "lrn",
+    direction: "asc",
+  });
+  const handleMasterlistSort = (key) => {
+    setMasterlistSort((prev) =>
+      prev.key === key
+        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" },
+    );
+  };
+
+  // ── schedule sorting (sort only, no search) ─────────────────────────────
+  const [scheduleSort, setScheduleSort] = useState({
+    key: "time",
+    direction: "asc",
+  });
+  const handleScheduleSort = (key) => {
+    setScheduleSort((prev) =>
+      prev.key === key
+        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" },
+    );
+  };
 
   // ── student add/import menu ─────────────────────────────────────────────
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -172,6 +217,9 @@ const ManageClasses = () => {
         setSectionStudents(await loadSectionStudents(enrolledDocs));
         setSchedules(await getSchedules(currentGrade, currentSection));
         setSelectedIds(new Set());
+        setMasterlistSearch("");
+        setMasterlistSort({ key: "lrn", direction: "asc" });
+        setScheduleSort({ key: "time", direction: "asc" });
       } catch (e) {
         setError(e.message);
       } finally {
@@ -256,7 +304,7 @@ const ManageClasses = () => {
       });
   };
 
-  // ── bulk select helpers ───────────────────────────────────────────────
+  // ── bulk select helpers (operate on the currently visible/filtered rows) ─
   const toggleSelectOne = (enrollId) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -513,6 +561,19 @@ const ManageClasses = () => {
       setFormError("Please assign a section teacher.");
       return;
     }
+    if (takenSubjectsInSection.has(schedForm.subject)) {
+      setFormError(
+        `${schedForm.subject} is already scheduled in this section at another time slot.`,
+      );
+      return;
+    }
+    const teacherConflict = teacherConflictMap[schedForm.teacherId];
+    if (teacherConflict) {
+      setFormError(
+        `This teacher is already teaching Grade ${teacherConflict.grade}-${teacherConflict.section} at this time slot.`,
+      );
+      return;
+    }
     guardSchedule(() => doSaveSchedule());
   };
 
@@ -581,6 +642,14 @@ const ManageClasses = () => {
     });
     setFormError("");
     setShowScheduleModal(true);
+
+    // Refresh the full cross-section/grade schedule list so the subject
+    // and teacher dropdowns reflect the latest conflicts, not stale data.
+    try {
+      setAllSchedules(await getSchedules());
+    } catch (e) {
+      console.error("Failed to refresh schedules for conflict check:", e);
+    }
   };
 
   const handleSelectGrade = (level) =>
@@ -861,6 +930,30 @@ const ManageClasses = () => {
               </div>
             </div>
 
+            {/* ── search bar (same design as Manage Students) ── */}
+            <div className="mc-search-bar-row">
+              <div className="mc-search-input-wrap">
+                <i className="fas fa-search mc-search-icon"></i>
+                <input
+                  type="text"
+                  className="mc-search-input"
+                  placeholder="Search name or LRN…"
+                  value={masterlistSearch}
+                  onChange={(e) => setMasterlistSearch(e.target.value)}
+                />
+                {masterlistSearch && (
+                  <button
+                    type="button"
+                    className="mc-search-clear"
+                    onClick={() => setMasterlistSearch("")}
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="table-container-mc">
               <table className="data-table-mc">
                 <thead>
@@ -952,9 +1045,36 @@ const ManageClasses = () => {
               <table className="data-table-mc">
                 <thead>
                   <tr>
-                    <th>Time</th>
-                    <th>Subject</th>
-                    <th>Teacher</th>
+                    <th
+                      className="mc-th-sortable"
+                      onClick={() => handleScheduleSort("time")}
+                    >
+                      Time{" "}
+                      <SortIcon
+                        active={scheduleSort.key === "time"}
+                        direction={scheduleSort.direction}
+                      />
+                    </th>
+                    <th
+                      className="mc-th-sortable"
+                      onClick={() => handleScheduleSort("subject")}
+                    >
+                      Subject{" "}
+                      <SortIcon
+                        active={scheduleSort.key === "subject"}
+                        direction={scheduleSort.direction}
+                      />
+                    </th>
+                    <th
+                      className="mc-th-sortable"
+                      onClick={() => handleScheduleSort("teacher")}
+                    >
+                      Teacher{" "}
+                      <SortIcon
+                        active={scheduleSort.key === "teacher"}
+                        direction={scheduleSort.direction}
+                      />
+                    </th>
                     <th style={{ textAlign: "center" }}>Action</th>
                   </tr>
                 </thead>
@@ -1115,12 +1235,28 @@ const ManageClasses = () => {
                       setSchedForm({ ...schedForm, subject: e.target.value })
                     }
                   >
-                    {SUBJECTS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
+                    {SUBJECTS.map((s) => {
+                      const taken = takenSubjectsInSection.has(s);
+                      return (
+                        <option key={s} value={s} disabled={taken}>
+                          {s}
+                          {taken ? " — Already scheduled in this section" : ""}
+                        </option>
+                      );
+                    })}
                   </select>
+                  {takenSubjectsInSection.has(schedForm.subject) && (
+                    <p
+                      style={{
+                        color: "#e67e22",
+                        fontSize: "0.78rem",
+                        marginTop: "4px",
+                      }}
+                    >
+                      ⚠ This subject is already scheduled in this section at
+                      another time slot.
+                    </p>
+                  )}
                 </div>
 
                 <div className="form-group-mc">
@@ -1141,15 +1277,46 @@ const ManageClasses = () => {
                       }
                     >
                       <option value="">— Select a teacher —</option>
-                      {teachers.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.fname} {t.mname ? t.mname + " " : ""}
-                          {t.lname}
-                          {t.advisory ? ` (Advisory: ${t.advisory})` : ""}
-                        </option>
-                      ))}
+                      {teachers.map((t) => {
+                        const conflict = teacherConflictMap[t.id];
+                        return (
+                          <option key={t.id} value={t.id} disabled={!!conflict}>
+                            {t.fname} {t.mname ? t.mname + " " : ""}
+                            {t.lname}
+                            {t.advisory ? ` (Advisory: ${t.advisory})` : ""}
+                            {/* CHANGED: shortened from the full
+                                "— Already teaching Grade X-Y at this time"
+                                sentence. Native <select>/<option> elements
+                                are rendered by the OS/browser widget, not
+                                by page CSS — white-space, max-width, and
+                                overflow rules don't apply inside <option>
+                                text, so a long label just pushes the whole
+                                dropdown wider than the modal (and the
+                                viewport). The full explanation is still
+                                shown to the admin below, in the warning
+                                <p> under this <select>, which is a normal
+                                DOM element and wraps correctly. */}
+                            {conflict ? " — Unavailable" : ""}
+                          </option>
+                        );
+                      })}
                     </select>
                   )}
+                  {schedForm.teacherId &&
+                    teacherConflictMap[schedForm.teacherId] && (
+                      <p
+                        style={{
+                          color: "#e67e22",
+                          fontSize: "0.78rem",
+                          marginTop: "4px",
+                        }}
+                      >
+                        ⚠ This teacher is already teaching Grade{" "}
+                        {teacherConflictMap[schedForm.teacherId].grade}-
+                        {teacherConflictMap[schedForm.teacherId].section} at
+                        this time slot.
+                      </p>
+                    )}
                 </div>
 
                 {formError && (

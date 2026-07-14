@@ -211,6 +211,33 @@
   }
 }
 
+/* ── Charts row: Enrollment/Dropout bar chart beside the Grade/Section
+   stacked chart ─────────────────────────────────────────────────────── */
+.charts-row {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+}
+
+.charts-row .enrollment-chart-card {
+  flex: 1.6;
+  min-width: 0;
+}
+
+.charts-row .gs-chart-card {
+  flex: 1.4;
+  min-width: 320px;
+}
+
+@media (max-width: 900px) {
+  .charts-row {
+    flex-direction: column;
+  }
+  .charts-row .gs-chart-card {
+    min-width: 0;
+  }
+}
+
 /* ── Holiday list under the calendar grid ───────────────────────────────── */
 .mini-calendar-holiday-list {
   margin-top: 14px;
@@ -591,6 +618,7 @@
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
+  min-height: 340px;
 }
 
 .enrollment-chart-header {
@@ -676,6 +704,49 @@
 .enrollment-chart-canvas-wrap {
   position: relative;
   width: 100%;
+  flex: 1;
+  min-height: 220px;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   GRADE / SECTION STACKED BAR CHART
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.gs-chart-card {
+  background: var(--white);
+  border-radius: 14px;
+  padding: 22px 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  min-height: 340px;
+}
+
+.gs-chart-header {
+  margin-bottom: 10px;
+}
+.gs-chart-header h3 {
+  font-size: 1.05rem;
+  color: #1a1a2e;
+  margin: 0;
+}
+
+.gs-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--gray);
+  font-size: 0.875rem;
+  padding: 40px 20px;
+  flex: 1;
+}
+
+.gs-chart-canvas-wrap {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 220px;
 }
 
 .modal-overlay-admin {
