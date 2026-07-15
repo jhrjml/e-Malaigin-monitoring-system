@@ -19,8 +19,8 @@
 .toolbar-mt {
   display: flex;
   justify-content: space-between;
-  align-items: center; /* NEW — vertically centers back button + title */
-  flex-wrap: nowrap; /* NEW — keeps them on one line */
+  align-items: center; 
+  flex-wrap: nowrap; 
   margin-bottom: 25px;
 }
 /* RESPONSIVE */
@@ -31,7 +31,7 @@
   }
 }
 
-/* ── Download Template Button (mirrors btn-import-ms from students) ── */
+/* ── Download Template Button ── */
 .btn-import-mt {
   background: #a65f81;
   color: white;
@@ -72,7 +72,7 @@
   opacity: 0.9;
 }
 
-/* ── Add Menu Popup (identical to student style) ── */
+/* ── Add Menu Popup ── */
 .add-menu-popup {
   position: absolute;
   right: 0;
@@ -273,12 +273,14 @@
   max-height: 80vh;
   overflow-y: auto;
 }
+
+/* ── MODAL FOOTER BUTTON CONTAINER ── */
 .add-teacher-modal .modal-footer-mt {
   padding: 15px 20px;
   background: white;
-  text-align: right;
   border-top: 1px solid #eee;
   display: flex;
+  justify-content: flex-end; /* Force flex child actions to pull to the right side */
 }
 
 /* Form Elements */
@@ -355,7 +357,7 @@
   color: #a65f81;
 }
 
-/* ── Import Styles (identical to ManageStudents) ── */
+/* ── Import Styles ── */
 .import-step {
   margin-bottom: 18px;
   padding: 14px;
@@ -462,7 +464,7 @@
 
 .teacher-toolbar-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
   margin-left: auto;
 }
@@ -493,104 +495,36 @@
   }
 }
 
-/* ═════════════════════════════════════════════════════════════════════════
-   TEACHER SEARCH  — same visual design as the admin dashboard search bar.
-   Add this block to ManageTeachers.css
-   ═════════════════════════════════════════════════════════════════════════ */
-
-.mt-search-bar-row {
-  display: flex;
-  justify-content: flex-end;
-  margin: 14px 0;
-}
-
-.mt-search-input-wrap {
-  position: relative;
-  width: 300px;
-}
-
-.mt-search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #aaa;
-  font-size: 0.85rem;
-  pointer-events: none;
-}
-
-.mt-search-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 9px 34px 9px 34px;
-  border: 1.5px solid #a65f81;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  outline: none;
-  background: #f7f8fa;
-  color: black;
-  transition:
-    border-color 0.18s,
-    background 0.18s;
-}
-.mt-search-input:focus {
-  border-color: #a65f81;
-  background: #fff;
-}
-
-.mt-search-clear {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: #e3e6ea;
-  border: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  color: #555;
-  font-size: 0.85rem;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.mt-search-clear:hover {
-  background: #d6dae0;
-}
-
-@media (max-width: 600px) {
-  .mt-search-bar-row {
-    justify-content: stretch;
-  }
-  .mt-search-input-wrap {
-    width: 100%;
-  }
-}
-
-/* ═════════════════════════════════════════════════════════════════════════
-   SORTABLE TABLE HEADERS
-   Used by both the main teacher table (Employee ID / Teacher Name /
-   Advisory Class / Contact No.) and the teacher schedule modal
-   (Subject / Grade & Section / Days / Time).
-   ═════════════════════════════════════════════════════════════════════════ */
-
-.mt-th-sortable {
+/* ── INLINE COLUMN HEADER SORTING DESIGN CONTROL ── */
+.sortable-table-header {
   cursor: pointer;
   user-select: none;
-  white-space: nowrap;
-}
-.mt-th-sortable:hover {
-  color: #a65f81;
+  transition: background-color 0.15s;
 }
 
-.mt-sort-icon {
-  font-size: 0.75rem;
-  color: #b8bcc4;
-  margin-left: 4px;
+.sortable-table-header:hover {
+  background-color: #f1f3f5 !important;
+}
+
+.sortable-table-header i {
+  margin-left: 8px;
+  font-size: 0.8rem;
   vertical-align: middle;
 }
-.mt-sort-icon--active {
-  color: #a65f81;
+
+.mt-header-unsorted {
+  color: #ccc;
+}
+
+.mt-header-sorted {
+  color: var(--accent);
+}
+
+.mt-sort-hint-label {
+  font-size: 0.75rem;
+  color: #a65f81; 
+  margin-left: 6px;
+  /* font-style: italic; */
+  font-weight: 500;
+  text-transform: none;
 }

@@ -1,82 +1,59 @@
-// AttendanceRecord.jsx  (Firebase version)
-// Parent lands directly on a calendar + "attendance for this day" view.
-// Left side: time / subject / status table for whichever date is selected
-// (defaults to today). Right side: a calendar — clicking a date reloads
-// the left side with that day's attendance across all subjects.
-// If the parent has more than one child, a filter bar at the top lets
-// them switch between children — same UI pattern as admin Archive.jsx.
-
-import { useState, useEffect, useCallback } from "react";
+// AttendanceRecord.jsx (Firebase version)
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { db } from "../api/firebase";
 import {
   doc,
   getDoc,
   collection,
+  getDocs,
   query,
   where,
-  getDocs,
 } from "firebase/firestore";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./AttendanceRecord.css";
 
 const col = (name) => collection(db, name);
 
-// Schedule documents have NO per-weekday field — ManageClasses.jsx always
-// writes days: "Sunday – Thursday" for every schedule entry, meaning every
-// subject in a section's schedule runs on every school day. The only thing
-// that varies by date is whether it's a school day at all (weekend = off),
-// which matches the same Fri/Sat check used in AttendanceMonitoring.jsx.
-const isWeekend = (date) => {
-  const dow = date.getDay();
-  return dow === 5 || dow === 6; // Fri=5, Sat=6
-};
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
-// Builds a YYYY-MM-DD string from the LOCAL date parts.
-// (Deliberately NOT using d.toISOString() — that converts to UTC first,
-// which shifts the date back a day for any timezone ahead of UTC, e.g. PHT.)
-const toISO = (d) => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+// Helper: Formats 24h standard strings (e.g., "13:45") to clean 12h formats ("1:45 PM") — Matched with Admin Portal
+const formatTimeLabel = (timeStr) => {
+  if (!timeStr) return "—";
+  const [hrs, mins] = timeStr.split(":");
+  let h = parseInt(hrs, 10);
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${mins} ${ampm}`;
 };
 
 function AttendanceRecord() {
-  // children / filter
+  // Children state management
   const [children, setChildren] = useState([]);
   const [selectedChild, setSelectedChild] = useState(null);
   const [childrenLoading, setChildrenLoading] = useState(true);
+  const [childSchedules, setChildSchedules] = useState([]); 
 
-  // schedule + full attendance history for the selected child
-  const [schedule, setSchedule] = useState([]); // [{ subject, start, end, teacherId, days }]
-  const [attendanceLogs, setAttendanceLogs] = useState([]); // all logs, any subject/date
-  const [loading, setLoading] = useState(false);
-
-  const today = toISO(new Date());
-  const [selectedDate, setSelectedDate] = useState(today);
-  const [calendarMonth, setCalendarMonth] = useState(() => {
+  // Selected date tracks 'YYYY-MM-DD'
+  const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth(), 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
 
-  // Click-to-pick month/year panel, opened by tapping the header label
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const MONTH_NAMES = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
+  // Calendar view month tracking
+  const todayObj = useMemo(() => new Date(), []);
+  const [viewYear, setViewYear] = useState(todayObj.getFullYear());
+  const [viewMonth, setViewMonth] = useState(todayObj.getMonth());
 
-  // ── load children linked to this parent ──────────────────────────────
+  const [attendanceLogs, setAttendanceLogs] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const pad = (n) => String(n).padStart(2, "0");
+
+  // 1. Load children linked to this parent account
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (!userId) {
@@ -126,7 +103,7 @@ function AttendanceRecord() {
         setChildren(enriched);
         setSelectedChild(enriched[0] || null);
       } catch (e) {
-        console.error(e);
+        console.error("Failed to load children logs:", e);
       } finally {
         setChildrenLoading(false);
       }
@@ -134,25 +111,27 @@ function AttendanceRecord() {
     load();
   }, []);
 
-  // ── load schedule + full attendance history for whichever child is selected ──
-  const loadChildData = useCallback(async (child) => {
+  // 2. Load schedules and filter locally to handle dynamic cross-collection data types
+  const loadSubjectsAndSchedules = useCallback(async (child) => {
     if (!child) return;
     setLoading(true);
     try {
-      const [scheduleSnap, attendanceSnap] = await Promise.all([
-        getDocs(
-          query(
-            col("Schedule"),
-            where("grade", "==", child.enrolledGrade),
-            where("section", "==", child.enrolledSection),
-          ),
-        ),
-        getDocs(query(col("Attendance"), where("studentId", "==", child.id))),
-      ]);
-      setSchedule(scheduleSnap.docs.map((d) => d.data()));
-      setAttendanceLogs(attendanceSnap.docs.map((d) => d.data()));
+      const snap = await getDocs(collection(db, "Schedule"));
+      const allScheds = snap.docs.map((d) => d.data());
+      
+      // Loosely filter schedule slots to catch mixed casing or string/number structures
+      const matchedScheds = allScheds.filter((s) => {
+        const sGrade = String(s.grade || "").trim();
+        const cGrade = String(child.enrolledGrade || "").trim();
+        const sSection = String(s.section || "").trim().toLowerCase();
+        const cSection = String(child.enrolledSection || "").trim().toLowerCase();
+        
+        return sGrade === cGrade && sSection === cSection;
+      });
+      
+      setChildSchedules(matchedScheds); 
     } catch (e) {
-      console.error(e);
+      console.error("Schedule matching error:", e);
     } finally {
       setLoading(false);
     }
@@ -160,258 +139,237 @@ function AttendanceRecord() {
 
   useEffect(() => {
     if (!selectedChild) return;
-    setSelectedDate(today);
-    setCalendarMonth(() => {
-      const d = new Date();
-      return new Date(d.getFullYear(), d.getMonth(), 1);
-    });
-    loadChildData(selectedChild);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChild, loadChildData]);
+    setAttendanceLogs([]);
+    loadSubjectsAndSchedules(selectedChild);
+  }, [selectedChild, loadSubjectsAndSchedules]);
+
+  // 3. Query attendance status entries for the chosen date
+  const loadDayAttendance = useCallback(async (childId, dateStr) => {
+    setLoading(true);
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, "Attendance"),
+          where("studentId", "==", childId),
+          where("date", "==", dateStr)
+        )
+      );
+      
+      setAttendanceLogs(snap.docs.map((d) => d.data()));
+    } catch (e) {
+      console.error("Failed to fetch day records:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedChild && selectedDate) {
+      loadDayAttendance(selectedChild.id, selectedDate);
+    }
+  }, [selectedChild, selectedDate, loadDayAttendance]);
+
+  // Calendar Grid Builder Operations
+  const firstOfMonth = new Date(viewYear, viewMonth, 1);
+  const firstWeekday = firstOfMonth.getDay(); 
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  const cells = useMemo(() => {
+    const tempCells = [];
+    for (let i = 0; i < firstWeekday; i++) tempCells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) tempCells.push(d);
+    return tempCells;
+  }, [firstWeekday, daysInMonth]);
+
+  const handleDayClick = (day) => {
+    if (!day) return;
+    const targetDate = `${viewYear}-${pad(viewMonth + 1)}-${pad(day)}`;
+    setSelectedDate(targetDate);
+  };
+
+  const goPrevMonth = () => {
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear((y) => y - 1);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
+  };
+
+  const goNextMonth = () => {
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear((y) => y + 1);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
+  };
+
+  const isSelectedCell = (d) => {
+    if (!d) return false;
+    const currentCellStr = `${viewYear}-${pad(viewMonth + 1)}-${pad(d)}`;
+    return selectedDate === currentCellStr;
+  };
 
   const switchChild = (child) => {
     if (child.id === selectedChild?.id) return;
     setSelectedChild(child);
   };
 
-  // ── rows for the currently selected date ──────────────────────────────
-  const selectedDateObj = new Date(selectedDate + "T00:00:00");
+  const getDayLabelHeader = useMemo(() => {
+    const todayFormatted = `${todayObj.getFullYear()}-${pad(todayObj.getMonth() + 1)}-${pad(todayObj.getDate())}`;
+    return selectedDate === todayFormatted ? "Today's Attendance" : "Attendance Record";
+  }, [selectedDate, todayObj]);
 
-  // Every Schedule entry runs Sun–Thu (see ManageClasses.jsx), so the only
-  // date-dependent question is "is this a school day at all?" — not which
-  // specific subjects meet today. Weekend → no classes; otherwise → the
-  // full schedule, each subject cross-referenced against that day's log.
-  const rows = isWeekend(selectedDateObj)
-    ? []
-    : schedule
-        .map((s) => {
-          const log = attendanceLogs.find(
-            (l) => l.subject === s.subject && l.date === selectedDate,
-          );
-          return {
-            time: s.start && s.end ? `${s.start} – ${s.end}` : "—",
-            sortKey: s.start || "",
-            subject: s.subject,
-            status: log ? log.status : "No Record",
-          };
-        })
-        .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-
-  // dates that have at least one attendance record, for the calendar dots
-  const attendanceDateSet = new Set(attendanceLogs.map((l) => l.date));
-
-  // ── calendar grid for calendarMonth ───────────────────────────────────
-  const year = calendarMonth.getFullYear();
-  const month = calendarMonth.getMonth();
-  const firstDayIndex = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < firstDayIndex; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
-  const goToPrevMonth = () => setCalendarMonth(new Date(year, month - 1, 1));
-  const goToNextMonth = () => setCalendarMonth(new Date(year, month + 1, 1));
-
-  const pickMonth = (newMonth) => {
-    setCalendarMonth(new Date(year, newMonth, 1));
-  };
-  const pickYear = (newYear) => {
-    setCalendarMonth(new Date(newYear, month, 1));
-  };
-
-  const pickDate = (day) => {
-    if (!day) return;
-    setSelectedDate(toISO(new Date(year, month, day)));
-    setPickerOpen(false);
-  };
+  // Sort child class schedules sequentially from morning to afternoon
+  const sortedSchedules = useMemo(() => {
+    return [...childSchedules].sort((a, b) => (a.start || "").localeCompare(b.start || ""));
+  }, [childSchedules]);
 
   if (childrenLoading) {
     return (
-      <div className="app-container">
-        <main className="main-content">
-          <div className="page-container">
-            <p className="ar-loading-text">Loading…</p>
-          </div>
-        </main>
+      <div className="ar-wrapper">
+        <p className="ar-loading-text"><i className="fas fa-spinner fa-spin"></i> Loading attendance setup...</p>
       </div>
     );
   }
 
   return (
-    <div className="app-container">
-      <main className="main-content">
-        <div className="page-container">
-          <div className="toolbar-ar">
-            <h2 className="section-title-ar">Attendance Record</h2>
-          </div>
+    <div className="ar-wrapper">
+      <div className="toolbar-ar">
+        <h2 className="section-title-ar">Attendance Record</h2>
+      </div>
 
-          {children.length === 0 ? (
-            <p className="ar-empty-text">No children linked to this account.</p>
-          ) : (
-            <>
-              {/* CHILD FILTER — same pattern as admin Archive.jsx */}
-              {children.length > 1 && (
-                <div className="ar-filter-group">
-                  {children.map((c) => (
-                    <button
-                      key={c.id}
-                      className={`ar-filter-btn ${selectedChild?.id === c.id ? "active" : ""}`}
-                      onClick={() => switchChild(c)}
-                    >
-                      <i className="fas fa-user-graduate"></i>
-                      {c.firstName} {c.lastName}
-                    </button>
-                  ))}
-                </div>
-              )}
+      {children.length === 0 ? (
+        <p className="ar-empty-text">No children linked to this account.</p>
+      ) : (
+        <>
+          {/* Child Filter Buttons Tab */}
+          {children.length > 1 && (
+            <div className="ar-filter-group">
+              {children.map((c) => (
+                <button
+                  key={c.id}
+                  className={`ar-filter-btn ${selectedChild?.id === c.id ? "active" : ""}`}
+                  onClick={() => switchChild(c)}
+                >
+                  <i className="fas fa-user-graduate"></i>
+                  {c.firstName} {c.lastName}
+                </button>
+              ))}
+            </div>
+          )}
 
-              {loading && <p className="ar-loading-text">Loading…</p>}
+          {/* Core Split Screen Dashboard Layout */}
+          <div className="ar-dashboard-grid-matrix">
+            
+            {/* LEFT BLOCK: Daily Schedules + Status Overlay */}
+            <div className="ar-left-logs-column">
+              <div className="ar-today-status-card-deck">
+                <h4>{getDayLabelHeader}</h4>
+                <span className="ar-date-pill-badge">{selectedDate}</span>
+              </div>
 
-              <div className="ar-layout">
-                {/* LEFT: attendance for the selected date */}
-                <div className="ar-left">
-                  <div className="today-status-card-ar">
-                    <h4>Today's Attendance</h4>
-                    <p className="ar-selected-date">{selectedDate}</p>
-                  </div>
+              {loading ? (
+                <div className="ar-table-loading-notice"><i className="fas fa-spinner fa-spin"></i> Fetching records...</div>
+              ) : (
+                <div className="ar-table-container-wrap">
+                  <table className="ar-custom-data-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: "220px", textAlign: "left" }}>Time</th>
+                        <th style={{ textAlign: "center" }}>Subject</th>
+                        <th style={{ width: "120px", textAlign: "center" }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedSchedules.length > 0 ? (
+                        sortedSchedules.map((sched, i) => {
+                          // Match logged attendance statuses by subject string keys
+                          const matchLog = attendanceLogs.find(
+                            (log) => String(log.subject || "").trim().toLowerCase() === String(sched.subject || "").trim().toLowerCase()
+                          );
+                          const statusText = matchLog ? matchLog.status : "Pending";
 
-                  <div className="table-container-ar">
-                    <table className="data-table-ar">
-                      <thead>
-                        <tr>
-                          <th>Time</th>
-                          <th>Subject</th>
-                          <th style={{ textAlign: "center" }}>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.length === 0 ? (
-                          <tr>
-                            <td colSpan="3" style={{ textAlign: "center" }}>
-                              No classes scheduled for this day.
-                            </td>
-                          </tr>
-                        ) : (
-                          rows.map((row, i) => (
+                          return (
                             <tr key={i}>
-                              <td>{row.time}</td>
-                              <td>{row.subject}</td>
+                              <td className="ar-font-monospace" style={{ textAlign: "left" }}>
+                                {/* Formatted dynamically using premium 12h labels to match Admin ManageClasses */}
+                                {formatTimeLabel(sched.start)} – {formatTimeLabel(sched.end)}
+                              </td>
+                              <td style={{ textAlign: "center", fontWeight: "600", color: "#111" }}>
+                                {sched.subject}
+                              </td>
                               <td style={{ textAlign: "center" }}>
-                                <span
-                                  className={`status-${row.status
-                                    .toLowerCase()
-                                    .replace(/\s+/g, "-")}`}
-                                >
-                                  {row.status}
+                                <span className={`ar-status-pill-badge ar-badge-${statusText.toLowerCase()}`}>
+                                  {statusText}
                                 </span>
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan="3" className="ar-table-empty-fallback-row">
+                            No class schedule configured for this section.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT BLOCK: Interactive Navigation Calendar Card */}
+            <div className="ar-right-calendar-column">
+              <div className="ar-mini-calendar-card">
+                <div className="ar-mini-calendar-nav">
+                  <button onClick={goPrevMonth} aria-label="Previous month">
+                    <i className="fas fa-chevron-left"></i>
+                  </button>
+                  <span className="ar-mini-calendar-month-label">
+                    {MONTH_NAMES[viewMonth]} {viewYear}
+                  </span>
+                  <button onClick={goNextMonth} aria-label="Next month">
+                    <i className="fas fa-chevron-right"></i>
+                  </button>
                 </div>
 
-                {/* RIGHT: calendar */}
-                <div className="ar-right">
-                  <div className="ar-calendar-card">
-                    <div className="ar-calendar-header">
-                      <button className="ar-cal-nav" onClick={goToPrevMonth}>
-                        <i className="fas fa-chevron-left"></i>
-                      </button>
+                <div className="ar-mini-calendar-weekdays">
+                  {WEEKDAY_LABELS.map((w) => (
+                    <span key={w}>{w}</span>
+                  ))}
+                </div>
+
+                <div className="ar-mini-calendar-grid">
+                  {cells.map((d, i) => {
+                    if (d === null) {
+                      return (
+                        <span
+                          key={`blank-${i}`}
+                          className="ar-mini-calendar-cell ar-mini-calendar-cell--empty"
+                        />
+                      );
+                    }
+                    return (
                       <button
+                        key={d}
                         type="button"
-                        className="ar-cal-month-label"
-                        onClick={() => setPickerOpen((o) => !o)}
+                        className={`ar-mini-calendar-cell ${isSelectedCell(d) ? "ar-mini-calendar-cell--selected" : ""}`}
+                        onClick={() => handleDayClick(d)}
                       >
-                        {calendarMonth.toLocaleDateString("en-US", {
-                          month: "long",
-                          year: "numeric",
-                        })}
+                        {d}
                       </button>
-                      <button className="ar-cal-nav" onClick={goToNextMonth}>
-                        <i className="fas fa-chevron-right"></i>
-                      </button>
-                    </div>
-
-                    {pickerOpen && (
-                      <div className="ar-cal-picker">
-                        <div className="ar-cal-picker-year-row">
-                          <span className="ar-cal-picker-year">{year}</span>
-                          <div className="ar-cal-picker-year-arrows">
-                            <button
-                              type="button"
-                              className="ar-cal-year-arrow"
-                              onClick={() => pickYear(year - 1)}
-                              aria-label="Previous year"
-                            >
-                              <i className="fas fa-chevron-up"></i>
-                            </button>
-                            <button
-                              type="button"
-                              className="ar-cal-year-arrow"
-                              onClick={() => pickYear(year + 1)}
-                              aria-label="Next year"
-                            >
-                              <i className="fas fa-chevron-down"></i>
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="ar-cal-picker-month-grid">
-                          {MONTH_NAMES.map((name, i) => (
-                            <button
-                              type="button"
-                              key={name}
-                              className={`ar-cal-picker-month ${i === month ? "selected" : ""}`}
-                              onClick={() => {
-                                pickMonth(i);
-                                setPickerOpen(false);
-                              }}
-                            >
-                              {name.slice(0, 3)}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="ar-calendar-weekdays">
-                      {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((w) => (
-                        <span key={w}>{w}</span>
-                      ))}
-                    </div>
-
-                    <div className="ar-calendar-grid">
-                      {cells.map((day, i) => {
-                        if (!day)
-                          return <div key={i} className="ar-cal-cell empty" />;
-                        const iso = toISO(new Date(year, month, day));
-                        const isSelected = iso === selectedDate;
-                        const isToday = iso === today;
-                        const hasRecord = attendanceDateSet.has(iso);
-                        return (
-                          <div
-                            key={i}
-                            className={`ar-cal-cell ${isSelected ? "selected" : ""} ${
-                              isToday ? "today" : ""
-                            }`}
-                            onClick={() => pickDate(day)}
-                          >
-                            {day}
-                            {hasRecord && <span className="ar-cal-dot" />}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
               </div>
-            </>
-          )}
-        </div>
-      </main>
+            </div>
+
+          </div>
+        </>
+      )}
     </div>
   );
 }

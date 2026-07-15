@@ -1,3 +1,4 @@
+/* ChildProfile.css */
 :root {
   --primary: #3f3f97;
   --accent: #a65f81;
@@ -15,131 +16,165 @@
 .toolbar-cp {
   display: flex;
   justify-content: space-between;
-  align-items: center; /* NEW — vertically centers back button + title */
-  flex-wrap: nowrap; /* NEW — keeps them on one line */
+  align-items: center;
+  flex-wrap: nowrap;
   margin-bottom: 25px;
 }
 
-/* RESPONSIVE */
 @media (max-width: 600px) {
   .toolbar-cp {
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
+    gap: 10px;
   }
 }
+
 .section-title-cp {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   font-weight: 700;
-  color: black;
+  color: #111;
 }
 
-/* ── CHILD FILTER (same pattern as admin Archive.jsx) ─────────────────────── */
+/* ── CHILD FILTER BAR ── */
 .cp-filter-group {
   display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
+  gap: 10px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
 }
 .cp-filter-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 18px;
+  gap: 8px;
+  padding: 10px 20px;
   border: 1.5px solid #dde1e7;
-  border-radius: 8px;
-  background: #fff;
+  border-radius: 24px;
+  background: var(--white);
   color: #555;
-  font-size: 0.875rem;
+  font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.18s;
+  transition: all 0.2s ease;
 }
 .cp-filter-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
+  background: rgba(166, 95, 129, 0.02);
 }
 .cp-filter-btn.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--white);
+  box-shadow: 0 4px 10px rgba(166, 95, 129, 0.25);
 }
 
-/* ── PROFILE LAYOUT ─────────────────────────────────────────────────────────── */
+/* ── MODERN SHOWN DECK PROFILE CANVAS ── */
 .profile-layout-cp {
   display: flex;
   flex-direction: column;
   gap: 24px;
   max-width: 100%;
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: var(--shadow-md);
 }
 
 .profile-header-card {
-  background: #fff;
-  border-radius: 14px;
-  padding: 35px 30px;
-  text-align: center;
+  background: var(--white);
+  border-radius: 16px;
   box-shadow: var(--shadow-md);
+  overflow: hidden;
+  position: relative;
+  border: 1px solid #eaedf1;
+}
+
+/* Styled Top Banner Background Contrast Accent */
+.profile-header-banner-accent {
+  height: 90px;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  width: 100%;
+}
+
+.profile-header-content-block {
+  padding: 0 30px 30px 30px;
+  text-align: center;
+  margin-top: -50px; /* Pulls the avatar up onto the banner gracefully */
 }
 
 .student-photo {
-  width: 110px;
-  height: 110px;
+  width: 105px;
+  height: 105px;
   border-radius: 50%;
   object-fit: cover;
-  border: 4px solid #3498db;
-  margin-bottom: 15px;
+  border: 4px solid var(--white);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  background: var(--white);
+  margin-bottom: 12px;
 }
 
-.profile-header-card h1 {
-  font-size: 1.5rem;
-  color: black;
-  margin: 0 0 8px;
+.profile-header-content-block h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #111;
+  margin: 0 0 14px 0;
 }
 
-.grade-level {
-  color: var(--accent);
-  font-weight: 600;
-  font-size: 0.95rem;
-  margin: 0 0 4px;
-}
-.grade-level i {
-  margin-right: 6px;
-}
-
-.advisor-name {
-  color: var(--gray);
-  font-size: 0.9rem;
-  margin: 0;
-}
-.advisor-name i {
-  margin-right: 6px;
-  color: var(--accent);
-}
-
-/* ── DETAILS GRID ───────────────────────────────────────────────────────────── */
-.profile-details-grid.grid-two-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-.info-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: var(--shadow-sm);
-}
-.info-card h3 {
-  font-size: 1rem;
-  color: black;
-  margin-bottom: 16px;
+.profile-header-badge-row {
   display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profile-badge-pill {
+  background: rgba(63, 63, 151, 0.07);
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 6px 16px;
+  border-radius: 30px;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
 }
+
+.profile-badge-pill.advisor {
+  background: rgba(166, 95, 129, 0.07);
+  color: var(--accent);
+}
+
+/* ── INFORMATION LAYOUT CARDS MATRIX ── */
+.profile-details-grid.grid-two-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.info-card {
+  background: var(--white);
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid #eaedf1;
+  border-top: 4px solid var(--primary); /* Anchors info segments with left system boundaries */
+}
+.info-card:nth-child(2) {
+  border-top-color: var(--accent);
+}
+
+.info-card h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #111;
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid #f2f4f8;
+  padding-bottom: 12px;
+}
 .info-card h3 i {
+  color: var(--primary);
+}
+.info-card:nth-child(2) h3 i {
   color: var(--accent);
 }
 
@@ -149,24 +184,50 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-.info-list li {
-  font-size: 0.9rem;
-  color: var(--dark-gray);
-  display: flex;
-  justify-content: space-between;
-  border-bottom: 1px solid #f0f2f5;
-  padding-bottom: 8px;
-}
-.info-list li strong {
-  color: var(--gray);
-  font-weight: 600;
+  gap: 16px;
 }
 
-/* ── RESPONSIVE ─────────────────────────────────────────────────────────────── */
+.info-list li {
+  font-size: 0.92rem;
+  color: #222;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.info-item-label {
+  color: var(--gray);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.info-item-label i {
+  width: 16px;
+  text-align: center;
+  color: #a3afb7;
+}
+
+.info-list li strong {
+  font-weight: 600;
+  color: #111;
+  text-align: right;
+  word-break: break-word;
+}
+
+.sml-font-monospace {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  letter-spacing: 0.3px;
+  background: #f4f6f9;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* ── RESPONSIVE MEDIA BREAKPOINTS ── */
 @media (max-width: 768px) {
   .profile-details-grid.grid-two-columns {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 }

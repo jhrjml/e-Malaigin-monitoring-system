@@ -24,6 +24,7 @@ import "../Layout.css";
 import ProfileModal from "../common/ProfileModal";
 import AttendanceMonitoring from "./AttendanceMonitoring";
 import ClassworkReminding from "./ClassworkReminding";
+import StudentMasterlist from "./StudentMasterlist";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -32,9 +33,9 @@ const titleMap = {
   repository: "Attendance Repository",
   attendance: "Attendance Monitoring",
   reminding: "Classwork Reminder",
+  masterlist: "Student Masterlist",
 };
 
-// ── School year runs June → March (PH DepEd calendar). ───────────────────
 function currentMonthId() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -55,8 +56,6 @@ function getSchoolYearMonths() {
   return months;
 }
 
-// ── Shared helper — every grade+section+subject this teacher is scheduled
-// for, deduped. ────────────────────────────────────────────────────────────
 async function getTeacherCombos(teacherId) {
   const schedSnap = await getDocs(
     query(collection(db, "Schedule"), where("teacherId", "==", teacherId)),
@@ -198,6 +197,13 @@ function TeacherHomepage() {
             <span>Dashboard</span>
           </li>
           <li
+            className={activePage === "masterlist" ? "active" : ""}
+            onClick={() => navigate("masterlist")}
+          >
+            <i className="fas fa-clipboard-list"></i>
+            <span>Student Masterlist</span>
+          </li>
+          <li
             className={activePage === "repository" ? "active" : ""}
             onClick={() => navigate("repository")}
           >
@@ -291,6 +297,9 @@ function TeacherHomepage() {
             </>
           )}
 
+          {activePage === "masterlist" && (
+            <StudentMasterlist teacherId={teacherId} />
+          )}
           {activePage === "repository" && <Repository />}
           {activePage === "attendance" && <AttendanceMonitoring />}
           {activePage === "reminding" && (
@@ -330,17 +339,11 @@ function TeacherHomepage() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// DASHBOARD OVERVIEW — Reminder panel (left) + month-filtered charts (right)
+// DASHBOARD OVERVIEW (DATA FETCH HOISTED)
 // ════════════════════════════════════════════════════════════════════════════
-
 function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
-  // Compute inside the component on every mount so the list and default are
-  // always based on today's actual date — not a stale module-level snapshot.
   const schoolYearMonths = useMemo(() => getSchoolYearMonths(), []);
 
-  // Find the current month in the school-year list. If today falls outside
-  // the school-year window (e.g. it's April, after March end), fall back to
-  // the last month in the list so the chart always shows something useful.
   const defaultMonth = useMemo(() => {
     const current = currentMonthId();
     const match = schoolYearMonths.find((m) => m.id === current);
@@ -348,49 +351,14 @@ function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
   }, [schoolYearMonths]);
 
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
+  const [reminders, setReminders] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // useState only uses its initial value on the very first mount.
-  // This effect syncs selectedMonth whenever defaultMonth resolves or changes
-  // (e.g. component remounts after navigating away and back).
   useEffect(() => {
     setSelectedMonth(defaultMonth);
   }, [defaultMonth]);
 
-  return (
-    <div className="th-overview-grid">
-      <ReminderPanel teacherId={teacherId} onOpenReminder={onOpenReminder} />
-
-      <div className="th-charts-col">
-        {/* Month filter — sits above both charts, right-aligned */}
-        <div className="th-filter-row">
-          <select
-            className="th-month-select"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-          >
-            {schoolYearMonths.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <AttendanceChart teacherId={teacherId} monthId={selectedMonth} />
-        <ClassworkChart teacherId={teacherId} monthId={selectedMonth} />
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// REMINDER PANEL
-// ════════════════════════════════════════════════════════════════════════════
-
-function ReminderPanel({ teacherId, onOpenReminder }) {
-  const [reminders, setReminders] = useState([]);
-  const [loading, setLoading] = useState(true);
-
+  // Unified Centralized Reminders Pipeline Fetch
   useEffect(() => {
     if (!teacherId) {
       setLoading(false);
@@ -417,51 +385,15 @@ function ReminderPanel({ teacherId, onOpenReminder }) {
         );
         const items = classworkLists.flat();
 
-        const gsMap = new Map();
-        combos.forEach((c) => {
-          const key = `${c.grade}|||${c.section}`;
-          if (!gsMap.has(key))
-            gsMap.set(key, { grade: c.grade, section: c.section });
-        });
+        // Sorted cleanly by real creation time descriptors (createdAt)
+        items.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
 
-        const enrolledCounts = {};
-        await Promise.all(
-          [...gsMap.entries()].map(async ([key, { grade, section }]) => {
-            const enrollSnap = await getDocs(
-              query(
-                collection(db, "Enrolled"),
-                where("grade", "==", grade),
-                where("section", "==", section),
-                where("status", "==", "Enrolled"),
-              ),
-            );
-            enrolledCounts[key] = enrollSnap.size;
-          }),
-        );
-
-        const now = new Date();
-        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-
-        const visible = items.filter((it) => {
-          if (it.isAnnouncement) {
-            return !it.date || it.date >= today;
-          }
-          const key = `${it.grade}|||${it.section}`;
-          const enrolledCount = enrolledCounts[key] || 0;
-          if (enrolledCount === 0) return true;
-          const statusMap = it.studentStatus || {};
-          const markedCount = Object.values(statusMap).filter(
-            (s) => s === "Submitted" || s === "Missing",
-          ).length;
-          return markedCount < enrolledCount;
-        });
-
-        visible.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-
-        if (!cancelled) setReminders(visible);
+        if (!cancelled) {
+          setReminders(items);
+          setLoading(false);
+        }
       } catch (e) {
-        console.error("Failed to load reminders:", e);
-      } finally {
+        console.error("Failed centralized dashboard sync:", e);
         if (!cancelled) setLoading(false);
       }
     };
@@ -472,8 +404,57 @@ function ReminderPanel({ teacherId, onOpenReminder }) {
     };
   }, [teacherId]);
 
+  // Isolate the single absolute most recently created posting entry 
+  const latestPost = useMemo(() => reminders[0] || null, [reminders]);
+
+  return (
+    <div className="th-dashboard-flow-container">
+      {/* Prominent Floating Latest Update Banner */}
+      {!loading && latestPost && (
+        <div className="th-latest-post-alert-banner" onClick={() => onOpenReminder(latestPost)}>
+          <div className="th-latest-banner-badge">LATEST POST</div>
+          <div className="th-latest-banner-body">
+            <i className={`fas ${latestPost.isAnnouncement ? "fa-bullhorn" : "fa-tasks"} th-latest-banner-icon`}></i>
+            <div className="th-latest-banner-text">
+              <strong>Grade {latestPost.grade} - {latestPost.section} ({latestPost.subject})</strong>: {latestPost.title} — <span>{latestPost.desc}</span>
+            </div>
+          </div>
+          <i className="fas fa-chevron-right th-latest-banner-arrow"></i>
+        </div>
+      )}
+
+      <div className="th-overview-grid">
+        <ReminderPanel reminders={reminders} loading={loading} onOpenReminder={onOpenReminder} />
+
+        <div className="th-charts-col">
+          <div className="th-filter-row">
+            <select
+              className="th-month-select"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+            >
+              {schoolYearMonths.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <AttendanceChart teacherId={teacherId} monthId={selectedMonth} />
+          <ClassworkChart teacherId={teacherId} monthId={selectedMonth} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// REMINDER PANEL
+// ════════════════════════════════════════════════════════════════════════════
+function ReminderPanel({ reminders, loading, onOpenReminder }) {
   const formatDueDate = (dateStr) => {
-    if (!dateStr) return "No due date";
+    if (!dateStr) return "No date configured";
     try {
       return new Date(`${dateStr}T00:00:00`).toLocaleDateString("en-US", {
         month: "short",
@@ -487,14 +468,14 @@ function ReminderPanel({ teacherId, onOpenReminder }) {
   return (
     <div className="th-panel th-reminder-panel">
       <div className="th-panel-header">
-        <h3>Reminder</h3>
+        <h3>Recent Updates &amp; Reminders</h3>
       </div>
 
       <div className="th-reminder-list">
         {loading ? (
           <p className="th-panel-status">Loading…</p>
         ) : reminders.length === 0 ? (
-          <p className="th-panel-status">No active reminders.</p>
+          <p className="th-panel-status">No active records found.</p>
         ) : (
           reminders.map((cw) => (
             <div
@@ -520,7 +501,7 @@ function ReminderPanel({ teacherId, onOpenReminder }) {
                 </span>
                 {cw.desc && <p className="th-reminder-desc">{cw.desc}</p>}
                 <p className="th-reminder-due">
-                  <i className="far fa-calendar-alt"></i> Due{" "}
+                  <i className="far fa-calendar-alt"></i> Posted:{" "}
                   {formatDueDate(cw.date)}
                 </p>
               </div>
@@ -533,9 +514,8 @@ function ReminderPanel({ teacherId, onOpenReminder }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ATTENDANCE CHART — Present vs. Absent per class+subject, filtered by month
+// ATTENDANCE CHART
 // ════════════════════════════════════════════════════════════════════════════
-
 function AttendanceChart({ teacherId, monthId }) {
   const [loading, setLoading] = useState(true);
   const [perClass, setPerClass] = useState([]);
@@ -735,9 +715,8 @@ function AttendanceChart({ teacherId, monthId }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// CLASSWORK CHART — Submitted vs. Missing per class+subject, filtered by month
+// CLASSWORK CHART
 // ════════════════════════════════════════════════════════════════════════════
-
 function ClassworkChart({ teacherId, monthId }) {
   const [loading, setLoading] = useState(true);
   const [perClass, setPerClass] = useState([]);

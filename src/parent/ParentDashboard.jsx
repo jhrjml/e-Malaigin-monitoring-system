@@ -25,7 +25,7 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import usePushNotifications from "../common/usePushNotifications";
-import { unsubscribeFromPush } from "../common/pushSubscribe"; // ← ADD THIS
+import { unsubscribeFromPush } from "../common/pushSubscribe"; 
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -36,7 +36,6 @@ const titleMap = {
   activity: "Academic Activity",
 };
 
-// ── School year runs June → March (PH DepEd calendar). ───────────────────
 function currentMonthId() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -71,12 +70,10 @@ function sortMostRecentFirst(a, b) {
 }
 
 const ParentDashboard = () => {
-  // ── Register for push notifications as soon as parent logs in ──────────
-  usePushNotifications(); // ← This is the only change to this file
+  usePushNotifications(); 
 
-  // ── Sidebar state — same pattern as AdminHomepage ───────────────────────
-  const [sidebarOpen, setSidebarOpen] = useState(false); // mobile: slide-in
-  const [sidebarClosed, setSidebarClosed] = useState(false); // desktop: collapse
+  const [sidebarOpen, setSidebarOpen] = useState(false); 
+  const [sidebarClosed, setSidebarClosed] = useState(false); 
 
   const [currentDate, setCurrentDate] = useState("");
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -98,7 +95,6 @@ const ParentDashboard = () => {
     setCurrentDate(new Date().toLocaleDateString("en-US", options));
   }, []);
 
-  // Reset sidebar state on resize, same as AdminHomepage
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth > 768) {
@@ -127,12 +123,7 @@ const ParentDashboard = () => {
     }
   };
 
-  // 2) Replace your existing handleLogout with this version:
   const handleLogout = () => {
-    // Fire-and-forget: don't block logout waiting for this, but do call it
-    // BEFORE clearing localStorage/redirecting, since unsubscribeFromPush()
-    // doesn't need any app state — it only touches the browser's own
-    // subscription + the matching Firestore doc.
     unsubscribeFromPush();
     localStorage.clear();
     setLogoutOpen(false);
@@ -152,7 +143,6 @@ const ParentDashboard = () => {
 
   return (
     <div className="app-container">
-      {/* SIDEBAR */}
       {sidebarOpen && (
         <div
           className="sidebar-backdrop"
@@ -203,7 +193,6 @@ const ParentDashboard = () => {
         </ul>
       </aside>
 
-      {/* MAIN CONTENT */}
       <main className="main-content">
         <header>
           <div className="header-left">
@@ -312,23 +301,13 @@ const ParentDashboard = () => {
   );
 };
 
-// ════════════════════════════════════════════════════════════════════════════
-// DASHBOARD OVERVIEW
-// ════════════════════════════════════════════════════════════════════════════
-
 function DashboardOverview({ onOpenReminder }) {
   const [kids, setKids] = useState([]);
   const [kidsLoading, setKidsLoading] = useState(true);
   const [selectedKid, setSelectedKid] = useState(null);
 
-  // Compute inside the component on every mount so the list and default are
-  // always based on today's actual date — not a stale module-level snapshot.
   const schoolYearMonths = useMemo(() => getSchoolYearMonths(), []);
 
-  // Find the current month in the school-year list. If today falls outside
-  // the school-year window (e.g. April, after March end of PH school year),
-  // fall back to the last month in the list so the chart always shows
-  // something useful rather than silently defaulting to June.
   const defaultMonth = useMemo(() => {
     const current = currentMonthId();
     const match = schoolYearMonths.find((m) => m.id === current);
@@ -336,10 +315,9 @@ function DashboardOverview({ onOpenReminder }) {
   }, [schoolYearMonths]);
 
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
+  const [reminders, setReminders] = useState([]);
+  const [remindersBusy, setRemindersBusy] = useState(true);
 
-  // useState only uses its initial value on the very first mount.
-  // This effect syncs selectedMonth whenever defaultMonth resolves or changes
-  // (e.g. component remounts after navigating away and back).
   useEffect(() => {
     setSelectedMonth(defaultMonth);
   }, [defaultMonth]);
@@ -422,99 +400,12 @@ function DashboardOverview({ onOpenReminder }) {
     };
   }, []);
 
-  return (
-    <div className="pd-overview-grid">
-      <ParentReminderPanel
-        kids={kids}
-        loading={kidsLoading}
-        onOpenReminder={onOpenReminder}
-        schoolYear={schoolYear}
-      />
-
-      <div className="pd-charts-col">
-        <div className="pd-filter-row">
-          {kids.length > 1 && (
-            <div className="pd-child-filter-group">
-              {kids.map((k) => (
-                <button
-                  key={k.id}
-                  className={`pd-child-filter-btn ${
-                    selectedKid?.id === k.id ? "active" : ""
-                  }`}
-                  onClick={() => setSelectedKid(k)}
-                >
-                  <i className="fas fa-user-graduate"></i> {k.firstName}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <select
-            className="pd-month-select"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-          >
-            {schoolYearMonths.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {kidsLoading ? (
-          <div className="pd-panel">
-            <p className="pd-panel-status">Loading…</p>
-          </div>
-        ) : !selectedKid ? (
-          <div className="pd-panel">
-            <p className="pd-panel-status">
-              No children linked to this account.
-            </p>
-          </div>
-        ) : (
-          <>
-            <ParentAttendanceChart
-              child={selectedKid}
-              monthId={selectedMonth}
-            />
-            <ParentClassworkChart
-              child={selectedKid}
-              monthId={selectedMonth}
-              schoolYear={schoolYear}
-            />
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// REMINDER PANEL
-// ════════════════════════════════════════════════════════════════════════════
-
-async function getChildSubjects(kid) {
-  if (!kid?.enrolledGrade || !kid?.enrolledSection) return [];
-  const schedSnap = await getDocs(
-    query(
-      collection(db, "Schedule"),
-      where("grade", "==", kid.enrolledGrade),
-      where("section", "==", kid.enrolledSection),
-    ),
-  );
-  return [...new Set(schedSnap.docs.map((d) => d.data().subject))];
-}
-
-function ParentReminderPanel({ kids, loading, onOpenReminder, schoolYear }) {
-  const [reminders, setReminders] = useState([]);
-  const [busy, setBusy] = useState(true);
-
+  // Central Reminders Pipeline Hook (Hoisted from Panel)
   useEffect(() => {
-    if (loading) return;
+    if (kidsLoading) return;
     if (!kids || kids.length === 0) {
       setReminders([]);
-      setBusy(false);
+      setRemindersBusy(false);
       return;
     }
     // Wait for the active school year label to resolve before querying —
@@ -523,9 +414,9 @@ function ParentReminderPanel({ kids, loading, onOpenReminder, schoolYear }) {
     if (!schoolYear) return;
 
     let cancelled = false;
-    setBusy(true);
+    setRemindersBusy(true);
 
-    const load = async () => {
+    const loadReminders = async () => {
       try {
         const now = new Date();
         const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -547,34 +438,27 @@ function ParentReminderPanel({ kids, loading, onOpenReminder, schoolYear }) {
 
         const perChild = await Promise.all(
           kids.map(async (kid) => {
-            const subjects = await getChildSubjects(kid);
-            const lists = await Promise.all(
-              subjects.map((subject) =>
-                getDocs(
-                  query(
-                    collection(db, "Classwork"),
-                    where("grade", "==", kid.enrolledGrade),
-                    where("section", "==", kid.enrolledSection),
-                    where("subject", "==", subject),
-                    where("schoolYear", "==", schoolYear),
-                  ),
-                ).then((snap) =>
-                  snap.docs.map((d) => {
-                    const data = d.data();
-                    return {
-                      id: d.id,
-                      ...data,
-                      date: toISO(data.date),
-                      subject,
-                      studentId: kid.id,
-                      studentName: `${kid.firstName} ${kid.lastName}`,
-                    };
-                  }),
-                ),
-              ),
+            if (!kid.enrolledGrade || !kid.enrolledSection) return [];
+            
+            const snap = await getDocs(
+              query(
+                collection(db, "Classwork"),
+                where("grade", "==", kid.enrolledGrade),
+                where("section", "==", kid.enrolledSection)
+              )
             );
-            return lists.flat();
-          }),
+
+            return snap.docs.map((d) => {
+              const data = d.data();
+              return {
+                id: d.id,
+                ...data,
+                date: toISO(data.date),
+                studentId: kid.id,
+                studentName: `${kid.firstName} ${kid.lastName}`,
+              };
+            });
+          })
         );
 
         const items = perChild.flat().filter((it) => {
@@ -586,23 +470,97 @@ function ParentReminderPanel({ kids, loading, onOpenReminder, schoolYear }) {
           return true;
         });
 
-        // Most-recently-posted first (see sortMostRecentFirst above).
-        items.sort(sortMostRecentFirst);
+        // Sorted chronologically descending by its creation timestamp configuration parameters (createdAt)
+        items.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
 
-        if (!cancelled) setReminders(items);
+        if (!cancelled) {
+          setReminders(items);
+          setRemindersBusy(false);
+        }
       } catch (e) {
-        console.error("Failed to load reminders:", e);
-      } finally {
-        if (!cancelled) setBusy(false);
+        console.error("Failed to sync centralized updates:", e);
+        if (!cancelled) setRemindersBusy(false);
       }
     };
 
-    load();
+    loadReminders();
     return () => {
       cancelled = true;
     };
-  }, [kids, loading, schoolYear]);
+  }, [kids, kidsLoading]);
 
+  // Isolate the single absolute most recently created posting entry 
+  const latestPost = useMemo(() => reminders[0] || null, [reminders]);
+
+  return (
+    <div className="pd-dashboard-flow-wrapper" style={{ width: "100%" }}>
+      {/* Dynamic Floating Latest Post Alert Banner */}
+      {!kidsLoading && !remindersBusy && latestPost && (
+        <div className="pd-latest-post-alert-banner" onClick={() => onOpenReminder({ studentId: latestPost.studentId, subject: latestPost.subject, classworkId: latestPost.id })}>
+          <div className="pd-latest-banner-badge">LATEST POST</div>
+          <div className="pd-latest-banner-body">
+            <i className="fas fa-list-ul pd-latest-banner-icon"></i>
+            <div className="pd-latest-banner-text">
+              <strong>Grade {latestPost.grade} - {latestPost.section} ({latestPost.subject})</strong>: {latestPost.title} — <span>{latestPost.desc}</span>
+            </div>
+          </div>
+          <i className="fas fa-chevron-right pd-latest-banner-arrow"></i>
+        </div>
+      )}
+
+      <div className="pd-overview-grid">
+        <ParentReminderPanel reminders={reminders} loading={kidsLoading || remindersBusy} onOpenReminder={onOpenReminder} />
+
+        <div className="pd-charts-col">
+          <div className="pd-filter-row">
+            {kids.length > 1 && (
+              <div className="pd-child-filter-group">
+                {kids.map((k) => (
+                  <button
+                    key={k.id}
+                    className={`pd-child-filter-btn ${selectedKid?.id === k.id ? "active" : ""}`}
+                    onClick={() => setSelectedKid(k)}
+                  >
+                    <i className="fas fa-user-graduate"></i> {k.firstName}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <select
+              className="pd-month-select"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+            >
+              {schoolYearMonths.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {kidsLoading ? (
+            <div className="pd-panel">
+              <p className="pd-panel-status">Loading…</p>
+            </div>
+          ) : !selectedKid ? (
+            <div className="pd-panel">
+              <p className="pd-panel-status">No children linked to this account.</p>
+            </div>
+          ) : (
+            <>
+              <ParentAttendanceChart child={selectedKid} monthId={selectedMonth} />
+              <ParentClassworkChart child={selectedKid} monthId={selectedMonth} />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ParentReminderPanel({ reminders, loading, onOpenReminder }) {
   const formatDueDate = (dateStr) => {
     if (!dateStr) return "No due date";
     try {
@@ -618,11 +576,11 @@ function ParentReminderPanel({ kids, loading, onOpenReminder, schoolYear }) {
   return (
     <div className="pd-panel pd-reminder-panel">
       <div className="pd-panel-header">
-        <h3>Reminders</h3>
+        <h3>Recent Updates &amp; Reminders</h3>
       </div>
 
       <div className="pd-reminder-list">
-        {loading || busy ? (
+        {loading ? (
           <p className="pd-panel-status">Loading…</p>
         ) : reminders.length === 0 ? (
           <p className="pd-panel-status">No active reminders.</p>
@@ -640,30 +598,22 @@ function ParentReminderPanel({ kids, loading, onOpenReminder, schoolYear }) {
               }
             >
               <div
-                className={`pd-reminder-icon ${
-                  cw.isAnnouncement ? "pd-reminder-icon--announcement" : ""
-                }`}
+                className={`pd-reminder-icon ${cw.isAnnouncement ? "pd-reminder-icon--announcement" : ""}`}
               >
-                <i
-                  className={`fas ${cw.isAnnouncement ? "fa-bullhorn" : "fa-tasks"}`}
-                ></i>
+                <i className={`fas ${cw.isAnnouncement ? "fa-bullhorn" : "fa-tasks"}`}></i>
               </div>
               <div className="pd-reminder-body">
                 <h4>
-                  {cw.subject} — {cw.studentName}
+                  Grade {cw.grade} - {cw.section} - {cw.subject}
                 </h4>
                 <span
-                  className={`pd-reminder-type-pill ${
-                    cw.isAnnouncement
-                      ? "pd-reminder-type-pill--announcement"
-                      : ""
-                  }`}
+                  className={`pd-reminder-type-pill ${cw.isAnnouncement ? "pd-reminder-type-pill--announcement" : ""}`}
                 >
                   {cw.title || "Reminder"}
                 </span>
                 {cw.desc && <p className="pd-reminder-desc">{cw.desc}</p>}
                 <p className="pd-reminder-due">
-                  <i className="far fa-calendar-alt"></i> Due{" "}
+                  <i className="far fa-calendar-alt"></i> Posted:{" "}
                   {formatDueDate(cw.date)}
                 </p>
               </div>
@@ -674,10 +624,6 @@ function ParentReminderPanel({ kids, loading, onOpenReminder, schoolYear }) {
     </div>
   );
 }
-
-// ════════════════════════════════════════════════════════════════════════════
-// ATTENDANCE CHART
-// ════════════════════════════════════════════════════════════════════════════
 
 function ParentAttendanceChart({ child, monthId }) {
   const [loading, setLoading] = useState(true);
@@ -827,11 +773,7 @@ function ParentAttendanceChart({ child, monthId }) {
   );
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// CLASSWORK CHART
-// ════════════════════════════════════════════════════════════════════════════
-
-function ParentClassworkChart({ child, monthId, schoolYear }) {
+function ParentClassworkChart({ child, monthId }) {
   const [loading, setLoading] = useState(true);
   const [perSubject, setPerSubject] = useState([]);
 

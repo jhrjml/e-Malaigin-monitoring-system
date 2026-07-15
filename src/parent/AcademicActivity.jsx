@@ -1,31 +1,5 @@
-// AcademicActivity.jsx  (Firebase version)
-// Parent views their child's classwork/assignments, subject by subject.
-// If the parent has more than one child, a filter bar at the top lets
-// them switch between children — same UI pattern as admin Archive.jsx.
-//
-// Can also be "jumped into" from the Dashboard's reminder panel via the
-// `focusClasswork` prop: { studentId, subject, classworkId }. When that
-// prop is set, this component switches to the matching child + subject,
-// opens the classwork list, and briefly highlights the matching item.
-//
-// EDIT-TIME DISPLAY — each card now shows "Edited …" using the item's
-// `editedAt` field (set by the teacher's ClassworkReminding.jsx when they
-// edit a post). Under 24 hours old it shows a relative time ("Edited 5m
-// ago" / "Edited 3h ago"); once it passes 24 hours it switches to a plain
-// date ("Edited Jul 5") — same behavior as Google Classroom.
-//
-// SORT ORDER — the classwork list is ordered by most-recent-post-first
-// (using the `createdAt` timestamp stamped at post time), matching the
-// teacher-side list and the reminder panels.
-//
-// SCHOOL-YEAR SCOPING — selectSubject() and the reminder "jump" effect
-// now only fetch Classwork docs tagged with the current active school
-// year (see firebaseApi.getActiveSchoolYearLabel / ClassworkReminding.jsx).
-// Without this, a child placed in the same Grade+Section+Subject combo a
-// previous student once had would see that student's old classwork posts
-// listed as if they were assigned to them.
-
-import { useState, useEffect, useCallback, useRef } from "react";
+// AcademicActivity.jsx (Firebase version)
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { db } from "../api/firebase";
 import {
   doc,
@@ -56,20 +30,6 @@ const iconFor = (subject) => {
   return map[subject] || "fa-book-open";
 };
 
-// Sorts classwork/announcement entries with the most recently POSTED item
-// first, using the `createdAt` timestamp stamped when the entry was
-// created. Falls back to the due-date field for any legacy entries that
-// predate `createdAt` being stamped.
-const sortMostRecentFirst = (a, b) => {
-  const ca = a.createdAt || "";
-  const cb = b.createdAt || "";
-  if (ca && cb) return cb.localeCompare(ca);
-  if (ca && !cb) return -1;
-  if (!ca && cb) return 1;
-  return (b.date || "").localeCompare(a.date || "");
-};
-
-// ── Convert a Firestore Timestamp / ISO string / Date → JS Date (or null) ──
 const toJsDate = (val) => {
   if (!val) return null;
   if (typeof val?.toDate === "function") return val.toDate();
@@ -77,9 +37,6 @@ const toJsDate = (val) => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-// ── "Edited …" label — same convention as Google Classroom:
-//    under 24h old  → the actual clock time, e.g. "Edited 10:54 AM"
-//    24h or older    → a plain date, e.g. "Edited Sep 18"
 const formatEditedLabel = (editedAt) => {
   const date = toJsDate(editedAt);
   if (!date) return null;
@@ -105,36 +62,35 @@ const formatEditedLabel = (editedAt) => {
 };
 
 function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
-  // children / filter
   const [children, setChildren] = useState([]);
   const [selectedChild, setSelectedChild] = useState(null);
   const [childrenLoading, setChildrenLoading] = useState(true);
 
-  // view state
   const [currentView, setCurrentView] = useState("select-subject");
   const [subjects, setSubjects] = useState([]);
   const [currentSubject, setCurrentSubject] = useState("");
   const [classworkList, setClassworkList] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // The admin-configured active school year label (e.g. "2026-2027"),
-  // used to scope every Classwork query below so old years' posts never
-  // show up under a repeated Grade+Section+Subject combo.
-  const [schoolYear, setSchoolYear] = useState("");
-  useEffect(() => {
-    getActiveSchoolYearLabel()
-      .then(setSchoolYear)
-      .catch((e) => console.error("Failed to load active school year:", e));
-  }, []);
+  const [sortBy, setSortBy] = useState("recent");
 
-  // highlight for an item opened via a reminder click
   const [highlightId, setHighlightId] = useState(null);
-
-  // guards the child-switch effect below from resetting the view back to
-  // "select-subject" when the switch was triggered by a reminder jump
   const isJumpingRef = useRef(false);
 
-  // ── load children linked to this parent ──────────────────────────────
+  // Instantly resets view back to the first subject selection page on sidebar menu button press
+  useEffect(() => {
+    const handleParentSidebarClick = (e) => {
+      const target = e.target.closest("li, button, div, span, a");
+      if (target && target.textContent && target.textContent.includes("Academic Activity")) {
+        setCurrentView("select-subject");
+        setCurrentSubject("");
+        setClassworkList([]);
+      }
+    };
+    document.addEventListener("mousedown", handleParentSidebarClick);
+    return () => document.removeEventListener("mousedown", handleParentSidebarClick);
+  }, []);
+
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (!userId) {
@@ -192,7 +148,6 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
     load();
   }, []);
 
-  // ── load subjects for whichever child is currently selected ──────────
   const loadSubjects = useCallback(async (child) => {
     if (!child) return;
     setLoading(true);
@@ -215,8 +170,6 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
 
   useEffect(() => {
     if (!selectedChild) return;
-    // Skip the reset when this child was selected as part of a reminder
-    // jump — that flow drives its own view/subject/classwork state below.
     if (isJumpingRef.current) {
       isJumpingRef.current = false;
       return;
@@ -232,8 +185,6 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
     setSelectedChild(child);
   };
 
-  // ── select subject → load classwork for child's grade+section+subject ───
-  // Scoped to the current active school year — see file header comment.
   const selectSubject = async (subjectName) => {
     setCurrentSubject(subjectName);
     setLoading(true);
@@ -264,7 +215,6 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
     }
   };
 
-  // ── jump straight to a reminder's child + subject + item ─────────────
   useEffect(() => {
     if (!focusClasswork || childrenLoading) return;
     if (children.length === 0) {
@@ -323,12 +273,18 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
     return () => {
       cancelled = true;
     };
-    // selectedChild intentionally omitted — only re-run when a *new*
-    // reminder is clicked or the children list finishes loading.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusClasswork, childrenLoading, children]);
 
-  // scroll the highlighted card into view, then clear the highlight
+  const sortedClassworkList = useMemo(() => {
+    const list = [...classworkList];
+    if (sortBy === "recent") {
+      return list.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    } else if (sortBy === "due") {
+      return list.sort((a, b) => (a.date || "9999-99-99").localeCompare(b.date || "9999-99-99"));
+    }
+    return list;
+  }, [classworkList, sortBy]);
+
   useEffect(() => {
     if (!highlightId) return;
     const el = document.getElementById(`cw-${highlightId}`);
@@ -353,15 +309,22 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
     <div className="app-container">
       <main className="main-content">
         <div className="page-container">
-          <div className="toolbar-aa">
-            <h2 className="section-title-aa">Academic Activity</h2>
-          </div>
+          {/* Main Top Header Title Block Section Wrapper */}
+          {currentView === "select-subject" && (
+            <div className="toolbar-aa">
+              <h2 className="section-title-aa">Academic Activity</h2>
+              {selectedChild && (
+                <p className="aa-main-sub-title">
+                  {selectedChild.firstName} {selectedChild.lastName} — Select Subject
+                </p>
+              )}
+            </div>
+          )}
 
           {children.length === 0 ? (
             <p className="aa-empty-text">No children linked to this account.</p>
           ) : (
             <>
-              {/* CHILD FILTER — same pattern as admin Archive.jsx */}
               {children.length > 1 && (
                 <div className="aa-filter-group">
                   {children.map((c) => (
@@ -382,10 +345,6 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
               {/* SELECT SUBJECT */}
               {currentView === "select-subject" && (
                 <div className="view-section-aa">
-                  <h3 className="aa-sub-title">
-                    {selectedChild?.firstName} {selectedChild?.lastName} —
-                    Select Subject
-                  </h3>
                   <div className="grid-container-aa">
                     {subjects.length === 0 ? (
                       <p className="aa-empty-text">
@@ -413,25 +372,47 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
                 </div>
               )}
 
-              {/* CLASSWORK */}
+              {/* CLASSWORK FEED */}
               {currentView === "academic" && (
                 <div className="view-section-aa">
-                  <div className="toolbar-inner-aa">
+                  <div className="aa-split-header-row">
                     <button
-                      className="btn-back-aa"
+                      className="btn-back-aa-inline"
                       onClick={() => setCurrentView("select-subject")}
+                      aria-label="Return to subject layout selection grid feed"
                     >
                       <i className="fas fa-arrow-left"></i>
                     </button>
-                    <h3>{currentSubject} Classwork</h3>
+                    <div className="aa-split-header-text-column">
+                      <h2>{currentSubject}</h2>
+                      <p>Classwork Feed • Grade {selectedChild?.enrolledGrade} – {selectedChild?.enrolledSection} | {selectedChild?.firstName} {selectedChild?.lastName}</p>
+                    </div>
                   </div>
+
+                  {/* Operational Sort Control Dropdown row */}
+                  {classworkList.length > 0 && (
+                    <div className="aa-sort-controls-toolbar">
+                      <label htmlFor="aa-sort-select">
+                          Sort by:
+                      </label>
+                      <select
+                        id="aa-sort-select"
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                      >
+                        <option value="recent">Recently Posted</option>
+                        <option value="due">Due Date</option>
+                      </select>
+                    </div>
+                  )}
+                  
                   <div className="list-container-aa">
-                    {classworkList.length === 0 ? (
+                    {sortedClassworkList.length === 0 ? (
                       <div className="aa-empty-state">
                         No classwork posted for this subject yet.
                       </div>
                     ) : (
-                      classworkList.map((cw) => {
+                      sortedClassworkList.map((cw) => {
                         const editedLabel = formatEditedLabel(cw.editedAt);
                         return (
                           <div
@@ -467,7 +448,7 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
                                       : "pill-pending-aa"
                                 }`}
                               >
-                                {cw.myStatus ?? "Not Marked"}
+                                {cw.myStatus === "Missing" ? "Missed" : (cw.myStatus ?? "Not Marked")}
                               </span>
                             </div>
                             <div className="cw-details-aa">

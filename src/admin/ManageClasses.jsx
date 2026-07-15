@@ -30,19 +30,6 @@ import useSubmitGuard from "../common/useSubmitGuard";
 import useNetworkStatus from "../common/useNetworkStatus"; // adjust path if different
 import "./ManageClasses.css";
 
-// ── Pre-defined time slots ────────────────────────────────────────────────
-const TIME_SLOTS = [
-  { value: "07:20-08:05", label: "7:20 AM – 8:05 AM" },
-  { value: "08:05-08:50", label: "8:05 AM – 8:50 AM" },
-  { value: "08:50-9:35", label: "8:50 AM – 9:35 AM" },
-  { value: "9:55-10:40", label: "9:55 AM – 10:40 AM" },
-  { value: "10:40-11:25", label: "10:40 AM – 11:25 AM" },
-  { value: "13:00-13:45", label: "1:00 PM – 1:45 PM" },
-  { value: "13:45-14:30", label: "1:45 PM – 2:30 PM" },
-  { value: "14:30-15:15", label: "2:30 PM – 3:15 PM" },
-  { value: "15:15-16:00", label: "3:15 PM – 4:00 PM" },
-];
-
 const SUBJECTS = [
   "Arabic",
   "Araling Panlipunan",
@@ -55,8 +42,15 @@ const SUBJECTS = [
   "Science",
 ];
 
-const slotLabel = (value) =>
-  TIME_SLOTS.find((s) => s.value === value)?.label ?? value;
+// Helper: Formats 24h standard strings (e.g., "13:45") to clean 12h formats ("1:45 PM")
+const formatTimeLabel = (timeStr) => {
+  if (!timeStr) return "—";
+  const [hrs, mins] = timeStr.split(":");
+  let h = parseInt(hrs, 10);
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  return `${h}:${mins} ${ampm}`;
+};
 
 // ── Sort icon (same visual design as ManageStudents.jsx) ──────────────────
 function SortIcon({ active, direction }) {
@@ -108,6 +102,11 @@ const ManageClasses = () => {
   const [editSchedId, setEditSchedId] = useState(null);
   const [selectedStudentId, setSelectedStudentId] = useState("");
 
+  // ── Masterlist Filtering & Sorting State ────────────────────────────────
+  const [studentSearchQuery, setStudentSearchQuery] = useState("");
+  const [studentSortField, setStudentSortField] = useState("lrn"); 
+  const [studentSortOrder, setStudentSortOrder] = useState("asc");
+
   // ── bulk select ─────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState(new Set());
 
@@ -155,9 +154,11 @@ const ManageClasses = () => {
   });
   const [studentImportFinished, setStudentImportFinished] = useState(false);
 
+  // ── Updated Form Hook state to manage timeline inputs ──
   const [schedForm, setSchedForm] = useState({
     subject: "Math",
-    timeSlot: "",
+    startTime: "",
+    endTime: "",
     teacherId: "",
   });
   const [formError, setFormError] = useState("");
@@ -181,6 +182,22 @@ const ManageClasses = () => {
     onConfirm: null,
   });
   const closeConfirm = () => setConfirm((c) => ({ ...c, open: false }));
+
+  // ── INTERCEPT SIDEBAR NAVIGATION CLICKS TO RESET DESTINATION CONTEXT ──
+  useEffect(() => {
+    const handleSidebarClick = (e) => {
+      const target = e.target.closest("a, button, div, li, span");
+      if (target && target.textContent && target.textContent.includes("Manage Classes")) {
+        setCurrentView("view-grade");
+        setCurrentGrade(null);
+        setCurrentSection("");
+        setStudentSearchQuery("");
+        setSelectedIds(new Set());
+      }
+    };
+    document.addEventListener("mousedown", handleSidebarClick);
+    return () => document.removeEventListener("mousedown", handleSidebarClick);
+  }, []);
 
   // ── fetch teachers once ───────────────────────────────────────────────
   useEffect(() => {
@@ -249,9 +266,6 @@ const ManageClasses = () => {
     setShowStudentModal(true);
   };
 
-  // Offline-safe enroll: closes the modal and shows success immediately,
-  // fires the write in the background, and refreshes the list once it
-  // resolves (instantly online, on reconnect if offline).
   const enroll = (e) => {
     e.preventDefault();
     setFormError("");
@@ -277,8 +291,6 @@ const ManageClasses = () => {
 
     enrollStudent({ studentId, grade, section })
       .then(async () => {
-        // Only refresh the visible list if the user is still viewing
-        // that same grade/section.
         if (currentGrade === grade && currentSection === section) {
           const docs = await getEnrolled(grade, section);
           setSectionStudents(await loadSectionStudents(docs));
@@ -302,102 +314,7 @@ const ManageClasses = () => {
     });
   };
 
-  // ── drop (single) ─────────────────────────────────────────────────────
-  const drop = (student) => {
-    setConfirm({
-      open: true,
-      title: "Drop Student",
-      titleIcon: "fa-user-times",
-      titleColor: "#e74c3c",
-      message: (
-        <>
-          Are you sure you want to drop{" "}
-          <strong>
-            {student.lastName}, {student.firstName}
-          </strong>{" "}
-          from this section?
-        </>
-      ),
-      confirmText: "Yes, Drop",
-      confirmColor: "danger",
-      onConfirm: () => {
-        closeConfirm();
-        // Optimistic UI update — offline-safe.
-        setSectionStudents((prev) => {
-          const remaining = prev.filter((s) => s.enrollId !== student.enrollId);
-          maybeClearSchedules(remaining);
-          return remaining;
-        });
-        setSelectedIds((prev) => {
-          const n = new Set(prev);
-          n.delete(student.enrollId);
-          return n;
-        });
-        showToast(
-          isOnline
-            ? `${student.firstName} ${student.lastName} has been dropped.`
-            : `${student.firstName} ${student.lastName} dropped offline — will sync when back online.`,
-        );
-        dropStudent(student.enrollId).catch((e) => {
-          showToast(e.message || "Failed to drop student.", true);
-        });
-      },
-    });
-  };
-
-  // ── promote / graduate (single) ───────────────────────────────────────
-  const promote = (student) => {
-    const isGrade6 = currentGrade === 6;
-    const action = isGrade6 ? "Graduate" : "Promote";
-    setConfirm({
-      open: true,
-      title: `${action} Student`,
-      titleIcon: isGrade6 ? "fa-graduation-cap" : "fa-arrow-up",
-      titleColor: "#2ecc71",
-      message: (
-        <>
-          Confirm {action.toLowerCase()} for{" "}
-          <strong>
-            {student.lastName}, {student.firstName}
-          </strong>
-          ?
-        </>
-      ),
-      confirmText: `Yes, ${action}`,
-      confirmColor: "success",
-      onConfirm: () => {
-        closeConfirm();
-        setSectionStudents((prev) => {
-          const remaining = prev.filter((s) => s.enrollId !== student.enrollId);
-          maybeClearSchedules(remaining);
-          return remaining;
-        });
-        setSelectedIds((prev) => {
-          const n = new Set(prev);
-          n.delete(student.enrollId);
-          return n;
-        });
-        showToast(
-          isOnline
-            ? `${student.firstName} ${student.lastName} was successfully ${action.toLowerCase()}d!`
-            : `${student.firstName} ${student.lastName} ${action.toLowerCase()}d offline — will sync when back online.`,
-        );
-        const opPromise = isGrade6
-          ? graduateStudent(student.enrollId)
-          : promoteStudent(student.enrollId);
-        opPromise.catch((e) => {
-          showToast(
-            e.message || `Failed to ${action.toLowerCase()} student.`,
-            true,
-          );
-        });
-      },
-    });
-  };
-
   // ── drop (bulk) ───────────────────────────────────────────────────────
-  // Offline-safe: fires all drops at once instead of awaiting each in a
-  // sequential loop (which used to hang on the first item while offline).
   const bulkDrop = () => {
     if (selectedIds.size === 0) return;
     setConfirm({
@@ -556,10 +473,6 @@ const ManageClasses = () => {
     e.target.value = "";
   };
 
-  // Offline-safe bulk enroll — see ManageStudents.jsx for the full
-  // explanation. All valid rows are enrolled in parallel (never awaited
-  // one-by-one), the modal closes immediately with an optimistic result,
-  // and the section list is refreshed quietly in the background.
   const handleStudentImportSave = () => {
     const validRows = studentImportRows.filter((r) => r.errs.length === 0);
     if (validRows.length === 0) return;
@@ -578,7 +491,6 @@ const ManageClasses = () => {
         .catch((err) => ({ ok: false, row, error: err })),
     );
 
-    // Close the import modal right away with an optimistic result.
     setStudentImportLoading(false);
     setStudentImportDone({ success: validRows.length, failed: 0 });
     setStudentImportFinished(true);
@@ -590,7 +502,6 @@ const ManageClasses = () => {
         : `${validRows.length} student${validRows.length !== 1 ? "s" : ""} saved offline — will sync when back online.`,
     );
 
-    // Reconcile quietly in the background once writes actually resolve.
     Promise.allSettled(pending).then(async (settled) => {
       const failMsgs = [];
       settled.forEach((s) => {
@@ -602,7 +513,6 @@ const ManageClasses = () => {
         }
       });
 
-      // Only refresh the visible list if still viewing the same section.
       if (currentGrade === grade && currentSection === section) {
         try {
           const docs = await getEnrolled(grade, section);
@@ -639,12 +549,16 @@ const ManageClasses = () => {
   const saveSchedule = (e) => {
     e.preventDefault();
     setFormError("");
-    if (!schedForm.timeSlot) {
-      setFormError("Please select a time slot.");
+    if (!schedForm.startTime || !schedForm.endTime) {
+      setFormError("Please configure both standard start and end hours.");
+      return;
+    }
+    if (schedForm.startTime >= schedForm.endTime) {
+      setFormError("Start time must be strictly before the end time parameter.");
       return;
     }
     if (!schedForm.teacherId) {
-      setFormError("Please select a teacher.");
+      setFormError("Please assign a section teacher.");
       return;
     }
     if (takenSubjectsInSection.has(schedForm.subject)) {
@@ -664,12 +578,11 @@ const ManageClasses = () => {
   };
 
   const doSaveSchedule = () => {
-    const [start, end] = schedForm.timeSlot.split("-");
     const payload = {
       subject: schedForm.subject,
-      timeSlot: schedForm.timeSlot,
-      start,
-      end,
+      timeSlot: `${schedForm.startTime}-${schedForm.endTime}`,
+      start: schedForm.startTime,
+      end: schedForm.endTime,
       teacherId: schedForm.teacherId,
       days: "Sunday – Thursday",
     };
@@ -705,36 +618,43 @@ const ManageClasses = () => {
       });
   };
 
-  const openEditScheduleModal = async (slotValue) => {
-    const existing = schedules.find(
-      (s) => (s.timeSlot || `${s.start}-${s.end}`) === slotValue,
-    );
-
-    // Subjects already used by OTHER slots in this section — used to pick a
-    // sensible default for a brand-new schedule so it doesn't open with an
-    // already-taken (disabled) subject pre-selected.
-    const subjectsUsedElsewhere = new Set(
-      schedules
-        .filter((s) => (s.timeSlot || `${s.start}-${s.end}`) !== slotValue)
-        .map((s) => s.subject),
-    );
-    const defaultSubject =
-      existing?.subject ||
-      SUBJECTS.find((s) => !subjectsUsedElsewhere.has(s)) ||
-      SUBJECTS[0];
-
-    setIsEditingSched(!!existing);
-    setEditSchedId(existing ? existing.id : null);
+  const openAddScheduleModal = () => {
+    setIsEditingSched(false);
+    setEditSchedId(null);
     setSchedForm({
-      subject: defaultSubject,
-      timeSlot: slotValue,
-      teacherId: existing?.teacherId || "",
+      subject: SUBJECTS[0],
+      startTime: "",
+      endTime: "",
+      teacherId: "",
+    });
+    setFormError("");
+    setShowScheduleModal(true);
+  };
+
+  const openEditScheduleModal = (sched) => {
+    setIsEditingSched(true);
+    setEditSchedId(sched.id);
+    setSchedForm({
+      subject: sched.subject || SUBJECTS[0],
+      startTime: sched.start || "",
+      endTime: sched.end || "",
+      teacherId: sched.teacherId || "",
     });
     setFormError("");
     setShowScheduleModal(true);
 
     // Refresh the full cross-section/grade schedule list so the subject
     // and teacher dropdowns reflect the latest conflicts, not stale data.
+  
+ async function refresherSchedules(){
+    try {
+      setAllSchedules(await getSchedules());
+    } catch (e) {
+      console.error("Failed to refresh schedules for conflict check:", e);
+    }
+  };
+
+  async function checkConflicts(){
     try {
       setAllSchedules(await getSchedules());
     } catch (e) {
@@ -758,121 +678,66 @@ const ManageClasses = () => {
   const studentDisplayName = (s) =>
     `${s.lastName}, ${s.firstName}${s.middleName ? ` ${s.middleName.charAt(0).toUpperCase()}.` : ""}`;
 
-  // ── masterlist: search filter ───────────────────────────────────────────
-  const masterlistQuery = masterlistSearch.trim().toLowerCase();
-  const filteredSectionStudents = !masterlistQuery
-    ? sectionStudents
-    : sectionStudents.filter((s) => {
-        const fullName = studentDisplayName(s).toLowerCase();
-        return (
-          fullName.includes(masterlistQuery) ||
-          String(s.lrn || "")
-            .toLowerCase()
-            .includes(masterlistQuery)
-        );
-      });
-
-  // ── masterlist: sorting ─────────────────────────────────────────────────
-  const getMasterlistSortValue = (s, key) => {
-    switch (key) {
-      case "lrn":
-        return String(s.lrn || "");
-      case "name":
-        return studentDisplayName(s).toLowerCase();
-      default:
-        return "";
+  // ── SEARCH AND INLINE MASTERLIST SORT MATRIX ENGINE (FIXED) ──
+  const handleStudentSortToggle = (field) => {
+    if (studentSortField === field) {
+      setStudentSortOrder(studentSortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setStudentSortField(field);
+      setStudentSortOrder("asc");
     }
   };
 
-  const visibleSectionStudents = filteredSectionStudents
-    .slice()
-    .sort((a, b) => {
-      const va = getMasterlistSortValue(a, masterlistSort.key);
-      const vb = getMasterlistSortValue(b, masterlistSort.key);
-      const cmp = String(va).localeCompare(String(vb), undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
-      return masterlistSort.direction === "asc" ? cmp : -cmp;
-    });
+  const filteredSectionStudents = sectionStudents.filter((s) => {
+    const q = studentSearchQuery.trim().toLowerCase();
+    if (!q) return true;
+    const fullName = studentDisplayName(s).toLowerCase();
+    return fullName.includes(q) || String(s.lrn).toLowerCase().includes(q);
+  });
 
+  const sortedSectionStudents = [...filteredSectionStudents].sort((a, b) => {
+    if (studentSortField === "lrn") {
+      const lrnA = String(a.lrn || "");
+      const lrnB = String(b.lrn || "");
+      return studentSortOrder === "asc"
+        ? lrnA.localeCompare(lrnB, undefined, { numeric: true })
+        : lrnB.localeCompare(lrnA, undefined, { numeric: true });
+    }
+    if (studentSortField === "name") {
+      const nameA = studentDisplayName(a).toLowerCase();
+      const nameB = studentDisplayName(b).toLowerCase();
+      return studentSortOrder === "asc" 
+        ? nameA.localeCompare(nameB) 
+        : nameB.localeCompare(nameA);
+    }
+    return 0;
+  });
+
+  // Accurate check to see if every single sorted student is explicitly selected
   const allSelected =
-    visibleSectionStudents.length > 0 &&
-    selectedIds.size === visibleSectionStudents.length;
+    sortedSectionStudents.length > 0 &&
+    sortedSectionStudents.every((s) => selectedIds.has(s.enrollId));
 
   const toggleSelectAll = () => {
-    if (allSelected) setSelectedIds(new Set());
-    else setSelectedIds(new Set(visibleSectionStudents.map((s) => s.enrollId)));
-  };
-
-  // ── schedule: sorting (sort only, no search) ────────────────────────────
-  const scheduleRows = TIME_SLOTS.map((slot, index) => {
-    const existing = schedules.find(
-      (s) => (s.timeSlot || `${s.start}-${s.end}`) === slot.value,
-    );
-    return {
-      timeSlot: slot.value,
-      timeLabel: slot.label,
-      timeIndex: index,
-      subject: existing?.subject || null,
-      teacherId: existing?.teacherId || null,
-      assigned: !!existing,
-    };
-  });
-
-  const getScheduleSortValue = (row, key) => {
-    switch (key) {
-      case "time":
-        return row.timeIndex;
-      case "subject":
-        return row.subject ? row.subject.toLowerCase() : "\uffff"; // unassigned sorts last
-      case "teacher":
-        return row.assigned
-          ? teacherName(row.teacherId).toLowerCase()
-          : "\uffff"; // unassigned sorts last
-      default:
-        return "";
-    }
-  };
-
-  const visibleScheduleRows = scheduleRows.slice().sort((a, b) => {
-    const va = getScheduleSortValue(a, scheduleSort.key);
-    const vb = getScheduleSortValue(b, scheduleSort.key);
-    let cmp;
-    if (typeof va === "number" && typeof vb === "number") {
-      cmp = va - vb;
+    if (allSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        sortedSectionStudents.forEach((s) => next.delete(s.enrollId));
+        return next;
+      });
     } else {
-      cmp = String(va).localeCompare(String(vb), undefined, {
-        numeric: true,
-        sensitivity: "base",
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        sortedSectionStudents.forEach((s) => next.add(s.enrollId));
+        return next;
       });
     }
-    return scheduleSort.direction === "asc" ? cmp : -cmp;
+  };
+
+  const sortedSchedules = [...schedules].sort((a, b) => {
+    return (a.start || "").localeCompare(b.start || "");
   });
 
-  // ── schedule modal: subject conflict check (within the current section) ──
-  // A subject can only appear once per section. Exclude the schedule row
-  // currently being edited so its own subject stays selectable.
-  const takenSubjectsInSection = new Set(
-    schedules.filter((s) => s.id !== editSchedId).map((s) => s.subject),
-  );
-
-  // ── schedule modal: teacher conflict check (across ALL grades/sections) ──
-  // A teacher can only be in one place during a given time slot. Map every
-  // teacherId already booked at the slot currently open in the modal to
-  // where they're booked, excluding the schedule row being edited so a
-  // teacher keeps showing as available for their own existing slot.
-  const teacherConflictMap = {};
-  allSchedules
-    .filter((s) => s.id !== editSchedId)
-    .filter((s) => (s.timeSlot || `${s.start}-${s.end}`) === schedForm.timeSlot)
-    .forEach((s) => {
-      teacherConflictMap[s.teacherId] = { grade: s.grade, section: s.section };
-    });
-
-  // ════════════════════════════════════════════════════════════════════════
-  // RENDER
-  // ════════════════════════════════════════════════════════════════════════
   return (
     <main className="main-content">
       <Toast toast={toast} />
@@ -937,7 +802,7 @@ const ManageClasses = () => {
           </div>
         )}
 
-        {/* ── ACTION ── */}
+        {/* ── ACTION INTERFACE ── */}
         {currentView === "view-action" && (
           <div className="view-section active">
             <div className="toolbar-mc">
@@ -966,7 +831,7 @@ const ManageClasses = () => {
                 onClick={() => setCurrentView("view-schedule")}
               >
                 <div className="icon-box-mc">
-                  <i className="fas fa-calendar-alt" />
+                  <i className="fas fa-calendar-alt"></i>
                 </div>
                 <h3>Manage Schedule</h3>
               </div>
@@ -980,22 +845,15 @@ const ManageClasses = () => {
             <div className="toolbar-mc">
               <button
                 className="btn-back-mc"
-                onClick={() => setCurrentView("view-action")}
+                onClick={() => {
+                  setCurrentView("view-action");
+                  setStudentSearchQuery(""); 
+                }}
               >
                 <i className="fas fa-arrow-left" />
               </button>
-              <div>
-                <h3>Section Masterlist</h3>
-                <p
-                  style={{
-                    margin: "2px 0 0",
-                    fontSize: "0.85rem",
-                    color: "#888",
-                  }}
-                >
-                  Grade {currentGrade} – {currentSection}
-                </p>
-              </div>
+              
+              <h3>Grade {currentGrade} – Section {currentSection} Masterlist</h3>
 
               <input
                 ref={studentFileRef}
@@ -1004,18 +862,38 @@ const ManageClasses = () => {
                 style={{ display: "none" }}
                 onChange={handleStudentFileChange}
               />
+              
               <div className="mc-toolbar-actions">
+                <div className="mc-student-search-container">
+                  <i className="fas fa-search mc-student-search-icon"></i>
+                  <input
+                    type="text"
+                    className="mc-student-search-input"
+                    placeholder="Search name or LRN..."
+                    value={studentSearchQuery}
+                    onChange={(e) => setStudentSearchQuery(e.target.value)}
+                  />
+                  {studentSearchQuery && (
+                    <button
+                      className="mc-student-search-clear"
+                      onClick={() => setStudentSearchQuery("")}
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
+
+                {/* Bulk Options (Visible when selectedIds.size > 0) */}
                 {selectedIds.size > 0 && (
                   <>
-                    <span className="selected-count-badge">
+                    <span className="selected-count-badge" style={{ background: "#ddeeff", color: "#2c6fad", padding: "6px 14px", borderRadius: "20px", fontWeight: "700", fontSize: "0.85rem" }}>
                       {selectedIds.size} selected
                     </span>
-                    <button className="btn-bulk-drop" onClick={bulkDrop}>
-                      <i className="fas fa-user-times"></i> Drop
+                    <button className="btn-bulk-drop" onClick={bulkDrop} style={{ background: "#f1c40f", color: "black", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}>
+                      <i className="fas fa-user-minus"></i> Drop
                     </button>
-                    <button className="btn-bulk-promote" onClick={bulkPromote}>
-                      <i className="fas fa-arrow-up"></i>{" "}
-                      {currentGrade === 6 ? "Graduate" : "Promote"}
+                    <button className="btn-bulk-promote" onClick={bulkPromote} style={{ background: "#a55f81", color: "white", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}>
+                      <i className="fas fa-arrow-up"></i> {currentGrade === 6 ? "Graduate" : "Promote"}
                     </button>
                   </>
                 )}
@@ -1095,41 +973,33 @@ const ManageClasses = () => {
                         type="checkbox"
                         checked={allSelected}
                         onChange={toggleSelectAll}
-                        disabled={visibleSectionStudents.length === 0}
+                        disabled={sortedSectionStudents.length === 0}
                       />
                     </th>
                     <th
-                      className="mc-th-sortable"
-                      onClick={() => handleMasterlistSort("lrn")}
+                      onClick={() => handleStudentSortToggle("lrn")}
+                      className="sortable-table-header"
                     >
-                      LRN{" "}
-                      <SortIcon
-                        active={masterlistSort.key === "lrn"}
-                        direction={masterlistSort.direction}
-                      />
+                      LRN
+                      <i className={`fas ${studentSortField === "lrn" ? (studentSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
+                      <span className="mt-sort-hint-label">(sort)</span>
                     </th>
                     <th
-                      className="mc-th-sortable"
-                      onClick={() => handleMasterlistSort("name")}
+                      onClick={() => handleStudentSortToggle("name")}
+                      className="sortable-table-header"
                     >
-                      Name{" "}
-                      <SortIcon
-                        active={masterlistSort.key === "name"}
-                        direction={masterlistSort.direction}
-                      />
+                      Name
+                      <i className={`fas ${studentSortField === "name" ? (studentSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
+                      <span className="mt-sort-hint-label">(sort)</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleSectionStudents.length > 0 ? (
-                    visibleSectionStudents.map((student) => (
+                  {sortedSectionStudents.length > 0 ? (
+                    sortedSectionStudents.map((student) => (
                       <tr
                         key={student.enrollId}
-                        className={
-                          selectedIds.has(student.enrollId)
-                            ? "row-selected"
-                            : ""
-                        }
+                        className={selectedIds.has(student.enrollId) ? "row-selected" : ""}
                       >
                         <td>
                           <input
@@ -1138,8 +1008,8 @@ const ManageClasses = () => {
                             onChange={() => toggleSelectOne(student.enrollId)}
                           />
                         </td>
-                        <td>{student.lrn}</td>
-                        <td>{studentDisplayName(student)}</td>
+                        <td onClick={() => toggleSelectOne(student.enrollId)} style={{ cursor: "pointer" }}>{student.lrn}</td>
+                        <td onClick={() => toggleSelectOne(student.enrollId)} style={{ cursor: "pointer" }}>{studentDisplayName(student)}</td>
                       </tr>
                     ))
                   ) : (
@@ -1148,9 +1018,7 @@ const ManageClasses = () => {
                         colSpan="3"
                         style={{ textAlign: "center", padding: "20px" }}
                       >
-                        {masterlistQuery
-                          ? `No students found for "${masterlistSearch}".`
-                          : "No students enrolled in this section."}
+                        {studentSearchQuery ? `No matching students found inside this section configuration records.` : "No students enrolled in this section."}
                       </td>
                     </tr>
                   )}
@@ -1160,7 +1028,7 @@ const ManageClasses = () => {
           </div>
         )}
 
-        {/* ── SCHEDULE ── */}
+        {/* ── SCHEDULE MAINTENANCE WINDOW ── */}
         {currentView === "view-schedule" && (
           <div className="view-section active">
             <div className="toolbar-mc">
@@ -1170,18 +1038,11 @@ const ManageClasses = () => {
               >
                 <i className="fas fa-arrow-left" />
               </button>
-              <div>
-                <h3>Class Schedule</h3>
-                <p
-                  style={{
-                    margin: "2px 0 0",
-                    fontSize: "0.85rem",
-                    color: "#888",
-                  }}
-                >
-                  Grade {currentGrade} – {currentSection}
-                </p>
-              </div>
+              <h3>Class Schedule</h3>
+              
+              <button className="btn-add-mc" onClick={openAddScheduleModal}>
+                <i className="fas fa-plus"></i> Add Schedule
+              </button>
             </div>
 
             <div className="day-badge">
@@ -1228,35 +1089,36 @@ const ManageClasses = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleScheduleRows.map((row) => (
-                    <tr key={row.timeSlot}>
-                      <td>
-                        <strong>{row.timeLabel}</strong>
-                      </td>
-                      <td>
-                        {row.assigned ? (
-                          row.subject
-                        ) : (
-                          <span style={{ color: "#aaa" }}>— Unassigned —</span>
-                        )}
-                      </td>
-                      <td>
-                        {row.assigned ? (
-                          teacherName(row.teacherId)
-                        ) : (
-                          <span style={{ color: "#aaa" }}>—</span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <button
-                          className="btn-action btn-edit"
-                          onClick={() => openEditScheduleModal(row.timeSlot)}
-                        >
-                          Edit
-                        </button>
+                  {sortedSchedules.length > 0 ? (
+                    sortedSchedules.map((sched) => (
+                      <tr key={sched.id}>
+                        <td>
+                          <strong>
+                            {formatTimeLabel(sched.start)} – {formatTimeLabel(sched.end)}
+                          </strong>
+                        </td>
+                        <td>{sched.subject}</td>
+                        <td>{teacherName(sched.teacherId)}</td>
+                        <td style={{ textAlign: "center" }}>
+                          <button
+                            className="btn-action btn-edit"
+                            onClick={() => openEditScheduleModal(sched)}
+                          >
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan="4"
+                        style={{ textAlign: "center", padding: "30px", color: "#888" }}
+                      >
+                        No timelines configured yet. Click "+ Add Schedule" to allocate a custom timeline slot.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1335,12 +1197,12 @@ const ManageClasses = () => {
         </div>
       )}
 
-      {/* ── SCHEDULE MODAL (Add / Edit) ── */}
+      {/* ── TIMELINE SCHEDULE MODAL ── */}
       {showScheduleModal && (
         <div className="modal-overlay modal-open">
           <div className="modal-content-mc">
             <div className="modal-header-mc">
-              <h3>Edit Schedule</h3>
+              <h3>{isEditingSched ? "Modify Timeline Slot" : "Add Timeline Slot"}</h3>
               <span
                 className="close-modal-mc"
                 onClick={() => setShowScheduleModal(false)}
@@ -1350,34 +1212,29 @@ const ManageClasses = () => {
             </div>
             <form onSubmit={saveSchedule}>
               <div className="modal-body-mc">
-                <div
-                  style={{
-                    background: "#f8f9fa",
-                    border: "1px solid #eee",
-                    borderRadius: "8px",
-                    padding: "8px 12px",
-                    marginBottom: "14px",
-                    fontSize: "0.85rem",
-                    color: "#555",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <i className="fas fa-clock"></i>
-                  Time slot:{" "}
-                  <strong style={{ marginLeft: "3px" }}>
-                    {slotLabel(schedForm.timeSlot)}
-                  </strong>
-                  <span
-                    style={{
-                      marginLeft: "auto",
-                      fontSize: "0.75rem",
-                      color: "#999",
-                    }}
-                  >
-                    (not editable)
-                  </span>
+                <div className="form-group-mc" style={{ display: "flex", gap: "12px", BoneBottom: "15px" }}>
+                  <div style={{ flex: 1 }}>
+                    <label>Start Time</label>
+                    <input
+                      type="time"
+                      required
+                      value={schedForm.startTime}
+                      onChange={(e) =>
+                        setSchedForm({ ...schedForm, startTime: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label>End Time</label>
+                    <input
+                      type="time"
+                      required
+                      value={schedForm.endTime}
+                      onChange={(e) =>
+                        setSchedForm({ ...schedForm, endTime: e.target.value })
+                      }
+                    />
+                  </div>
                 </div>
 
                 <div className="form-group-mc">
@@ -1539,8 +1396,7 @@ const ManageClasses = () => {
                 }}
               >
                 <i className="fas fa-info-circle"></i>
-                Upload the Excel file downloaded from{" "}
-                <strong>Manage Students</strong>. Students are matched by LRN.
+                Upload the Excel file downloaded from <strong>Manage Students</strong>. Students are matched by LRN.
               </div>
 
               {studentImportErrors.length > 0 && !studentImportFinished && (
@@ -1678,5 +1534,5 @@ const ManageClasses = () => {
     </main>
   );
 };
-
+}
 export default ManageClasses;

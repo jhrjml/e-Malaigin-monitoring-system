@@ -106,34 +106,9 @@ function ManageTeachers() {
   const [error, setError] = useState(null);
   const [formError, setFormError] = useState("");
 
-  // ── search ────────────────────────────────────────────────────────────
-  const [teacherSearch, setTeacherSearch] = useState("");
-
-  // ── sorting (main teacher table) ────────────────────────────────────────
-  const [sortConfig, setSortConfig] = useState({
-    key: "empId",
-    direction: "asc",
-  });
-  const handleSort = (key) => {
-    setSortConfig((prev) =>
-      prev.key === key
-        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
-        : { key, direction: "asc" },
-    );
-  };
-
-  // ── sorting (teacher schedule modal) ────────────────────────────────────
-  const [scheduleSortConfig, setScheduleSortConfig] = useState({
-    key: "time",
-    direction: "asc",
-  });
-  const handleScheduleSort = (key) => {
-    setScheduleSortConfig((prev) =>
-      prev.key === key
-        ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
-        : { key, direction: "asc" },
-    );
-  };
+  // ── Sorting State Containers ──────────────────────────────────────────────
+  const [sortField, setSortField] = useState("empId"); 
+  const [sortOrder, setSortOrder] = useState("asc");   
 
   // ── toast / network ──────────────────────────────────────────────────────
   const { toast, showToast } = useToast();
@@ -184,7 +159,7 @@ function ManageTeachers() {
     contact: "",
     email: "",
   };
-  const [form, setForm] = useState(emptyForm);
+  const [form = form, setForm] = useState(emptyForm);
 
   useEffect(() => {
     fetchTeachers();
@@ -205,15 +180,7 @@ function ManageTeachers() {
     setError(null);
     try {
       const data = await getTeachers();
-      const sortedData = data.sort((a, b) => {
-        const idA = a.empId || "";
-        const idB = b.empId || "";
-        return idA.localeCompare(idB, undefined, {
-          numeric: true,
-          sensitivity: "base",
-        });
-      });
-      setTeachers(sortedData);
+      setTeachers(data);
     } catch {
       setError("Could not load teachers.");
     } finally {
@@ -299,10 +266,6 @@ function ManageTeachers() {
     const wasEditing = isEditing;
     const editingId = editId;
 
-    // Snapshot so we can roll back the optimistic update if the save fails.
-    const previousTeachers = teachers;
-
-    // Close + notify immediately — don't wait for the network.
     closeModal();
     showToast(
       isOnline
@@ -382,7 +345,6 @@ function ManageTeachers() {
       confirmColor: "danger",
       onConfirm: () => {
         closeConfirm();
-        // Optimistic remove — same offline-safe pattern.
         setTeachers((prev) => prev.filter((x) => x.id !== t.id));
         showToast(
           isOnline
@@ -421,8 +383,6 @@ function ManageTeachers() {
   const downloadTemplate = () => {
     const wb = XLSX.utils.book_new();
 
-    // ── Sheet 1: Template (data entry sheet) ──────────────────────────────
-    // Column order: First, Middle, Last, Gender, Advisory Class, Contact, Email
     const headers = [
       [
         "First Name",
@@ -445,7 +405,6 @@ function ManageTeachers() {
       { wch: 28 },
     ];
 
-    // ── Sheet 2: Hidden lookup list for the Advisory Class dropdown ────────
     const lookupData = [
       ["Advisory Options"],
       ...ADVISORY_OPTIONS.map((o) => [o]),
@@ -513,15 +472,13 @@ function ManageTeachers() {
 
         const baseCount = teachers.length;
 
-        // ── Collect advisories already taken in the existing DB list ────────
         const takenAdvisoriesInDb = new Set(
           teachers
             .map((t) => (t.advisory || "").trim().toLowerCase())
             .filter(Boolean),
         );
 
-        // ── Track advisories seen so far within this batch ──────────────────
-        const advisorySeenInBatch = new Map(); // normalised → row number (1-based)
+        const advisorySeenInBatch = new Map(); 
 
         const parsed = rows.map((r, i) => {
           const fname = String(r[0] || "").trim();
@@ -546,16 +503,11 @@ function ManageTeachers() {
           if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
             errs.push("Invalid email");
 
-          // ── Gender normalization + validation ─────────────────────────────
-          // Accepts "M"/"F"/"male"/"female" in any case and stores the
-          // canonical "Male"/"Female" label.
-          let gender = genderRaw;
-          const matchedGender = matchGenderOption(genderRaw);
-          if (!matchedGender) {
-            errs.push(
-              genderRaw
-                ? `"${genderRaw}" is not a valid gender (use Male or Female)`
-                : "Gender is required (Male or Female)",
+          if (advisory) {
+            const normAdvisory = advisory.toLowerCase();
+
+            const isValidOption = ADVISORY_OPTIONS.some(
+              (o) => o.toLowerCase() === normAdvisory,
             );
           } else {
             gender = matchedGender;
@@ -624,7 +576,6 @@ function ManageTeachers() {
     e.target.value = "";
   };
 
-  // Offline-safe bulk import — see ManageStudents.jsx for full explanation.
   const handleImportSave = () => {
     const validRows = importRows.filter((r) => r.errs.length === 0);
     if (validRows.length === 0) return;
@@ -639,7 +590,6 @@ function ManageTeachers() {
       _tempId: `temp-${Date.now()}-${i}`,
     }));
 
-    // Fire all writes now — never blocks the UI.
     const pending = tempRows.map((row) => {
       const payload = {
         empId: row.empId,
@@ -656,7 +606,6 @@ function ManageTeachers() {
         .catch((err) => ({ ok: false, row, error: err }));
     });
 
-    // Optimistically show them in the table immediately.
     setTeachers((prev) => [
       ...prev,
       ...tempRows.map((row) => ({
@@ -672,7 +621,6 @@ function ManageTeachers() {
       })),
     ]);
 
-    // Close the import modal right away with an optimistic result.
     setImportLoading(false);
     setImportDone({ success: tempRows.length, failed: 0 });
     setImportFinished(true);
@@ -684,7 +632,6 @@ function ManageTeachers() {
         : `${tempRows.length} teacher${tempRows.length !== 1 ? "s" : ""} saved offline — will sync when back online.`,
     );
 
-    // Reconcile quietly in the background once writes actually resolve.
     Promise.allSettled(pending).then((settled) => {
       const failMsgs = [];
       let anyFailed = false;
@@ -698,8 +645,6 @@ function ManageTeachers() {
           );
         }
       });
-      // Re-sync the full teacher list from the server rather than trying to
-      // splice each temp entry, since empId sequencing depends on final count.
       fetchTeachers();
       if (anyFailed) {
         setImportErrors(failMsgs);
@@ -723,87 +668,33 @@ function ManageTeachers() {
   const validCount = importRows.filter((r) => r.errs.length === 0).length;
   const invalidCount = importRows.filter((r) => r.errs.length > 0).length;
 
-  // ── search filter (teacher table) ───────────────────────────────────────
-  const teacherQuery = teacherSearch.trim().toLowerCase();
-  const filteredTeachers = !teacherQuery
-    ? teachers
-    : teachers.filter((t) => {
-        const fullName = `${t.lname}, ${t.fname}${
-          t.mname ? " " + t.mname : ""
-        }`.toLowerCase();
-        return (
-          fullName.includes(teacherQuery) ||
-          String(t.empId || "")
-            .toLowerCase()
-            .includes(teacherQuery) ||
-          String(t.advisory || "")
-            .toLowerCase()
-            .includes(teacherQuery) ||
-          String(t.contact || "")
-            .toLowerCase()
-            .includes(teacherQuery) ||
-          String(t.email || "")
-            .toLowerCase()
-            .includes(teacherQuery)
-        );
-      });
-
-  // ── sorting (teacher table) ─────────────────────────────────────────────
-  const getTeacherSortValue = (t, key) => {
-    switch (key) {
-      case "empId":
-        return String(t.empId || "");
-      case "name":
-        return `${t.lname}, ${t.fname}${
-          t.mname ? " " + t.mname : ""
-        }`.toLowerCase();
-      case "gender":
-        return (t.gender || "").toLowerCase();
-      case "advisory":
-        return (t.advisory || "").toLowerCase();
-      case "contact":
-        return String(t.contact || "");
-      default:
-        return "";
+  // ── COLUMN SORTING LOGIC ──
+  const handleSortToggle = (field) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("asc");
     }
   };
 
-  const visibleTeachers = filteredTeachers.slice().sort((a, b) => {
-    const va = getTeacherSortValue(a, sortConfig.key);
-    const vb = getTeacherSortValue(b, sortConfig.key);
-    const cmp = String(va).localeCompare(String(vb), undefined, {
-      numeric: true,
-      sensitivity: "base",
-    });
-    return sortConfig.direction === "asc" ? cmp : -cmp;
-  });
-
-  // ── sorting (schedule modal) ────────────────────────────────────────────
-  const getScheduleSortValue = (s, key) => {
-    switch (key) {
-      case "subject":
-        return String(s.subject || "").toLowerCase();
-      case "gradeSection":
-        return `${String(s.grade || "").padStart(2, "0")}-${s.section || ""}`.toLowerCase();
-      case "days":
-        return String(s.days || "Sunday – Thursday").toLowerCase();
-      case "time":
-        return String(
-          s.timeSlot || (s.start && s.end ? `${s.start}-${s.end}` : ""),
-        );
-      default:
-        return "";
+  const sortedTeachers = [...teachers].sort((a, b) => {
+    if (sortField === "empId") {
+      const idA = a.empId || "";
+      const idB = b.empId || "";
+      return sortOrder === "asc"
+        ? idA.localeCompare(idB, undefined, { numeric: true })
+        : idB.localeCompare(idA, undefined, { numeric: true });
     }
-  };
 
-  const visibleSchedules = teacherSchedules.slice().sort((a, b) => {
-    const va = getScheduleSortValue(a, scheduleSortConfig.key);
-    const vb = getScheduleSortValue(b, scheduleSortConfig.key);
-    const cmp = String(va).localeCompare(String(vb), undefined, {
-      numeric: true,
-      sensitivity: "base",
-    });
-    return scheduleSortConfig.direction === "asc" ? cmp : -cmp;
+    if (sortField === "name") {
+      const nameA = `${a.lname || ""} ${a.fname || ""}`.toLowerCase();
+      const nameB = `${b.lname || ""} ${b.fname || ""}`.toLowerCase();
+      return sortOrder === "asc" 
+        ? nameA.localeCompare(nameB) 
+        : nameB.localeCompare(nameA);
+    }
+    return 0;
   });
 
   return (
@@ -919,56 +810,25 @@ function ManageTeachers() {
             <table className="data-table-mt">
               <thead>
                 <tr>
-                  <th
-                    className="mt-th-sortable"
-                    onClick={() => handleSort("empId")}
+                  {/* ── STREAMLINED FIXED SORT LABELS ── */}
+                  <th 
+                    onClick={() => handleSortToggle("empId")} 
+                    className="sortable-table-header"
                   >
-                    Employee ID{" "}
-                    <SortIcon
-                      active={sortConfig.key === "empId"}
-                      direction={sortConfig.direction}
-                    />
+                    Employee ID
+                    <i className={`fas ${sortField === "empId" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
+                    <span className="mt-sort-hint-label">(sort)</span>
                   </th>
-                  <th
-                    className="mt-th-sortable"
-                    onClick={() => handleSort("name")}
+                  <th 
+                    onClick={() => handleSortToggle("name")} 
+                    className="sortable-table-header"
                   >
-                    Teacher Name{" "}
-                    <SortIcon
-                      active={sortConfig.key === "name"}
-                      direction={sortConfig.direction}
-                    />
+                    Teacher Name
+                    <i className={`fas ${sortField === "name" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
+                    <span className="mt-sort-hint-label">(sort)</span>
                   </th>
-                  <th
-                    className="mt-th-sortable"
-                    onClick={() => handleSort("gender")}
-                  >
-                    Gender{" "}
-                    <SortIcon
-                      active={sortConfig.key === "gender"}
-                      direction={sortConfig.direction}
-                    />
-                  </th>
-                  <th
-                    className="mt-th-sortable"
-                    onClick={() => handleSort("advisory")}
-                  >
-                    Advisory Class{" "}
-                    <SortIcon
-                      active={sortConfig.key === "advisory"}
-                      direction={sortConfig.direction}
-                    />
-                  </th>
-                  <th
-                    className="mt-th-sortable"
-                    onClick={() => handleSort("contact")}
-                  >
-                    Contact No.{" "}
-                    <SortIcon
-                      active={sortConfig.key === "contact"}
-                      direction={sortConfig.direction}
-                    />
-                  </th>
+                  <th>Advisory Class</th>
+                  <th>Contact No.</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -979,7 +839,7 @@ function ManageTeachers() {
                       Loading...
                     </td>
                   </tr>
-                ) : visibleTeachers.length === 0 ? (
+                ) : sortedTeachers.length === 0 ? (
                   <tr>
                     <td colSpan="6" style={{ textAlign: "center" }}>
                       {teacherQuery
@@ -988,7 +848,7 @@ function ManageTeachers() {
                     </td>
                   </tr>
                 ) : (
-                  visibleTeachers.map((t) => (
+                  sortedTeachers.map((t) => (
                     <tr key={t.id}>
                       <td>{t.empId}</td>
                       <td>

@@ -20,6 +20,9 @@ function ManageUsers() {
   const [linkedStudents, setLinkedStudents] = useState([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
 
+  // ── Sorting State Containers ──────────────────────────────────────────────
+  const [sortOrder, setSortOrder] = useState("asc"); // 'asc' = A-Z, 'desc' = Z-A
+
   // ── On mount: run maintenance tasks then load users ────────────────────
   useEffect(() => {
     (async () => {
@@ -28,10 +31,22 @@ function ManageUsers() {
     })();
   }, []);
 
+  // ── INTERCEPT SIDEBAR NAVIGATION CLICKS TO RESET DESTINATION CONTEXT ──
+  useEffect(() => {
+    const handleSidebarClick = (e) => {
+      const target = e.target.closest("a, button, div, li, span");
+      if (target && target.textContent && target.textContent.includes("Users Account")) {
+        setCurrentView("categories");
+        setCurrentRoleFilter("");
+      }
+    };
+    document.addEventListener("mousedown", handleSidebarClick);
+    return () => document.removeEventListener("mousedown", handleSidebarClick);
+  }, []);
+
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      // Exclude archived accounts from the list
       const all = await getUsers();
       setUsers(all.filter((u) => u.status !== "Archived"));
     } catch (e) {
@@ -47,6 +62,7 @@ function ManageUsers() {
 
   const openUserList = (role) => {
     setCurrentRoleFilter(role);
+    setSortOrder("asc"); 
     setCurrentView("list");
   };
 
@@ -91,6 +107,20 @@ function ManageUsers() {
     if (grade === 7) return "Graduated";
     return `Grade ${grade}`;
   };
+
+  // ── ALPHABETICAL COLUMN SORTING TOGGLE UTILITY ──
+  const handleSortToggle = () => {
+    setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+  };
+
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    const nameA = (a.role === "Teacher" ? a.fullName : a.guardianName) || "";
+    const nameB = (b.role === "Teacher" ? b.fullName : b.guardianName) || "";
+    
+    return sortOrder === "asc"
+      ? nameA.toLowerCase().localeCompare(nameB.toLowerCase())
+      : nameB.toLowerCase().localeCompare(nameA.toLowerCase());
+  });
 
   return (
     <>
@@ -185,14 +215,22 @@ function ManageUsers() {
                   <table className="data-table-mu">
                     <thead>
                       <tr>
-                        <th>Full Name</th>
+                        <th 
+                          onClick={handleSortToggle} 
+                          className="sortable-table-header"
+                          style={{ cursor: "pointer", userSelect: "none" }}
+                        >
+                          Full Name
+                          <i className={`fas ${sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted"}`}></i>
+                          <span className="mt-sort-hint-label">(sort)</span>
+                        </th>
                         <th>Username</th>
                         <th>Status</th>
-                        <th>Action</th>
+                        <th style={{ textAlign: "center" }}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredUsers.length === 0 ? (
+                      {sortedUsers.length === 0 ? (
                         <tr>
                           <td
                             colSpan="4"
@@ -202,7 +240,7 @@ function ManageUsers() {
                           </td>
                         </tr>
                       ) : (
-                        filteredUsers.map((user) => (
+                        sortedUsers.map((user) => (
                           <tr key={user.id}>
                             <td>
                               <strong>
@@ -277,15 +315,11 @@ function ManageUsers() {
             </div>
 
             <div className="modal-body">
-              {/* Role icon */}
-
-              {/* Role */}
               <div className="view-field">
                 <label>Role</label>
                 <div className="view-value">{selectedUser.role}</div>
               </div>
 
-              {/* Name */}
               <div className="view-field">
                 <label>
                   {selectedUser.role === "Teacher"
@@ -299,13 +333,11 @@ function ManageUsers() {
                 </div>
               </div>
 
-              {/* Username */}
               <div className="view-field">
                 <label>Username</label>
                 <div className="view-value">{selectedUser.username}</div>
               </div>
 
-              {/* Password */}
               <div className="view-field">
                 <label>Password</label>
                 <div
@@ -331,7 +363,6 @@ function ManageUsers() {
                 </div>
               </div>
 
-              {/* Status */}
               <div className="view-field">
                 <label>Status</label>
                 <span
@@ -345,7 +376,6 @@ function ManageUsers() {
                 </span>
               </div>
 
-              {/* Linked students — Parent accounts only */}
               {selectedUser.role === "Parent" &&
                 selectedUser.studentIds?.length > 0 && (
                   <div className="view-field">

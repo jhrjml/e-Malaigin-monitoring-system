@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import ManageStudents from "./ManageStudents";
 import ManageTeachers from "./ManageTeachers";
@@ -15,6 +15,7 @@ import {
   setActiveSchoolYear,
   importPublicHolidaysForSchoolYear,
   backfillEnrollmentTimestamps,
+  getEnrolled,
 } from "../api/firebaseApi";
 import {
   Chart as ChartJS,
@@ -161,23 +162,66 @@ function AdminHomepage() {
     teacherCount: 0,
   });
   const [enrollmentStats, setEnrollmentStats] = useState([]);
-  const [gradeSectionStats, setGradeSectionStats] = useState([]);
+  const [distributionData, setDistributionData] = useState([]);
   const [dashboardLoading, setDashboardLoading] = useState(false);
 
-  const loadDashboardData = useCallback(() => {
+  const loadDashboardData = useCallback(async () => {
     setDashboardLoading(true);
-    return Promise.all([
-      getDashboardStats(),
-      getEnrollmentDropoutStats(),
-      getGradeSectionDistribution(),
-    ])
-      .then(([stats, enrollment, gradeSection]) => {
-        setDashboardStats(stats);
-        setEnrollmentStats(enrollment);
-        setGradeSectionStats(gradeSection);
-      })
-      .catch((e) => console.error("Failed to load dashboard data:", e))
-      .finally(() => setDashboardLoading(false));
+    try {
+      // 1. Fetch baseline statistics and historical charts logs
+      const [stats, enrollment] = await Promise.all([
+        getDashboardStats(),
+        getEnrollmentDropoutStats(),
+      ]);
+
+      // 2. Fetch live classroom section rosters to compile an accurate snapshot
+      const gradeLevels = [1, 2, 3, 4, 5, 6];
+      const compiledMetrics = await Promise.all(
+        gradeLevels.map(async (grade) => {
+          const enrolledA = await getEnrolled(grade, "A");
+          const enrolledB = await getEnrolled(grade, "B");
+
+          const countA = enrolledA.filter((e) => e.status === "Enrolled").length;
+          const countB = enrolledB.filter((e) => e.status === "Enrolled").length;
+
+          return {
+            grade,
+            sectionA: countA,
+            sectionB: countB,
+          };
+        })
+      );
+
+      // 3. Compute the absolute live active student population count
+      const totalLiveEnrolled = compiledMetrics.reduce(
+        (sum, d) => sum + d.sectionA + d.sectionB,
+        0
+      );
+
+      // 4. Determine the current school year string label dynamically (e.g., "2026-2027")
+      const now = new Date();
+      const startYear = now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;
+      const currentSyLabel = `${startYear}-${startYear + 1}`;
+
+      // 5. Patch the historical log array so the active school year matches the live total precisely
+      const patchedEnrollment = enrollment.map((item) => {
+        if (item.year === currentSyLabel) {
+          return { ...item, enrolled: totalLiveEnrolled };
+        }
+        return item;
+      });
+
+      setDashboardStats({
+        studentCount: totalLiveEnrolled, // Synchronizes the dashboard top card metrics
+        teacherCount: stats.teacherCount,
+      });
+      setEnrollmentStats(patchedEnrollment);
+      setDistributionData(compiledMetrics);
+    } catch (e) {
+      console.error("Failed to load dashboard data:", e);
+    } finally {
+      setDashboardLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -253,7 +297,7 @@ function AdminHomepage() {
             className={activePage === "dashboard" ? "active" : ""}
             onClick={() => navigate("dashboard")}
           >
-            <i className="fas fa-chart-pie"></i> <span>Dashborad</span>
+            <i className="fas fa-chart-pie"></i> <span>Dashboard</span>
           </li>
           <li
             className={activePage === "students" ? "active" : ""}
@@ -353,7 +397,7 @@ function AdminHomepage() {
             <DashboardOverview
               stats={dashboardStats}
               enrollment={enrollmentStats}
-              gradeSection={gradeSectionStats}
+              distribution={distributionData}
               loading={dashboardLoading}
               onRefresh={loadDashboardData}
             />
@@ -403,13 +447,7 @@ function AdminHomepage() {
 // DASHBOARD OVERVIEW
 // ════════════════════════════════════════════════════════════════════════════
 
-function DashboardOverview({
-  stats,
-  enrollment,
-  gradeSection,
-  loading,
-  onRefresh,
-}) {
+function DashboardOverview({ stats, enrollment, distribution, loading, onRefresh }) {
   return (
     <div className="overview-grid">
       <div className="overview-main-row">
@@ -427,16 +465,16 @@ function DashboardOverview({
               value={stats.teacherCount}
               accent="orange"
             />
-          </div>
-
-          <div className="charts-row">
-            <EnrollmentDropoutChart
-              data={enrollment}
-              loading={loading}
-              onDataFixed={onRefresh}
-            />
             <GradeSectionStackedChart data={gradeSection} loading={loading} />
           </div>
+
+          <StudentDistributionChart chartData={distribution} loading={loading} />
+
+          <EnrollmentDropoutChart
+            data={enrollment}
+            loading={loading}
+            onDataFixed={onRefresh}
+          />
         </div>
 
         <MiniCalendar />
@@ -454,6 +492,100 @@ function StatCard({ icon, label, value, accent }) {
       <div className="stat-card-body">
         <span className="stat-card-value">{value}</span>
         <span className="stat-card-label">{label}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── NEW PURE CSS STACKED COLUMN POPULATION DISTRIBUTION CHART ──
+function StudentDistributionChart({ chartData, loading }) {
+  const maxCount = useMemo(() => {
+    if (!chartData || chartData.length === 0) return 4;
+    const peak = Math.max(...chartData.map((d) => d.sectionA + d.sectionB), 1);
+    return peak < 4 ? 4 : Math.ceil(peak / 4) * 4;
+  }, [chartData]);
+
+  if (loading) {
+    return (
+      <div className="enrollment-chart-card">
+        <div className="enrollment-chart-empty">Loading student statistics…</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="enrollment-chart-card" style={{ marginBottom: "20px" }}>
+      <div className="enrollment-chart-header">
+        <div>
+          <h3>Student Population by Grade Level (Stacked)</h3>
+        </div>
+        <div className="enrollment-chart-legend">
+          <span className="legend-item">
+            <span className="legend-swatch section-swatch-a"></span> Section A
+          </span>
+          <span className="legend-item">
+            <span className="legend-swatch section-swatch-b"></span> Section B
+          </span>
+        </div>
+      </div>
+
+      <div className="clustered-chart-outer-wrapper">
+        <div className="clustered-chart-main-row">
+          
+          {/* Left Side Y-Axis Scale Numbers */}
+          <div className="chart-y-axis">
+            <span>{maxCount}</span>
+            <span>{Math.round(maxCount * 0.75)}</span>
+            <span>{Math.round(maxCount * 0.5)}</span>
+            <span>{Math.round(maxCount * 0.25)}</span>
+            <span>0</span>
+          </div>
+
+          {/* Right Side Bar Stack Work Area Canvas */}
+          <div className="clustered-chart-canvas-area">
+            {chartData.map((data) => (
+              <div key={data.grade} className="stacked-bars-column-wrapper">
+                
+                {/* Total Counter instantly visible right above the highest stacked edge segment */}
+                {data.sectionA + data.sectionB > 0 && (
+                  <div className="stacked-total-label">
+                    {data.sectionA + data.sectionB}
+                  </div>
+                )}
+                
+                {/* Section B Bar (Top) */}
+                <div 
+                  className={`stacked-chart-bar bar-section-b bar-outline-${data.grade}`}
+                  style={{ height: `${(data.sectionB / maxCount) * 100}%` }}
+                  title={`Grade ${data.grade} - Section B: ${data.sectionB} Students`}
+                >
+                  {data.sectionB > 0 && (
+                    <span className="bar-value-bubble">Section B: {data.sectionB}</span>
+                  )}
+                </div>
+
+                {/* Section A Bar (Bottom) */}
+                <div 
+                  className={`stacked-chart-bar bar-section-a ms-grade-gradient-${data.grade}`}
+                  style={{ height: `${(data.sectionA / maxCount) * 100}%` }}
+                  title={`Grade ${data.grade} - Section A: ${data.sectionA} Students`}
+                >
+                  {data.sectionA > 0 && (
+                    <span className="bar-value-bubble">Section A: {data.sectionA}</span>
+                  )}
+                </div>
+
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Bottom X-Axis Labels Row */}
+        <div className="clustered-chart-x-axis-row">
+          {chartData.map((data) => (
+            <div key={data.grade} className="cluster-axis-label">Grade {data.grade}</div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -866,8 +998,7 @@ function MiniCalendar() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ENROLLMENT / DROPOUT CHART  — react-chartjs-2 grouped bar chart,
-// matching the teacher dashboard's style.
+// ENROLLMENT / DROPOUT CHART
 // ════════════════════════════════════════════════════════════════════════════
 
 function EnrollmentDropoutChart({ data, loading, onDataFixed }) {
@@ -951,7 +1082,7 @@ function EnrollmentDropoutChart({ data, loading, onDataFixed }) {
     <div className="enrollment-chart-card">
       <div className="enrollment-chart-header">
         <div>
-          <h3>Enrollment &amp; Dropout</h3>
+          <h3>Enrollment &amp; Dropout History</h3>
         </div>
         <div className="enrollment-chart-legend">
           <span className="legend-item">
@@ -995,160 +1126,6 @@ function EnrollmentDropoutChart({ data, loading, onDataFixed }) {
             <Bar data={chartData} options={chartOptions} />
           </div>
         </>
-      )}
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// GRADE / SECTION STACKED BAR CHART — one bar per grade level (1–6), stacked
-// by section, with the count printed inside each segment and the grade's
-// total printed above the bar. Sits beside the Enrollment & Dropout chart.
-// ════════════════════════════════════════════════════════════════════════════
-
-const GRADE_LEVELS = [1, 2, 3, 4, 5, 6];
-
-function GradeSectionStackedChart({ data, loading }) {
-  const hasData = data.length > 0;
-
-  // Look up count for a given grade + section, 0 if that section doesn't
-  // exist for that grade.
-  const countsByGradeSection = {};
-  data.forEach((d) => {
-    countsByGradeSection[`${d.grade}|${d.section}`] = d.count;
-  });
-
-  // Every distinct section name across the whole school, sorted so the
-  // color assigned to a section is always the same no matter which grade
-  // it appears in — this is what makes the legend meaningful: "Rizal" is
-  // always the same blue everywhere on the chart, in every grade's bar.
-  const sectionNames = [...new Set(data.map((d) => d.section))].sort();
-
-  // One dataset PER SECTION NAME (not per stacking "slot"). Each dataset
-  // holds that section's count for every grade level (0 where the section
-  // doesn't exist in that grade), which is what lets Chart.js draw a
-  // correct, real legend using dataset.label.
-  const datasets = sectionNames.map((section, i) => {
-    const palette = STACK_COLORS[i % STACK_COLORS.length];
-    return {
-      label: section,
-      data: GRADE_LEVELS.map(
-        (g) => countsByGradeSection[`${g}|${section}`] || 0,
-      ),
-      backgroundColor: palette.bg,
-      textColor: palette.text,
-      borderRadius: 4,
-      // Wider bars + wider category slots than before (was 0.55 / 0.7,
-      // which is what made the bars look razor-thin) — the chart now
-      // matches roughly a 60px+ bar width in a normal 280px-tall card.
-      barPercentage: 0.75,
-      categoryPercentage: 0.85,
-    };
-  });
-
-  const chartData = {
-    labels: GRADE_LEVELS.map((g) => `Grade ${g}`),
-    datasets,
-  };
-
-  // Round the y-axis max up to a friendly step above the tallest total, so
-  // gridlines land on clean numbers instead of Chart.js picking something
-  // like "37".
-  const totals = GRADE_LEVELS.map((g) =>
-    sectionNames.reduce(
-      (sum, s) => sum + (countsByGradeSection[`${g}|${s}`] || 0),
-      0,
-    ),
-  );
-  const maxTotal = Math.max(0, ...totals);
-  const step =
-    maxTotal <= 10 ? 2 : maxTotal <= 20 ? 5 : maxTotal <= 60 ? 10 : 20;
-  const suggestedMax = Math.ceil((maxTotal + 1) / step) * step;
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    layout: { padding: { top: 18 } },
-    plugins: {
-      legend: {
-        display: true,
-        position: "top",
-        align: "end",
-        labels: {
-          boxWidth: 10,
-          boxHeight: 10,
-          usePointStyle: true,
-          pointStyle: "rectRounded",
-          font: { size: 11, weight: 600 },
-          color: "#555",
-          padding: 10,
-        },
-      },
-      tooltip: {
-        filter: (item) => item.raw > 0,
-        callbacks: {
-          label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
-        },
-      },
-    },
-    scales: {
-      x: {
-        stacked: true,
-        title: {
-          display: true,
-          text: "Grade Level",
-          font: { size: 12, weight: 600 },
-          color: "#666",
-          padding: { top: 8 },
-        },
-        grid: { display: false },
-        border: { display: false },
-        ticks: { font: { size: 11 }, color: "#888" },
-      },
-      y: {
-        stacked: true,
-        display: true,
-        beginAtZero: true,
-        suggestedMax,
-        title: {
-          display: true,
-          text: "Number of Students",
-          font: { size: 12, weight: 600 },
-          color: "#666",
-        },
-        border: { display: false },
-        grid: { color: "rgba(0,0,0,0.06)" },
-        ticks: {
-          font: { size: 11 },
-          color: "#888",
-          stepSize: step,
-          precision: 0,
-        },
-      },
-    },
-  };
-
-  return (
-    <div className="gs-chart-card">
-      <div className="gs-chart-header">
-        <h3>Students by Grade &amp; Section</h3>
-      </div>
-
-      {loading ? (
-        <div className="gs-chart-empty">Loading…</div>
-      ) : !hasData ? (
-        <div className="gs-chart-empty">
-          No enrolled students yet. Data will appear here once students are
-          enrolled into a section.
-        </div>
-      ) : (
-        <div className="gs-chart-canvas-wrap">
-          <Bar
-            data={chartData}
-            options={chartOptions}
-            plugins={[stackValueLabelsPlugin]}
-          />
-        </div>
       )}
     </div>
   );

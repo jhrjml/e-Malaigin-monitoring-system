@@ -1,11 +1,4 @@
-// ChildProfile.jsx  (Firebase version)
-// Reads the logged-in parent's linked studentIds from Firestore,
-// then fetches each student's full profile and enrollment info.
-// Also resolves the adviser (homeroom teacher) of the child's section.
-//
-// NOTE: ID card download has been removed from this view. That
-// functionality now lives in the teacher-facing StudentProfile.jsx
-// (only for the teacher's Advisory class).
+// ChildProfile.jsx (Firebase version)
 import "../Layout.css";
 import React, { useState, useEffect } from "react";
 import { db } from "../api/firebase";
@@ -22,7 +15,7 @@ import "./ChildProfile.css";
 
 const col = (name) => collection(db, name);
 
-// ── resolve the adviser of a grade+section from the Teacher collection ──────
+// Resolve the adviser of a grade+section from the Teacher collection
 async function getSectionAdvisor(grade, section) {
   if (!section) return null;
   try {
@@ -59,8 +52,8 @@ async function getSectionAdvisor(grade, section) {
 }
 
 const ChildProfile = () => {
-  const [children, setChildren] = useState([]); // array — a parent can have multiple children
-  const [selected, setSelected] = useState(null); // currently displayed child
+  const [children, setChildren] = useState([]); 
+  const [selected, setSelected] = useState(null); 
   const [loading, setLoading] = useState(true);
 
   const [advisorName, setAdvisorName] = useState("");
@@ -75,7 +68,6 @@ const ChildProfile = () => {
 
     const load = async () => {
       try {
-        // 1. Get the parent User document to find their studentIds
         const userSnap = await getDoc(doc(db, "User", userId));
         if (!userSnap.exists()) {
           setLoading(false);
@@ -90,12 +82,10 @@ const ChildProfile = () => {
           return;
         }
 
-        // 2. Fetch each student document
         const studentDocs = await Promise.all(
           studentIds.map((id) => getDoc(doc(db, "Student", id))),
         );
 
-        // 3. For each student fetch their active enrollment (grade + section)
         const enriched = await Promise.all(
           studentDocs
             .filter((d) => d.exists())
@@ -131,7 +121,7 @@ const ChildProfile = () => {
     load();
   }, []);
 
-  // ── resolve the section adviser whenever the selected child changes ──────
+  // Resolve the section adviser whenever the selected child changes
   useEffect(() => {
     if (!selected) {
       setAdvisorName("");
@@ -152,9 +142,8 @@ const ChildProfile = () => {
     };
   }, [selected]);
 
-  // ── avatar helper (same canvas approach as GenerateQr) ────────────────
   const avatarUrl = (name) => {
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "Student")}&background=3498db&color=fff&size=120`;
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "Student")}&background=3f3f97&color=fff&size=120`;
   };
 
   const formatDob = (dob) => {
@@ -175,10 +164,8 @@ const ChildProfile = () => {
       <div className="app-container">
         <main className="main-content">
           <div className="page-container">
-            <p
-              style={{ padding: "30px", textAlign: "center", color: "#a65f81" }}
-            >
-              Loading child profile…
+            <p style={{ padding: "30px", textAlign: "center", color: "#a65f81", fontWeight: "600" }}>
+              <i className="fas fa-spinner fa-spin"></i> Loading child profile…
             </p>
           </div>
         </main>
@@ -195,8 +182,7 @@ const ChildProfile = () => {
               <h2 className="section-title-cp">My Child</h2>
             </div>
             <p style={{ padding: "30px", textAlign: "center", color: "#999" }}>
-              No children linked to this account. Please contact the
-              administrator.
+              No children linked to this account. Please contact the administrator.
             </p>
           </div>
         </main>
@@ -234,25 +220,29 @@ const ChildProfile = () => {
 
           {selected && (
             <div className="profile-layout-cp">
+              {/* Premium Header Profile Deck */}
               <div className="profile-header-card">
-                <img
-                  src={avatarUrl(`${selected.firstName} ${selected.lastName}`)}
-                  alt="Student"
-                  className="student-photo"
-                />
-                <h1>{fullName}</h1>
-                <p className="grade-level">
-                  <i className="fas fa-award"></i> Grade{" "}
-                  {selected.enrolledGrade} — Section {selected.enrolledSection}
-                </p>
-                <p className="advisor-name">
-                  <i className="fas fa-chalkboard-teacher"></i>{" "}
-                  {advisorLoading
-                    ? "Loading adviser…"
-                    : `Adviser: ${advisorName || "—"}`}
-                </p>
+                <div className="profile-header-banner-accent"></div>
+                <div className="profile-header-content-block">
+                  <img
+                    src={avatarUrl(`${selected.firstName} ${selected.lastName}`)}
+                    alt="Student"
+                    className="student-photo"
+                  />
+                  <h1>{fullName}</h1>
+                  <div className="profile-header-badge-row">
+                    <span className="profile-badge-pill">
+                      <i className="fas fa-award"></i> Grade {selected.enrolledGrade} — Section {selected.enrolledSection}
+                    </span>
+                    <span className="profile-badge-pill advisor">
+                      <i className="fas fa-chalkboard-teacher"></i>{" "}
+                      {advisorLoading ? "Loading adviser…" : `Adviser: ${advisorName || "—"}`}
+                    </span>
+                  </div>
+                </div>
               </div>
 
+              {/* Enhanced Visual Details Information Grid Matrix */}
               <div className="profile-details-grid grid-two-columns">
                 <div className="info-card">
                   <h3>
@@ -260,31 +250,36 @@ const ChildProfile = () => {
                   </h3>
                   <ul className="info-list">
                     <li>
-                      <strong>Date of Birth:</strong> {formatDob(selected.dob)}
+                      <div className="info-item-label"><i className="far fa-id-card"></i> Learner Reference Number (LRN)</div>
+                      <strong className="sml-font-monospace">{selected.lrn}</strong>
                     </li>
                     <li>
-                      <strong>Age:</strong> {selected.age}
+                      <div className="info-item-label"><i className="far fa-calendar-alt"></i> Date of Birth</div>
+                      <strong>{formatDob(selected.dob)}</strong>
                     </li>
                     <li>
-                      <strong>LRN:</strong> {selected.lrn}
+                      <div className="info-item-label"><i className="fas fa-birthday-cake"></i> Age</div>
+                      <strong>{selected.age ? `${selected.age} years old` : "—"}</strong>
                     </li>
                   </ul>
                 </div>
 
                 <div className="info-card">
                   <h3>
-                    <i className="fas fa-map-marker-alt"></i> Contact &amp;
-                    Address
+                    <i className="fas fa-map-marker-alt"></i> Contact &amp; Address
                   </h3>
                   <ul className="info-list">
                     <li>
-                      <strong>Address:</strong> {selected.address || "—"}
+                      <div className="info-item-label"><i className="fas fa-home"></i> Address</div>
+                      <strong>{selected.address || "—"}</strong>
                     </li>
                     <li>
-                      <strong>Contact No.:</strong> {selected.contact || "—"}
+                      <div className="info-item-label"><i className="fas fa-phone-alt"></i> Contact No.</div>
+                      <strong>{selected.contact || "—"}</strong>
                     </li>
                     <li>
-                      <strong>Guardian:</strong> {selected.guardian || "—"}
+                      <div className="info-item-label"><i className="fas fa-user-shield"></i> Parent / Guardian</div>
+                      <strong>{selected.guardian || "—"}</strong>
                     </li>
                   </ul>
                 </div>

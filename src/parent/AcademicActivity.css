@@ -1,3 +1,4 @@
+/* AcademicActivity.css */
 :root {
   --primary: #3f3f97;
   --accent: #a65f81;
@@ -9,23 +10,23 @@
 
 .toolbar-aa {
   display: flex;
-  justify-content: space-between;
-  align-items: center; /* NEW — vertically centers back button + title */
-  flex-wrap: nowrap; /* NEW — keeps them on one line */
-  margin-bottom: 25px;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 24px;
 }
 
-/* RESPONSIVE */
-@media (max-width: 600px) {
-  .toolbar-aa {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
 .section-title-aa {
-  font-size: 1.4rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: black;
+  margin: 0;
+}
+
+.aa-main-sub-title {
+  font-size: 1.1rem;
+  color: var(--gray) !important;
+  font-weight: normal !important;
+  margin: 4px 0 0 0;
 }
 
 .aa-loading-text {
@@ -37,13 +38,96 @@
   color: #999;
   padding: 20px 0;
 }
-.aa-sub-title {
-  font-size: 1.1rem;
-  color: black;
-  margin-bottom: 10px;
+
+/* Split Header Row layout */
+.aa-split-header-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
-/* ── CHILD FILTER (same pattern as admin Archive.jsx) ─────────────────────── */
+.btn-back-aa-inline {
+  background: transparent;
+  color: black;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  font-weight: bold;
+  transition: color 0.15s ease;
+}
+.btn-back-aa-inline:hover {
+  color: var(--accent);
+}
+
+.aa-split-header-text-column {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.aa-split-header-text-column h2 {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: black;
+  margin: 0 0 4px 0;
+}
+.aa-split-header-text-column p {
+  font-size: 0.9rem;
+  color: var(--gray);
+  margin: 0;
+  font-weight: normal;
+}
+
+/* ── INTERACTIVE RIGHT-ALIGNED FEED SORT DROPDOWN ── */
+.aa-sort-controls-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* Seamlessly aligns elements to the right boundary */
+  gap: 10px;
+  margin-bottom: 20px;
+  width: 100%; /* Spans full horizontal container width to allow alignment shifts */
+  background: transparent; /* Stripped main container box background */
+  padding: 0; /* Stripped container padding */
+  border: none; /* Stripped boundary line strokes */
+  box-shadow: none; /* Stripped drop shadows */
+}
+
+.aa-sort-controls-toolbar label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.aa-sort-controls-toolbar label i {
+  color: var(--accent);
+}
+
+/* Retains distinct clean boxed format framework boundaries on dropdown element */
+#aa-sort-select {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1.5px solid #dde1e7;
+  background: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: black;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+#aa-sort-select:focus {
+  border-color: var(--accent);
+}
+
+/* ── CHILD FILTER TABS ── */
 .aa-filter-group {
   display: flex;
   gap: 8px;
@@ -74,7 +158,7 @@
   color: #fff;
 }
 
-/* ── LAYOUT / ANIMATION ─────────────────────────────────────────────────────── */
+/* ── VIEW SECTIONS ── */
 .view-section-aa {
   animation: aaFadeIn 0.3s ease-in-out;
   width: 100%;
@@ -82,14 +166,8 @@
   box-sizing: border-box;
 }
 @keyframes aaFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .grid-container-aa {
@@ -101,7 +179,7 @@
   box-sizing: border-box;
 }
 
-/* ── SUBJECT CARD ───────────────────────────────────────────────────────────── */
+/* ── SUBJECT CARDS ── */
 .subject-card-aa {
   background: white;
   padding: 20px;
@@ -140,42 +218,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   color: black;
+  margin: 0 0 4px 0;
 }
 
-/* ── TOOLBAR (inner, used inside views) ────────────────────────────────────── */
-.toolbar-inner-aa {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 15px;
-}
-
-.btn-back-aa {
-  background: transparent;
-  color: rgb(0, 0, 0);
-  border: none;
-  padding: 8px 20px;
-  border-radius: 5px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: x-large;
-  font-weight: bold;
-  flex-shrink: 0;
-}
-
-@media (max-width: 600px) {
-  .btn-back-aa {
-    padding: 8px 12px;
-    gap: 8px;
-    font-size: 1.25rem;
-  }
-}
-
-/* ── CLASSWORK LIST ─────────────────────────────────────────────────────────── */
+/* ── CLASSWORK CARDS FEED ── */
 .list-container-aa {
   width: 100%;
   box-sizing: border-box;
@@ -196,16 +242,9 @@
   width: 100%;
   box-sizing: border-box;
 }
-.cw-submitted-aa {
-  border-left-color: var(--success);
-}
-.cw-missed-aa {
-  border-left-color: var(--danger);
-}
-.cw-pending-aa {
-  border-left: 4px solid #bdc3c7;
-  background: #f9f9f9;
-}
+.cw-submitted-aa { border-left-color: var(--success); }
+.cw-missed-aa { border-left-color: var(--danger); }
+.cw-pending-aa { border-left: 4px solid #bdc3c7; background: #f9f9f9; }
 
 .cw-header-aa {
   display: flex;
@@ -230,12 +269,8 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
-.pill-submitted-aa {
-  background: var(--success);
-}
-.pill-missed-aa {
-  background: var(--danger);
-}
+.pill-submitted-aa { background: var(--success); }
+.pill-missed-aa { background: var(--danger); }
 .pill-pending-aa {
   background: #ecf0f1;
   color: #7f8c8d;
@@ -251,7 +286,6 @@
   font-size: 0.9rem;
 }
 
-/* ── Edited-time footer row (beside "Teacher reminder posted.") ───────────── */
 .cw-details-footer-aa {
   display: flex;
   align-items: center;
@@ -273,20 +307,10 @@
   align-items: center;
   gap: 5px;
 }
-.cw-edited-aa i {
-  font-size: 0.7rem;
-}
+.cw-edited-aa i { font-size: 0.7rem; }
 
-/* ── RESPONSIVE ─────────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .grid-container-aa {
-    grid-template-columns: 1fr;
-  }
-  .cw-header-aa {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .cw-details-footer-aa {
-    justify-content: flex-start;
-  }
+  .grid-container-aa { grid-template-columns: 1fr; }
+  .cw-header-aa { flex-direction: column; align-items: flex-start; }
+  .cw-details-footer-aa { justify-content: flex-start; }
 }
