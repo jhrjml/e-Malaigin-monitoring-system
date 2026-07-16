@@ -1,16 +1,14 @@
 /* ChildProfile.css */
 :root {
-  --primary: #3f3f97;
-  --accent: #a65f81;
-  --success: #2ecc71;
-  --danger: #e74c3c;
-  --warning: #f1c40f;
-  --light: #f8f9fa;
-  --white: #ffffff;
-  --gray: #95a5a6;
-  --dark-gray: #34495e;
-  --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 5px 15px rgba(0, 0, 0, 0.08);
+  --cp-primary: #3f3f97;
+  --cp-accent: #a65f81;
+  --cp-success: #2ecc71;
+  --cp-danger: #e74c3c;
+  --cp-warning: #f1c40f;
+  --cp-light: #f8f9fa;
+  --cp-white: #ffffff;
+  --cp-gray: #95a5a6;
+  --cp-dark-gray: #34495e;
 }
 
 .toolbar-cp {
@@ -18,7 +16,7 @@
   justify-content: space-between;
   align-items: center;
   flex-wrap: nowrap;
-  margin-bottom: 25px;
+  margin-bottom: 20px;
 }
 
 @media (max-width: 600px) {
@@ -30,204 +28,331 @@
 }
 
 .section-title-cp {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #111;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #1a1a2e;
+  margin: 0;
+  letter-spacing: -0.5px;
 }
 
 /* ── CHILD FILTER BAR ── */
 .cp-filter-group {
   display: flex;
   gap: 10px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
 }
 .cp-filter-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
+  gap: 6px;
+  padding: 8px 18px;
   border: 1.5px solid #dde1e7;
-  border-radius: 24px;
-  background: var(--white);
-  color: #555;
-  font-size: 0.88rem;
-  font-weight: 600;
+  border-radius: 30px;
+  background: var(--cp-white);
+  color: #5c6a79;
+  font-size: 0.85rem;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
 }
+.cp-filter-btn i {
+  font-size: 0.95rem;
+}
 .cp-filter-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(166, 95, 129, 0.02);
+  border-color: var(--cp-accent);
+  color: var(--cp-accent);
+  background: color-mix(in srgb, var(--cp-accent) 4%, transparent);
 }
 .cp-filter-btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--white);
-  box-shadow: 0 4px 10px rgba(166, 95, 129, 0.25);
+  background: var(--cp-accent);
+  border-color: var(--cp-accent);
+  color: var(--cp-white);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--cp-accent) 30%, transparent);
 }
 
-/* ── MODERN SHOWN DECK PROFILE CANVAS ── */
-.profile-layout-cp {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  max-width: 100%;
-}
-
-.profile-header-card {
-  background: var(--white);
+/* ── COMPACT PROFILE CANVAS ── */
+.cp-view-container {
+  background: #ffffff;
   border-radius: 16px;
-  box-shadow: var(--shadow-md);
-  overflow: hidden;
-  position: relative;
-  border: 1px solid #eaedf1;
+  padding: 20px 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+  border: 1px solid #eef1f6;
+  margin-bottom: 16px;
 }
 
-/* Styled Top Banner Background Contrast Accent */
-.profile-header-banner-accent {
-  height: 90px;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  width: 100%;
+.cp-profile-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 18px;
 }
 
-.profile-header-content-block {
-  padding: 0 30px 30px 30px;
-  text-align: center;
-  margin-top: -50px; /* Pulls the avatar up onto the banner gracefully */
-}
-
-.student-photo {
-  width: 105px;
-  height: 105px;
+/* ── COMPACT GENERIC AVATAR ── */
+.cp-avatar {
+  width: 75px;
+  height: 75px;
   border-radius: 50%;
-  object-fit: cover;
-  border: 4px solid var(--white);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
-  background: var(--white);
-  margin-bottom: 12px;
-}
-
-.profile-header-content-block h1 {
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: #111;
-  margin: 0 0 14px 0;
-}
-
-.profile-header-badge-row {
+  border: 3px solid #ffffff;
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--cp-accent) 20%, transparent);
+  background: color-mix(in srgb, var(--cp-accent) 12%, transparent);
+  color: var(--cp-accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  font-size: 2.2rem;
+  flex-shrink: 0;
+}
+
+.cp-profile-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cp-student-name {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #1a1a2e;
+  margin: 0;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+}
+
+.cp-pill-group {
+  display: flex;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
-.profile-badge-pill {
-  background: rgba(63, 63, 151, 0.07);
-  color: var(--primary);
+.cp-grade-pill,
+.cp-adviser-pill {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.78rem;
   font-weight: 700;
-  font-size: 0.85rem;
-  padding: 6px 16px;
-  border-radius: 30px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
 }
 
-.profile-badge-pill.advisor {
-  background: rgba(166, 95, 129, 0.07);
-  color: var(--accent);
+.cp-grade-pill {
+  background: color-mix(in srgb, var(--cp-accent) 10%, transparent);
+  color: var(--cp-accent);
 }
 
-/* ── INFORMATION LAYOUT CARDS MATRIX ── */
-.profile-details-grid.grid-two-columns {
+.cp-adviser-pill {
+  background: color-mix(in srgb, var(--cp-primary) 10%, transparent);
+  color: var(--cp-primary);
+}
+
+.cp-divider {
+  border: 0;
+  height: 1px;
+  background: #f0f2f5;
+  margin: 0 0 18px 0;
+}
+
+/* ── 3-COLUMN COMPACT GRID ── */
+.cp-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
 }
 
-.info-card {
-  background: var(--white);
-  border-radius: 14px;
-  padding: 24px;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid #eaedf1;
-  border-top: 4px solid var(--primary); /* Anchors info segments with left system boundaries */
-}
-.info-card:nth-child(2) {
-  border-top-color: var(--accent);
+.cp-grid-span-3 {
+  grid-column: span 3;
 }
 
-.info-card h3 {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #111;
-  margin: 0 0 20px 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid #f2f4f8;
-  padding-bottom: 12px;
-}
-.info-card h3 i {
-  color: var(--primary);
-}
-.info-card:nth-child(2) h3 i {
-  color: var(--accent);
-}
-
-.info-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.cp-field-group {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  width: 100%;
 }
 
-.info-list li {
-  font-size: 0.92rem;
-  color: #222;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20px;
+.cp-field-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  color: #95a5a6;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  display: block;
 }
 
-.info-item-label {
-  color: var(--gray);
+.cp-view-box {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #1a1a2e;
+  background: #fdfdfd;
+  border: 1.5px solid #eef1f6;
   font-weight: 600;
+}
+
+.cp-lrn-box {
+  background: #f4f6f8;
+  border-color: #f4f6f8;
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+/* ── TABLE SCHEDULE ── */
+.cp-timeline-container {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+  border: 1px solid #eef1f6;
+}
+
+.cp-section-subtitle {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #1a1a2e;
+  margin: 0 0 16px 0;
   display: flex;
   align-items: center;
   gap: 8px;
-}
-.info-item-label i {
-  width: 16px;
-  text-align: center;
-  color: #a3afb7;
+  border-bottom: 1px solid #f0f2f5;
+  padding-bottom: 12px;
 }
 
-.info-list li strong {
+.cp-section-subtitle i {
+  color: var(--cp-accent);
+}
+
+.cp-table-container {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #eef1f6;
+  overflow: hidden;
+  overflow-x: auto;
+}
+
+.cp-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cp-table th,
+.cp-table td {
+  padding: 14px 20px;
+  text-align: left;
+  border-bottom: 1px solid #f0f2f5;
+  vertical-align: middle;
+}
+
+.cp-table th {
+  background: #f8f9fa;
+  color: #5c6a79;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #eaedf1;
+}
+
+.cp-table tr:hover {
+  background: #fcfcfc;
+}
+
+.cp-table tr:last-child td {
+  border-bottom: none;
+}
+
+.cp-teacher-cell {
+  font-size: 0.85rem;
+  color: #5c6a79;
   font-weight: 600;
-  color: #111;
-  text-align: right;
-  word-break: break-word;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f4f6f8;
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.cp-teacher-cell i {
+  color: var(--cp-primary);
 }
 
-.sml-font-monospace {
-  font-family: "SFMono-Regular", Consolas, monospace;
-  letter-spacing: 0.3px;
-  background: #f4f6f9;
-  padding: 2px 8px;
-  border-radius: 4px;
+.sortable-table-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s;
+  white-space: nowrap;
+}
+.sortable-table-header:hover {
+  background-color: #f1f3f5 !important;
+}
+.sortable-table-header i {
+  margin-left: 8px;
+  font-size: 0.8rem;
+  vertical-align: middle;
+}
+.cp-header-unsorted {
+  color: #ccc;
+}
+.cp-header-sorted {
+  color: var(--cp-accent);
+}
+
+/* ── STATUS SCREENS ── */
+.cp-loading-status {
+  text-align: center;
+  padding: 30px 20px;
+  color: #a65f81;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.cp-empty-status {
+  text-align: center;
+  padding: 30px 20px;
+  color: #95a5a6;
+  font-weight: 500;
+  font-size: 0.95rem;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px dashed #dde1e7;
 }
 
 /* ── RESPONSIVE MEDIA BREAKPOINTS ── */
-@media (max-width: 768px) {
-  .profile-details-grid.grid-two-columns {
+@media (max-width: 800px) {
+  .cp-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .cp-grid-span-3 {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 600px) {
+  .cp-view-container,
+  .cp-timeline-container {
+    padding: 16px;
+  }
+  .cp-profile-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+  .cp-pill-group {
+    justify-content: center;
+  }
+  .cp-grid {
     grid-template-columns: 1fr;
-    gap: 16px;
+  }
+  .cp-grid-span-3 {
+    grid-column: span 1;
+  }
+  .cp-table th,
+  .cp-table td {
+    padding: 10px 14px;
+    font-size: 0.85rem;
   }
 }

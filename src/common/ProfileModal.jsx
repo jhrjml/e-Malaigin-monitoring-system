@@ -77,7 +77,6 @@ function ProfileModal({ open, onClose }) {
       return;
     }
     if (newPassword && newPassword.length < 6) {
-      // ADD THIS
       setError("New password must be at least 6 characters.");
       return;
     }
@@ -115,15 +114,13 @@ function ProfileModal({ open, onClose }) {
 
   if (!open) return null;
 
-  // Mask password for display: show first char + asterisks
-  const maskedPassword = password
-    ? password[0] + "*".repeat(Math.max(password.length - 1, 4))
-    : "••••••••";
-
   return (
     <div className="pm-overlay" onClick={onClose}>
       <div className="pm-box" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
+        {/* Avatar & Header */}
+        <div className="pm-avatar">
+          <i className="fas fa-user"></i>
+        </div>
         <div className="pm-header">
           <div className="pm-displayname">{displayName}</div>
           <div className="pm-role">
@@ -134,23 +131,38 @@ function ProfileModal({ open, onClose }) {
         <div className="pm-divider" />
 
         {loading ? (
-          <p className="pm-loading">Loading…</p>
+          <p className="pm-loading">Loading profile…</p>
         ) : (
           <>
-            {error && <div className="pm-error">{error}</div>}
-            {success && <div className="pm-success">{success}</div>}
+            {error && (
+              <div className="pm-error">
+                <i className="fas fa-exclamation-circle"></i> {error}
+              </div>
+            )}
+            {success && (
+              <div className="pm-success">
+                <i className="fas fa-check-circle"></i> {success}
+              </div>
+            )}
 
             {/* View mode */}
             {!editing ? (
               <>
-                <div className="pm-grid">
-                  <div className="pm-field">
-                    <label>Username</label>
-                    <div className="pm-text">{username}</div>
-                  </div>
-                  <div className="pm-field">
-                    <label>Password</label>
-                    <div className="pm-text">{password}</div>
+                <div className="pm-field">
+                  <label>Username</label>
+                  <div className="pm-text-box">{username}</div>
+                </div>
+                <div className="pm-field">
+                  <label>Password</label>
+                  <div className="pm-text-box">
+                    <span>{showPassword ? password : "••••••••"}</span>
+                    <button
+                      type="button"
+                      className="pm-toggle"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
                   </div>
                 </div>
               </>
@@ -233,15 +245,15 @@ function ProfileModal({ open, onClose }) {
                 </>
               ) : (
                 <>
+                  <button className="pm-btn pm-cancel" onClick={handleCancel}>
+                    Cancel
+                  </button>
                   <button
                     className="pm-btn pm-save"
                     onClick={handleSave}
                     disabled={saving}
                   >
                     {saving ? "Saving…" : "Save Changes"}
-                  </button>
-                  <button className="pm-btn pm-cancel" onClick={handleCancel}>
-                    Cancel
                   </button>
                 </>
               )}

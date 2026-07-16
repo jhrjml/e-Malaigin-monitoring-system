@@ -209,79 +209,6 @@
   border-color: #a65f81;
 }
 
-.modal-overlay-teacher {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-}
-
-.modal-teacher {
-  background: var(--white);
-  padding: 30px;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 400px;
-  text-align: center;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-}
-
-.logout-modal-teacher .modal-header-teacher {
-  background: white;
-  color: rgb(0, 0, 0);
-  padding: 15px 25px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-header-teacher h2 {
-  font-size: x-large;
-  margin: 0;
-}
-
-.logout-modal-teacher p {
-  font-size: 18px;
-  font-weight: 500;
-  color: var(--black);
-}
-
-.modal-buttons-teacher {
-  margin-top: 25px;
-  display: flex;
-  justify-content: center;
-  gap: 15px;
-}
-.logout-modal-teacher .btn-confirm {
-  background: #2c3e50;
-  color: #fff;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: large;
-}
-.logout-modal-teacher .btn-confirm:hover {
-  opacity: 0.85;
-}
-.logout-modal-teacher .btn-cancel {
-  background: #ecf0f1;
-  color: #2c3e50;
-  padding: 10px 20px;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: large;
-}
-.logout-modal-teacher .btn-cancel:hover {
-  opacity: 0.85;
-}
-
 .header-right {
   display: flex;
   align-items: center;
@@ -394,37 +321,6 @@
   }
 }
 
-@media (max-width: 480px) {
-  .modal-teacher {
-    padding: 16px;
-    width: 88%;
-  }
-
-  .logout-modal-teacher .modal-header-teacher {
-    padding: 12px 12px !important;
-  }
-
-  .modal-header-teacher h2 {
-    font-size: larger;
-  }
-
-  .logout-modal-teacher p {
-    font-size: larger !important;
-    margin-bottom: 4px;
-  }
-
-  .modal-buttons-teacher {
-    margin-top: 20px;
-    gap: 10px !important;
-  }
-
-  .logout-modal-teacher .btn-confirm,
-  .logout-modal-teacher .btn-cancel {
-    padding: 8px 14px !important;
-    font-size: larger !important;
-  }
-}
-
 /* ── HIGHLIGHTED LATEST POST ALERT BANNER ── */
 .th-latest-post-alert-banner {
   background: var(--white);
@@ -488,7 +384,9 @@
   color: #ccc;
   font-size: 0.85rem;
   margin-left: 14px;
-  transition: color 0.15s, transform 0.15s;
+  transition:
+    color 0.15s,
+    transform 0.15s;
 }
 
 .th-latest-post-alert-banner:hover .th-latest-banner-arrow {

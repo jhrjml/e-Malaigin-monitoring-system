@@ -4,6 +4,7 @@ import "./ParentDashboard.css";
 import ChildProfile from "./ChildProfile";
 import "../Layout.css";
 import ProfileModal from "../common/ProfileModal";
+import ConfirmModal from "../common/ConfirmModal"; // Importing the unified modern modal
 import AttendanceRecord from "./AttendanceRecord";
 import AcademicActivity from "./AcademicActivity";
 import { db } from "../api/firebase";
@@ -25,7 +26,7 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import usePushNotifications from "../common/usePushNotifications";
-import { unsubscribeFromPush } from "../common/pushSubscribe"; 
+import { unsubscribeFromPush } from "../common/pushSubscribe";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -56,24 +57,11 @@ function getSchoolYearMonths() {
   return months;
 }
 
-// Sorts reminder entries with the most recently POSTED item first, using
-// the `createdAt` timestamp stamped when the classwork/announcement was
-// created. Falls back to the due-date field for any legacy entries that
-// predate `createdAt` being stamped.
-function sortMostRecentFirst(a, b) {
-  const ca = a.createdAt || "";
-  const cb = b.createdAt || "";
-  if (ca && cb) return cb.localeCompare(ca);
-  if (ca && !cb) return -1;
-  if (!ca && cb) return 1;
-  return (b.date || "9999-99-99").localeCompare(a.date || "9999-99-99");
-}
-
 const ParentDashboard = () => {
-  usePushNotifications(); 
+  usePushNotifications();
 
-  const [sidebarOpen, setSidebarOpen] = useState(false); 
-  const [sidebarClosed, setSidebarClosed] = useState(false); 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarClosed, setSidebarClosed] = useState(false);
 
   const [currentDate, setCurrentDate] = useState("");
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -270,27 +258,18 @@ const ParentDashboard = () => {
           )}
         </div>
 
-        {logoutOpen && (
-          <div className="modal-overlay-parent">
-            <div className="modal-parent logout-modal-parent">
-              <div className="modal-header-parent">
-                <h2>Confirm Logout</h2>
-              </div>
-              <p>Are you sure you want to logout?</p>
-              <div className="modal-buttons-parent">
-                <button
-                  className="btn-cancel"
-                  onClick={() => setLogoutOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button className="btn-confirm" onClick={handleLogout}>
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* ── UNIFORM LOGOUT MODAL ── */}
+        <ConfirmModal
+          open={logoutOpen}
+          title="Confirm Logout"
+          titleIcon="fa-sign-out-alt"
+          titleColor="#a65f81"
+          message="Are you sure you want to log out of the parent portal?"
+          confirmText="Logout"
+          confirmColor="primary"
+          onConfirm={handleLogout}
+          onCancel={() => setLogoutOpen(false)}
+        />
 
         <ProfileModal
           open={profileOpen}
@@ -322,13 +301,6 @@ function DashboardOverview({ onOpenReminder }) {
     setSelectedMonth(defaultMonth);
   }, [defaultMonth]);
 
-  // The admin-configured active school year label (e.g. "2026-2027").
-  // Fetched once here and passed down to the Reminder panel and Classwork
-  // chart, both of which query the "Classwork" collection by
-  // grade+section+subject only — without this, a child placed in the same
-  // Grade+Section+Subject combo a previous student once had would show
-  // that student's old reminders and completion counts mixed into this
-  // year's dashboard.
   const [schoolYear, setSchoolYear] = useState("");
   useEffect(() => {
     getActiveSchoolYearLabel()
@@ -400,7 +372,7 @@ function DashboardOverview({ onOpenReminder }) {
     };
   }, []);
 
-  // Central Reminders Pipeline Hook (Hoisted from Panel)
+  // Central Reminders Pipeline Hook
   useEffect(() => {
     if (kidsLoading) return;
     if (!kids || kids.length === 0) {
@@ -408,9 +380,6 @@ function DashboardOverview({ onOpenReminder }) {
       setRemindersBusy(false);
       return;
     }
-    // Wait for the active school year label to resolve before querying —
-    // it starts as "" on first render, and querying with an empty string
-    // would just return zero results instead of waiting for the real value.
     if (!schoolYear) return;
 
     let cancelled = false;
@@ -418,9 +387,6 @@ function DashboardOverview({ onOpenReminder }) {
 
     const loadReminders = async () => {
       try {
-        const now = new Date();
-        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-
         const toISO = (raw) => {
           if (!raw) return null;
           if (typeof raw?.toDate === "function") {
@@ -439,13 +405,13 @@ function DashboardOverview({ onOpenReminder }) {
         const perChild = await Promise.all(
           kids.map(async (kid) => {
             if (!kid.enrolledGrade || !kid.enrolledSection) return [];
-            
+
             const snap = await getDocs(
               query(
                 collection(db, "Classwork"),
                 where("grade", "==", kid.enrolledGrade),
-                where("section", "==", kid.enrolledSection)
-              )
+                where("section", "==", kid.enrolledSection),
+              ),
             );
 
             return snap.docs.map((d) => {
@@ -458,20 +424,24 @@ function DashboardOverview({ onOpenReminder }) {
                 studentName: `${kid.firstName} ${kid.lastName}`,
               };
             });
-          })
+          }),
         );
 
         const items = perChild.flat().filter((it) => {
           const markedStatus = it.studentStatus?.[it.studentId];
           const isMarked =
             markedStatus === "Submitted" || markedStatus === "Missed";
+
+          // If the teacher has explicitly graded it, hide it from the "active reminders" list
           if (isMarked) return false;
-          if (it.date && it.date < today) return false;
+
           return true;
         });
 
-        // Sorted chronologically descending by its creation timestamp configuration parameters (createdAt)
-        items.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+        // Sorted chronologically descending by its creation timestamp
+        items.sort((a, b) =>
+          (b.createdAt || "").localeCompare(a.createdAt || ""),
+        );
 
         if (!cancelled) {
           setReminders(items);
@@ -487,21 +457,34 @@ function DashboardOverview({ onOpenReminder }) {
     return () => {
       cancelled = true;
     };
-  }, [kids, kidsLoading]);
+  }, [kids, kidsLoading, schoolYear]);
 
-  // Isolate the single absolute most recently created posting entry 
+  // Isolate the single absolute most recently created posting entry for the top banner
   const latestPost = useMemo(() => reminders[0] || null, [reminders]);
 
   return (
     <div className="pd-dashboard-flow-wrapper" style={{ width: "100%" }}>
       {/* Dynamic Floating Latest Post Alert Banner */}
       {!kidsLoading && !remindersBusy && latestPost && (
-        <div className="pd-latest-post-alert-banner" onClick={() => onOpenReminder({ studentId: latestPost.studentId, subject: latestPost.subject, classworkId: latestPost.id })}>
+        <div
+          className="pd-latest-post-alert-banner"
+          onClick={() =>
+            onOpenReminder({
+              studentId: latestPost.studentId,
+              subject: latestPost.subject,
+              classworkId: latestPost.id,
+            })
+          }
+        >
           <div className="pd-latest-banner-badge">LATEST POST</div>
           <div className="pd-latest-banner-body">
             <i className="fas fa-list-ul pd-latest-banner-icon"></i>
             <div className="pd-latest-banner-text">
-              <strong>Grade {latestPost.grade} - {latestPost.section} ({latestPost.subject})</strong>: {latestPost.title} — <span>{latestPost.desc}</span>
+              <strong>
+                Grade {latestPost.grade} - {latestPost.section} (
+                {latestPost.subject})
+              </strong>
+              : {latestPost.title} — <span>{latestPost.desc}</span>
             </div>
           </div>
           <i className="fas fa-chevron-right pd-latest-banner-arrow"></i>
@@ -509,7 +492,11 @@ function DashboardOverview({ onOpenReminder }) {
       )}
 
       <div className="pd-overview-grid">
-        <ParentReminderPanel reminders={reminders} loading={kidsLoading || remindersBusy} onOpenReminder={onOpenReminder} />
+        <ParentReminderPanel
+          reminders={reminders}
+          loading={kidsLoading || remindersBusy}
+          onOpenReminder={onOpenReminder}
+        />
 
         <div className="pd-charts-col">
           <div className="pd-filter-row">
@@ -546,12 +533,21 @@ function DashboardOverview({ onOpenReminder }) {
             </div>
           ) : !selectedKid ? (
             <div className="pd-panel">
-              <p className="pd-panel-status">No children linked to this account.</p>
+              <p className="pd-panel-status">
+                No children linked to this account.
+              </p>
             </div>
           ) : (
             <>
-              <ParentAttendanceChart child={selectedKid} monthId={selectedMonth} />
-              <ParentClassworkChart child={selectedKid} monthId={selectedMonth} />
+              <ParentAttendanceChart
+                child={selectedKid}
+                monthId={selectedMonth}
+              />
+              <ParentClassworkChart
+                child={selectedKid}
+                monthId={selectedMonth}
+                schoolYear={schoolYear}
+              />
             </>
           )}
         </div>
@@ -600,7 +596,9 @@ function ParentReminderPanel({ reminders, loading, onOpenReminder }) {
               <div
                 className={`pd-reminder-icon ${cw.isAnnouncement ? "pd-reminder-icon--announcement" : ""}`}
               >
-                <i className={`fas ${cw.isAnnouncement ? "fa-bullhorn" : "fa-tasks"}`}></i>
+                <i
+                  className={`fas ${cw.isAnnouncement ? "fa-bullhorn" : "fa-tasks"}`}
+                ></i>
               </div>
               <div className="pd-reminder-body">
                 <h4>
@@ -773,7 +771,7 @@ function ParentAttendanceChart({ child, monthId }) {
   );
 }
 
-function ParentClassworkChart({ child, monthId }) {
+function ParentClassworkChart({ child, monthId, schoolYear }) {
   const [loading, setLoading] = useState(true);
   const [perSubject, setPerSubject] = useState([]);
 
@@ -784,8 +782,6 @@ function ParentClassworkChart({ child, monthId }) {
       setLoading(false);
       return;
     }
-    // Wait for the active school year label to resolve before querying
-    // (see ParentReminderPanel above for why).
     if (!schoolYear) return;
 
     let cancelled = false;

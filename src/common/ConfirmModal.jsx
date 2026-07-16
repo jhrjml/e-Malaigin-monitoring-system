@@ -5,7 +5,7 @@
 //   open          – boolean, controls visibility
 //   title         – string, header text  (optional, defaults to nothing)
 //   titleIcon     – FontAwesome class string e.g. "fa-trash" (optional)
-//   titleColor    – CSS color for the icon  (optional, defaults to --primary)
+//   titleColor    – CSS color for the icon  (optional, defaults to #a65f81)
 //   message       – string or JSX, body text
 //   confirmText   – string (default "OK")
 //   cancelText    – string (default "Cancel")
@@ -39,7 +39,7 @@ function ConfirmModal({
       }}
     >
       <div className="cm-box">
-        {/* Header */}
+        {/* Header - Now perfectly centered */}
         {title && (
           <div className="cm-header">
             {titleIcon && (
@@ -56,12 +56,10 @@ function ConfirmModal({
           </div>
         )}
 
-        {/* Body */}
-        <p className={`cm-message ${title ? "cm-message--left" : ""}`}>
-          {message}
-        </p>
+        {/* Body Text */}
+        <p className="cm-message">{message}</p>
 
-        {/* Buttons */}
+        {/* Buttons - Now stretching evenly across the bottom */}
         <div className="cm-buttons">
           {onCancel && (
             <button

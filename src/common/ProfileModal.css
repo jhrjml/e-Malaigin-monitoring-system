@@ -1,262 +1,280 @@
+/* ProfileModal.css */
+
 .pm-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px); /* Modern frosted glass effect */
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 9999;
+  animation: pm-fade-in 0.2s ease;
+}
+
+@keyframes pm-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .pm-box {
-  background: #fff;
-  border-radius: 14px;
-  padding: 28px 28px 24px;
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 35px 32px 30px;
   width: 90%;
-  max-width: 400px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  max-width: 420px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
   align-items: center;
-  animation: pm-pop 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* Smooth, bouncy entrance animation */
+  animation: pm-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 @keyframes pm-pop {
   from {
+    transform: translateY(20px) scale(0.95);
     opacity: 0;
-    transform: scale(0.92) translateY(10px);
   }
   to {
+    transform: translateY(0) scale(1);
     opacity: 1;
-    transform: scale(1) translateY(0);
   }
 }
 
-/* Header */
+/* ── Avatar & Header ────────────────────────────────────────────────────── */
+.pm-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  /* Soft pastel background based on your primary color */
+  background: color-mix(in srgb, #a65f81 15%, transparent);
+  color: #a65f81;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  margin-bottom: 16px;
+}
+
 .pm-header {
   text-align: center;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 
 .pm-displayname {
-  font-size: 1.2rem;
+  font-size: 1.35rem;
   font-weight: 700;
-  color: black;
+  color: #1a1a2e;
   margin-bottom: 4px;
+  letter-spacing: -0.3px;
 }
 
 .pm-role {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: #a65f81;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1.2px;
+  letter-spacing: 1.5px;
 }
 
 .pm-divider {
   width: 100%;
   height: 1px;
-  background: #f0f0f0;
-  margin: 16px 0;
+  background: #eef1f6;
+  margin: 20px 0;
 }
 
 .pm-loading {
   color: #a65f81;
-  font-size: 0.9rem;
-  padding: 10px 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 20px 0;
 }
 
-/* Feedback */
-.pm-error {
+/* ── Feedback Messages ──────────────────────────────────────────────────── */
+.pm-error,
+.pm-success {
   width: 100%;
-  background: rgba(231, 76, 60, 0.08);
-  border: 1px solid rgba(231, 76, 60, 0.3);
-  color: #e74c3c;
-  border-radius: 8px;
-  padding: 9px 12px;
+  border-radius: 12px;
+  padding: 12px 16px;
   font-size: 0.85rem;
-  margin-bottom: 14px;
+  margin-bottom: 20px;
   text-align: center;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.pm-error {
+  background: rgba(231, 76, 60, 0.1);
+  border: 1px solid rgba(231, 76, 60, 0.2);
+  color: #c0392b;
 }
 
 .pm-success {
-  width: 100%;
-  background: rgba(46, 204, 113, 0.08);
-  border: 1px solid rgba(46, 204, 113, 0.3);
+  background: rgba(46, 204, 113, 0.1);
+  border: 1px solid rgba(46, 204, 113, 0.2);
   color: #27ae60;
-  border-radius: 8px;
-  padding: 9px 12px;
-  font-size: 0.85rem;
-  margin-bottom: 14px;
-  text-align: center;
 }
 
-/* Fields */
+/* ── Form Fields ────────────────────────────────────────────────────────── */
 .pm-field {
   width: 100%;
-  margin-bottom: 14px;
+  margin-bottom: 18px;
+  text-align: left;
 }
 
 .pm-field label {
   display: block;
   font-size: 0.85rem;
-  font-weight: 400; /* lighter */
-  color: #aaa; /* gray, not uppercase */
-  text-transform: none; /* remove caps */
-  letter-spacing: 0;
-  margin-bottom: 4px;
+  font-weight: 600;
+  color: #5c6a79;
+  margin-bottom: 8px;
 }
 
 .pm-required {
   color: #e74c3c;
 }
-
 .pm-optional {
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  color: #bbb;
+  color: #95a5a6;
+  font-weight: 500;
   font-size: 0.75rem;
 }
 
-/* Plain text display */
-.pm-text {
+/* Read-Only text display container */
+.pm-text-box {
+  background: #f8f9fa;
+  border: 1px solid #eef1f6;
+  border-radius: 12px;
+  padding: 12px 16px;
   font-size: 1rem;
-  font-weight: 700;
-  color: black;
+  font-weight: 600;
+  color: #1a1a2e;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 2px 0;
-}
-
-.pm-toggle-inline {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #aaa;
-  font-size: 1rem;
-  display: flex;
-  align-items: center;
-  padding: 0;
-  transition: color 0.2s;
-}
-
-.pm-toggle-inline:hover {
-  color: #a65f81;
+  justify-content: space-between;
 }
 
 /* Editable input */
 .pm-field input {
   width: 100%;
-  border: 1.5px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 10px 12px;
+  border: 1.5px solid #dde1e7;
+  border-radius: 12px;
+  padding: 12px 16px;
   font-size: 0.95rem;
-  color: black;
+  color: #1a1a2e;
   outline: none;
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
+  transition: all 0.2s ease;
   background: #fff;
 }
 
 .pm-field input:focus {
   border-color: #a65f81;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.12);
+  box-shadow: 0 0 0 4px rgba(166, 95, 129, 0.15);
 }
 
 /* Password row */
 .pm-pwd-row {
   position: relative;
 }
-
 .pm-pwd-row input {
   padding-right: 60px;
 }
 
 .pm-toggle {
   position: absolute;
-  right: 10px;
+  right: 14px;
   top: 50%;
   transform: translateY(-50%);
   background: none;
   border: none;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: #95a5a6;
   cursor: pointer;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 0;
-}
-
-/* For the view-mode password toggle (not inside .pm-pwd-row) */
-.pm-pwd-display .pm-toggle {
-  position: static;
-  transform: none;
-  flex-shrink: 0;
+  transition: color 0.2s;
 }
 
 .pm-toggle:hover {
   color: #a65f81;
 }
 
-/* Action buttons */
+/* Override for the view-mode password toggle (inside pm-text-box) */
+.pm-text-box .pm-toggle {
+  position: static;
+  transform: none;
+}
+
+/* ── Action Buttons ─────────────────────────────────────────────────────── */
 .pm-actions {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 .pm-btn {
-  flex: 1;
-  padding: 10px;
+  flex: 1; /* Stretch buttons evenly */
+  padding: 13px 20px;
   border: none;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 600;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
   cursor: pointer;
-  transition:
-    opacity 0.2s,
-    transform 0.15s;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
-.pm-btn:hover:not(:disabled) {
-  opacity: 0.88;
-  transform: translateY(-1px);
+.pm-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
-
 .pm-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
 .pm-edit {
   background: #a65f81;
   color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+  box-shadow: 0 4px 12px rgba(166, 95, 129, 0.25);
+}
+.pm-edit:hover:not(:disabled) {
+  background: #8f4d6d;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(166, 95, 129, 0.35);
 }
 
 .pm-save {
   background: #2ecc71;
   color: #fff;
+  box-shadow: 0 4px 12px rgba(46, 204, 113, 0.25);
+}
+.pm-save:hover:not(:disabled) {
+  background: #27ae60;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(46, 204, 113, 0.35);
 }
 
 .pm-cancel,
 .pm-close {
-  background: #ecf0f1;
-  color: black;
+  background: #f4f6f8;
+  color: #5c6a79;
 }
-
-.pm-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  width: 100%;
-  margin-bottom: 4px;
+.pm-cancel:hover:not(:disabled),
+.pm-close:hover:not(:disabled) {
+  background: #e2e6ea;
+  color: #1a1a2e;
 }

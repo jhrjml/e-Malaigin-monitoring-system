@@ -22,6 +22,7 @@ import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./TeacherDashboard.css";
 import "../Layout.css";
 import ProfileModal from "../common/ProfileModal";
+import ConfirmModal from "../common/ConfirmModal";
 import AttendanceMonitoring from "./AttendanceMonitoring";
 import ClassworkReminding from "./ClassworkReminding";
 import StudentMasterlist from "./StudentMasterlist";
@@ -74,7 +75,7 @@ async function getTeacherCombos(teacherId) {
   return [...map.values()];
 }
 
-function TeacherHomepage() {
+function TeacherDashboard() {
   const navigateTo = useNavigate();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -311,27 +312,18 @@ function TeacherHomepage() {
         </div>
       </main>
 
-      {logoutOpen && (
-        <div className="modal-overlay-teacher">
-          <div className="modal-teacher logout-modal-teacher">
-            <div className="modal-header-teacher">
-              <h2>Confirm Logout</h2>
-            </div>
-            <p>Are you sure you want to logout?</p>
-            <div className="modal-buttons-teacher">
-              <button
-                className="btn-cancel"
-                onClick={() => setLogoutOpen(false)}
-              >
-                Cancel
-              </button>
-              <button className="btn-confirm" onClick={handleLogout}>
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── UNIFORM LOGOUT MODAL ── */}
+      <ConfirmModal
+        open={logoutOpen}
+        title="Confirm Logout"
+        titleIcon="fa-sign-out-alt"
+        titleColor="#a65f81"
+        message="Are you sure you want to log out of the teacher portal?"
+        confirmText="Logout"
+        confirmColor="primary"
+        onConfirm={handleLogout}
+        onCancel={() => setLogoutOpen(false)}
+      />
 
       <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
     </div>
@@ -386,7 +378,9 @@ function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
         const items = classworkLists.flat();
 
         // Sorted cleanly by real creation time descriptors (createdAt)
-        items.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+        items.sort((a, b) =>
+          (b.createdAt || "").localeCompare(a.createdAt || ""),
+        );
 
         if (!cancelled) {
           setReminders(items);
@@ -404,19 +398,28 @@ function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
     };
   }, [teacherId]);
 
-  // Isolate the single absolute most recently created posting entry 
+  // Isolate the single absolute most recently created posting entry
   const latestPost = useMemo(() => reminders[0] || null, [reminders]);
 
   return (
     <div className="th-dashboard-flow-container">
       {/* Prominent Floating Latest Update Banner */}
       {!loading && latestPost && (
-        <div className="th-latest-post-alert-banner" onClick={() => onOpenReminder(latestPost)}>
+        <div
+          className="th-latest-post-alert-banner"
+          onClick={() => onOpenReminder(latestPost)}
+        >
           <div className="th-latest-banner-badge">LATEST POST</div>
           <div className="th-latest-banner-body">
-            <i className={`fas ${latestPost.isAnnouncement ? "fa-bullhorn" : "fa-tasks"} th-latest-banner-icon`}></i>
+            <i
+              className={`fas ${latestPost.isAnnouncement ? "fa-bullhorn" : "fa-tasks"} th-latest-banner-icon`}
+            ></i>
             <div className="th-latest-banner-text">
-              <strong>Grade {latestPost.grade} - {latestPost.section} ({latestPost.subject})</strong>: {latestPost.title} — <span>{latestPost.desc}</span>
+              <strong>
+                Grade {latestPost.grade} - {latestPost.section} (
+                {latestPost.subject})
+              </strong>
+              : {latestPost.title} — <span>{latestPost.desc}</span>
             </div>
           </div>
           <i className="fas fa-chevron-right th-latest-banner-arrow"></i>
@@ -424,7 +427,11 @@ function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
       )}
 
       <div className="th-overview-grid">
-        <ReminderPanel reminders={reminders} loading={loading} onOpenReminder={onOpenReminder} />
+        <ReminderPanel
+          reminders={reminders}
+          loading={loading}
+          onOpenReminder={onOpenReminder}
+        />
 
         <div className="th-charts-col">
           <div className="th-filter-row">
@@ -883,4 +890,4 @@ function ClassworkChart({ teacherId, monthId }) {
   );
 }
 
-export default TeacherHomepage;
+export default TeacherDashboard;

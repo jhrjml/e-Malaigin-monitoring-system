@@ -598,7 +598,9 @@
   color: #ccc;
   font-size: 0.85rem;
   margin-left: 14px;
-  transition: color 0.15s, transform 0.15s;
+  transition:
+    color 0.15s,
+    transform 0.15s;
 }
 
 .pd-latest-post-alert-banner:hover .pd-latest-banner-arrow {

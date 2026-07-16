@@ -42,58 +42,74 @@ const LoginPage = () => {
 
   return (
     <div className="lp-root">
-      {/* LEFT SIDE PANEL CONTAINER */}
-      <div className="lp-wrap">
-        <div className="lp-card">
-          {/* Brand Header */}
-          <div className="lp-brand">
-            <div className="lp-brand-logo">
-              <img
-                src="/logo.jpg"
-                alt="School Logo"
-                className="lp-brand-logo-img"
-              />
-              <div className="lp-brand-text">
-                <span>e-Malaigin</span>
-              </div>
+      {/* Defines the beautiful organic "S" curve shape for the image */}
+      <svg style={{ width: 0, height: 0, position: "absolute" }}>
+        <clipPath id="blob-shape" clipPathUnits="objectBoundingBox">
+          <path d="M 0,0 L 0.85,0 C 1,0.35 0.7,0.65 0.85,1 L 0,1 Z" />
+        </clipPath>
+      </svg>
+
+      {/* LEFT SIDE: Image Background with Blob Cutout */}
+      <div className="lp-left-panel">
+        <div className="lp-left-overlay"></div>
+
+        <div className="lp-left-content">
+          <div className="lp-school-info">
+            <h1>Malaig Elementary School</h1>
+            <p>School Management System</p>
+          </div>
+        </div>
+      </div>
+
+      {/* RIGHT SIDE: Pastel Pink Background with Form */}
+      <div className="lp-right-panel">
+        {/* Decorative fluid/organic blobs for the background */}
+        <div className="lp-blob lp-blob-1"></div>
+        <div className="lp-blob lp-blob-2"></div>
+        <div className="lp-blob lp-blob-3"></div>
+        <div className="lp-blob lp-blob-4"></div>
+
+        <div className="lp-form-box">
+          {/* New Focused Brand Header */}
+          <div className="lp-brand-right">
+            <img src="/logo.jpg" alt="School Logo" />
+            <div className="lp-brand-text-right">
+              <h1>e-Malaigin</h1>
             </div>
           </div>
 
-          {/* Title Header Block Grouped Together */}
-          <div className="lp-card-title">Welcome Back</div>
-          <div className="lp-brand-sub">Please enter your details</div>
-
-          <form onSubmit={handleLogin} noValidate>
-            {error && <div className="lp-error">{error}</div>}
+          <form className="lp-form" onSubmit={handleLogin} noValidate>
+            {error && (
+              <div className="lp-error">
+                <i className="fas fa-exclamation-circle"></i> {error}
+              </div>
+            )}
 
             {/* Username Field */}
-            <div className="lp-field">
+            <div className="lp-form-group">
               <label htmlFor="lp-username">Username</label>
-              <div className="lp-input-row">
+              <div className="lp-input-wrap">
                 <input
                   id="lp-username"
                   type="text"
-                  placeholder="Enter username"
+                  placeholder="Enter your username"
                   autoComplete="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   disabled={loading}
                 />
-                <span className="lp-input-icon">
-                  <i className="bx bx-user" />
-                </span>
               </div>
             </div>
 
             {/* Password Field */}
-            <div className="lp-field">
+            <div className="lp-form-group">
               <label htmlFor="lp-password">Password</label>
-              <div className="lp-input-row">
+              <div className="lp-input-wrap">
                 <input
                   id="lp-password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="Enter password"
+                  placeholder="Enter your password"
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -112,10 +128,10 @@ const LoginPage = () => {
             </div>
 
             {/* Pill Action Button */}
-            <button type="submit" className="lp-btn" disabled={loading}>
+            <button type="submit" className="lp-submit-btn" disabled={loading}>
               {loading ? (
                 <>
-                  SIGNING IN...
+                  Authenticating...
                   <span className="lp-spinner" />
                 </>
               ) : (
@@ -123,17 +139,11 @@ const LoginPage = () => {
               )}
             </button>
           </form>
-          {/* 👇 MOVED HERE: Directly underneath the closing form tag */}
-          <div className="lp-copyright">
-            {/* &copy; 2026 e-Malaigin. All Rights Reserved.*/}
+
+          <p className="lp-help-text">
             Need help? Ask the administrative staff for your account.
-          </div>
+          </p>
         </div>
-      </div>
-      {/* RIGHT SIDE HERO TEXT */}
-      <div className="lp-right-hero">
-        <h1 className="lp-hero-title">Malaig Elementary School</h1>
-        <p className="lp-hero-subtitle">School Management Portal</p>
       </div>
     </div>
   );
