@@ -1,13 +1,3 @@
-// ManageStudents.jsx  (Firebase version — custom modals + batch import + Action ID Downloader)
-// OFFLINE-SAFE VERSION:
-//  - Single add/edit no longer awaits the network write before closing
-//    the modal. Firestore's persistentLocalCache queues the write and
-//    syncs it automatically when back online.
-//  - Bulk import no longer awaits each row sequentially (that hung
-//    forever offline on the very first row). All rows are fired at once,
-//    the import UI closes immediately with an optimistic result, and the
-//    list is reconciled quietly in the background once writes resolve.
-//  - useSubmitGuard prevents a fast double-click from creating duplicates.
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import QRCode from "react-qr-code";
@@ -24,9 +14,9 @@ import ConfirmModal from "../common/ConfirmModal";
 import Toast from "../common/Toast";
 import { useToast } from "../common/useToast.js";
 import useSubmitGuard from "../common/useSubmitGuard";
-import useNetworkStatus from "../common/useNetworkStatus"; // adjust path if different
+import useNetworkStatus from "../common/useNetworkStatus";
 import "./ManageStudents.css";
-import "./GenerateQr.css"; // Imports matching ID card dimensions & layout criteria
+import "./GenerateQr.css";
 import "../Layout.css";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 
@@ -39,38 +29,33 @@ function ManageStudents() {
   const [editingStudent, setEditingStudent] = useState(null);
   const [error, setError] = useState("");
 
-  // ── Global Search State ──────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState("");
 
-  // ── Sorting State Containers ──────────────────────────────────────────────
-  const [sortField, setSortField] = useState("lrn"); // Options: "lrn" or "name"
-  const [sortOrder, setSortOrder] = useState("asc");   // 'asc' = A-Z/lowest, 'desc' = Z-A/highest
+  const [sortField, setSortField] = useState("lrn");
+  const [sortOrder, setSortOrder] = useState("asc");
 
-  // ── Direct ID Card Automation Target State ────────────────────────────────
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [viewingStudent, setViewingStudent] = useState(null);
+
   const [idTargetStudent, setIdTargetStudent] = useState(null);
   const [downloadingId, setDownloadingId] = useState(false);
 
-  // ── toast / network ──────────────────────────────────────────────────────
   const { toast, showToast } = useToast();
   const { isOnline } = useNetworkStatus();
 
-  // ── submit guards (separate locks for each action) ─────────────────────
   const guardSubmit = useSubmitGuard();
   const guardImport = useSubmitGuard();
 
-  // ── add menu dropdown ───────────────────────────────────────────────────
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // ── import state ────────────────────────────────────────────────────────
   const [importRows, setImportRows] = useState([]);
   const [importErrors, setImportErrors] = useState([]);
   const [importLoading, setImportLoading] = useState(false);
   const [importDone, setImportDone] = useState({ success: 0, failed: 0 });
   const [importFinished, setImportFinished] = useState(false);
 
-  // ── confirm modal state ─────────────────────────────────────────────────
   const [confirm, setConfirm] = useState({
     open: false,
     title: "",
@@ -88,6 +73,7 @@ function ManageStudents() {
     firstName: "",
     middleName: "",
     lastName: "",
+    gender: "",
     dob: "",
     age: "",
     contact: "",
@@ -95,14 +81,12 @@ function ManageStudents() {
     address: "",
   });
 
-  // Fetch ALL students on mount to support instant global dashboard filtering
   useEffect(() => {
     getStudents()
       .then(setStudents)
       .catch((err) => console.error("Error fetching students:", err));
   }, []);
 
-  // Close add menu on outside click
   useEffect(() => {
     const handler = (e) => {
       if (addMenuRef.current && !addMenuRef.current.contains(e.target))
@@ -112,11 +96,14 @@ function ManageStudents() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── INTERCEPT SIDEBAR NAVIGATION CLICKS TO RESET DESTINATION CONTEXT ──
   useEffect(() => {
     const handleSidebarClick = (e) => {
-      const target = e.target.closest("a, button, div, li, span");
-      if (target && target.textContent && target.textContent.includes("Manage Students")) {
+      const target = e.target.closest(".menu li");
+      if (
+        target &&
+        target.textContent &&
+        target.textContent.includes("Manage Students")
+      ) {
         setView("grades");
         setSelectedGrade(null);
         setSearchQuery("");
@@ -126,7 +113,6 @@ function ManageStudents() {
     return () => document.removeEventListener("mousedown", handleSidebarClick);
   }, []);
 
-  // ── ID CARD ENGINE INTERCEPT EFFECT TRIGGER ────────────────────────────────
   useEffect(() => {
     if (!idTargetStudent) return;
 
@@ -162,15 +148,29 @@ function ManageStudents() {
         const totalContentHeight = CARD_HEIGHT_IN * 2 + GAP_IN;
         const marginTop = (PAGE_HEIGHT_IN - totalContentHeight) / 2;
 
-        pdf.addImage(frontPng, "PNG", marginX, marginTop, CARD_WIDTH_IN, CARD_HEIGHT_IN);
-        pdf.addImage(backPng, "PNG", marginX, marginTop + CARD_HEIGHT_IN + GAP_IN, CARD_WIDTH_IN, CARD_HEIGHT_IN);
+        pdf.addImage(
+          frontPng,
+          "PNG",
+          marginX,
+          marginTop,
+          CARD_WIDTH_IN,
+          CARD_HEIGHT_IN,
+        );
+        pdf.addImage(
+          backPng,
+          "PNG",
+          marginX,
+          marginTop + CARD_HEIGHT_IN + GAP_IN,
+          CARD_WIDTH_IN,
+          CARD_HEIGHT_IN,
+        );
 
         const fullName = `${idTargetStudent.lastName}, ${idTargetStudent.firstName}${idTargetStudent.middleName ? " " + idTargetStudent.middleName : ""}`;
         const safeName = fullName
           .replace(/,/g, "")
           .replace(/\s+/g, "_")
           .replace(/[^a-zA-Z0-9_]/g, "");
-        
+
         pdf.save(`${safeName}_Grade${idTargetStudent.grade}_ID.pdf`);
 
         await markQrGenerated(idTargetStudent.lrn);
@@ -215,7 +215,6 @@ function ManageStudents() {
     }
   };
 
-  // ── ADD / EDIT (offline-safe) ───────────────────────────────────────────
   const handleSubmit = (e) => {
     e.preventDefault();
     setError("");
@@ -224,12 +223,13 @@ function ManageStudents() {
 
   const doSubmit = () => {
     const wasEditing = editingStudent;
-    
+
     const payload = {
       lrn: String(formData.lrn),
       firstName: formData.firstName,
       middleName: formData.middleName || "",
       lastName: formData.lastName,
+      gender: formData.gender || "",
       dob: formData.dob,
       age: parseInt(formData.age, 10),
       contact: formData.contact,
@@ -245,6 +245,7 @@ function ManageStudents() {
       firstName: "",
       middleName: "",
       lastName: "",
+      gender: "",
       dob: "",
       age: "",
       contact: "",
@@ -315,20 +316,25 @@ function ManageStudents() {
     setEditingStudent(student);
     setError("");
     setFormData({
-      lrn: student.lrn,
-      firstName: student.firstName,
-      middleName: student.middleName,
-      lastName: student.lastName,
-      dob: student.dob,
-      age: student.age,
-      contact: student.contact,
-      guardian: student.guardian,
-      address: student.address,
+      lrn: student.lrn || "",
+      firstName: student.firstName || "",
+      middleName: student.middleName || "",
+      lastName: student.lastName || "",
+      gender: student.gender || "",
+      dob: student.dob || "",
+      age: student.age || "",
+      contact: student.contact || "",
+      guardian: student.guardian || "",
+      address: student.address || "",
     });
     setModalOpen(true);
   };
 
-  // ── BATCH IMPORT ────────────────────────────────────────────────────────
+  const handleViewProfile = (student) => {
+    setViewingStudent(student);
+    setViewModalOpen(true);
+  };
+
   const downloadTemplate = () => {
     const headers = [
       [
@@ -336,6 +342,7 @@ function ManageStudents() {
         "First Name",
         "Middle Name",
         "Last Name",
+        "Gender (Male/Female)",
         "Date of Birth (YYYY-MM-DD)",
         "Contact (11 digits — format cell as Text)",
         "Guardian",
@@ -348,14 +355,27 @@ function ManageStudents() {
       { wch: 16 },
       { wch: 16 },
       { wch: 16 },
+      { wch: 18 },
       { wch: 26 },
       { wch: 30 },
       { wch: 20 },
       { wch: 28 },
     ];
+
+    if (!ws["!dataValidation"]) ws["!dataValidation"] = [];
+    ws["!dataValidation"].push({
+      sqref: "E2:E200",
+      type: "list",
+      formula1: '"Male,Female"',
+      showDropDown: false,
+      showErrorMessage: true,
+      errorTitle: "Invalid Gender",
+      error: "Please select Male or Female.",
+    });
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Students");
-    XLSX.writeFile(wb, `Grade${selectedGrade}_Students_Template.xlsx`);
+    XLSX.writeFile(wb, `Grade${selectedGrade || "All"}_Students_Template.xlsx`);
   };
 
   const handleFileChange = (e) => {
@@ -382,21 +402,36 @@ function ManageStudents() {
           const firstName = String(r[1] || "").trim();
           const middleName = String(r[2] || "").trim();
           const lastName = String(r[3] || "").trim();
+          const genderRaw = String(r[4] || "").trim();
+
+          let gender = "";
+          if (
+            genderRaw.toLowerCase() === "male" ||
+            genderRaw.toLowerCase() === "m"
+          )
+            gender = "Male";
+          else if (
+            genderRaw.toLowerCase() === "female" ||
+            genderRaw.toLowerCase() === "f"
+          )
+            gender = "Female";
+
           let dob = "";
-          if (r[4] instanceof Date) dob = r[4].toISOString().split("T")[0];
-          else dob = String(r[4] || "").trim();
-          const contact = String(r[5] || "")
+          if (r[5] instanceof Date) dob = r[5].toISOString().split("T")[0];
+          else dob = String(r[5] || "").trim();
+          const contact = String(r[6] || "")
             .replace(/\D/g, "")
             .padStart(11, "0")
             .slice(0, 11);
-          const guardian = String(r[6] || "").trim();
-          const address = String(r[7] || "").trim();
+          const guardian = String(r[7] || "").trim();
+          const address = String(r[8] || "").trim();
           const age = dob ? calculateAge(dob) : "";
 
           const errs = [];
           if (!/^\d{12}$/.test(lrn)) errs.push("LRN must be 12 digits");
           if (!firstName) errs.push("First name required");
           if (!lastName) errs.push("Last name required");
+          if (!gender) errs.push("Valid gender required (Male/Female)");
           if (!dob || isNaN(new Date(dob))) errs.push("Invalid date of birth");
           if (!/^\d{11}$/.test(contact)) errs.push("Contact must be 11 digits");
           if (!guardian) errs.push("Guardian required");
@@ -408,6 +443,7 @@ function ManageStudents() {
             firstName,
             middleName,
             lastName,
+            gender,
             dob,
             age,
             contact,
@@ -462,6 +498,7 @@ function ManageStudents() {
         firstName: row.firstName,
         middleName: row.middleName,
         lastName: row.lastName,
+        gender: row.gender,
         dob: row.dob,
         age: parseInt(row.age, 10),
         contact: row.contact,
@@ -482,6 +519,7 @@ function ManageStudents() {
         firstName: row.firstName,
         middleName: row.middleName,
         lastName: row.lastName,
+        gender: row.gender,
         dob: row.dob,
         age: row.age,
         contact: row.contact,
@@ -507,7 +545,7 @@ function ManageStudents() {
       setStudents((prev) => {
         let next = [...prev];
         settled.forEach((s) => {
-          const outcome = s.value; 
+          const outcome = s.value;
           if (!outcome) return;
           if (outcome.ok) {
             next = next.map((st) =>
@@ -532,6 +570,15 @@ function ManageStudents() {
     });
   };
 
+  const closeImportModal = () => {
+    setImportModalOpen(false);
+    setImportRows([]);
+    setImportErrors([]);
+    setImportFinished(false);
+    setImportDone({ success: 0, failed: 0 });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const handleSortToggle = (field) => {
     if (sortField === field) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -553,24 +600,26 @@ function ManageStudents() {
       if (sortField === "name") {
         const nameA = `${a.lastName || ""} ${a.firstName || ""}`.toLowerCase();
         const nameB = `${b.lastName || ""} ${b.firstName || ""}`.toLowerCase();
-        return sortOrder === "asc" ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+        return sortOrder === "asc"
+          ? nameA.localeCompare(nameB)
+          : nameB.localeCompare(nameA);
       }
       return 0;
     });
   };
 
-  // ── LIVE FILTER ENGINE ──
   const isSearching = searchQuery.trim().length > 0;
 
   const globalFilteredStudents = students.filter((s) => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return true;
-    const fullName = `${s.lastName} ${s.firstName} ${s.middleName || ""}`.toLowerCase();
+    const fullName =
+      `${s.lastName} ${s.firstName} ${s.middleName || ""}`.toLowerCase();
     return fullName.includes(q) || String(s.lrn).includes(q);
   });
 
   const activeGradeStudents = students.filter(
-    (s) => s.grade === parseInt(selectedGrade, 10)
+    (s) => s.grade === parseInt(selectedGrade, 10),
   );
 
   const sortedGlobalStudents = processSortingPipeline(globalFilteredStudents);
@@ -604,19 +653,17 @@ function ManageStudents() {
                 Grade Level Masterlist
               </h2>
               <p style={{ color: "#000", fontSize: "0.9rem" }}>
-                Select a grade level to view registered students or use global lookup.
+                Select a grade level to view registered students
               </p>
             </div>
 
-            {/* ── ALIGNED ACTION WRAPPER GROUP ── */}
             <div className="ms-toolbar-actions">
-              {/* ── GLOBAL SEARCH BOX INPUT ── */}
               <div className="ms-global-search-container">
                 <i className="fas fa-search ms-global-search-icon"></i>
                 <input
                   type="text"
                   className="ms-global-search-input"
-                  placeholder="Global search name or LRN..."
+                  placeholder="Search name or LRN..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -625,105 +672,59 @@ function ManageStudents() {
                     className="ms-global-search-clear"
                     onClick={() => setSearchQuery("")}
                   >
-                    &times;
+                    <i className="fas fa-times"></i>
                   </button>
                 )}
               </div>
 
-              <button
-                className="btn-import-ms"
-                onClick={() => {
-                  const headers = [
-                    [
-                      "LRN",
-                      "First Name",
-                      "Middle Name",
-                      "Last Name",
-                      "Date of Birth (YYYY-MM-DD)",
-                      "Contact (11 digits — format cell as Text)",
-                      "Guardian",
-                      "Address",
-                    ],
-                  ];
-                  const ws = XLSX.utils.aoa_to_sheet(headers);
-                  ws["!cols"] = [
-                    { wch: 14 },
-                    { wch: 16 },
-                    { wch: 16 },
-                    { wch: 16 },
-                    { wch: 26 },
-                    { wch: 30 },
-                    { wch: 20 },
-                    { wch: 28 },
-                  ];
-                  const wb = XLSX.utils.book_new();
-                  XLSX.utils.book_append_sheet(wb, ws, "Students");
-                  XLSX.writeFile(wb, "Students_Template.xlsx");
-                }}
-              >
+              <button className="btn-import-ms" onClick={downloadTemplate}>
                 <i className="fas fa-download"></i> Download Template
               </button>
             </div>
           </div>
 
-          <div className="pretty-table-container">
+          <div>
             {!isSearching ? (
-              /* DEFAULT TRACK VIEW: SHOW LEVEL ROWS (FULLY CLICKABLE) */
-              <table className="pretty-table">
-                <thead>
-                  <tr>
-                    <th>Grade Level</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[1, 2, 3, 4, 5, 6].map((grade) => (
-                    <tr 
-                      key={grade} 
-                      onClick={() => openGrade(grade)} 
-                      style={{ cursor: "pointer" }}
-                    >
-                      <td>
-                        <div className={`grade-badge grade-${grade}`}>
-                          Grade {grade}
-                        </div>
-                      </td>
-                      <td>
-                        <span className="status-pill active">Active</span>
-                      </td>
-                      <td>
-                        <button
-                          className="btn-view-ms"
-                          onClick={(e) => {
-                            e.stopPropagation(); // Stops parent tr activation loop clash
-                            openGrade(grade);
-                          }}
-                        >
-                          View Students <i className="fas fa-arrow-right"></i>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="ms-grade-grid">
+                {[1, 2, 3, 4, 5, 6].map((grade) => (
+                  <div
+                    key={grade}
+                    className="grade-card"
+                    onClick={() => openGrade(grade)}
+                  >
+                    <div className={`icon-circle grade-${grade}`}>{grade}</div>
+                    <h3>Grade Level {grade}</h3>
+                    <div className="grade-right"></div>
+                  </div>
+                ))}
+              </div>
             ) : (
-              /* SEARCH VIEW: SHOW GLOBAL RESULTS TABLE */
               <div className="table-container" style={{ marginTop: "0px" }}>
                 <table className="data-table-ms">
                   <thead>
                     <tr>
-                      <th onClick={() => handleSortToggle("lrn")} className="sortable-table-header">
+                      <th
+                        onClick={() => handleSortToggle("lrn")}
+                        className="sortable-table-header"
+                      >
                         LRN
-                        <i className={`fas ${sortField === "lrn" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
-                        <span className="mt-sort-hint-label">(sort)</span>
+                        <i
+                          className={`fas ${sortField === "lrn" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                        ></i>
+                        <span className="mt-sort-hint-label"></span>
                       </th>
-                      <th onClick={() => handleSortToggle("name")} className="sortable-table-header">
+                      <th
+                        onClick={() => handleSortToggle("name")}
+                        className="sortable-table-header"
+                      >
                         Name
-                        <i className={`fas ${sortField === "name" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
-                        <span className="mt-sort-hint-label">(sort)</span>
+                        <i
+                          className={`fas ${sortField === "name" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                        ></i>
+                        <span className="mt-sort-hint-label"></span>
                       </th>
                       <th>Grade Level</th>
+                      <th>Gender</th>
                       <th>Age</th>
                       <th>Contact</th>
                       <th>Action</th>
@@ -733,10 +734,11 @@ function ManageStudents() {
                     {sortedGlobalStudents.length === 0 ? (
                       <tr>
                         <td
-                          colSpan="6"
+                          colSpan="7"
                           style={{ textAlign: "center", padding: "20px" }}
                         >
-                          No cross-grade matching students found for "{searchQuery}".
+                          No cross-grade matching students found for "
+                          {searchQuery}".
                         </td>
                       </tr>
                     ) : (
@@ -746,8 +748,8 @@ function ManageStudents() {
                           <td>
                             <button
                               className="student-clickable-name-link"
-                              onClick={() => handleEdit(s)}
-                              title="Click to view/edit student record profile details"
+                              onClick={() => handleViewProfile(s)}
+                              title="Click to view student profile details"
                             >
                               {s.lastName}, {s.firstName}
                               {s.middleName
@@ -756,10 +758,17 @@ function ManageStudents() {
                             </button>
                           </td>
                           <td>
-                            <span className={`grade-badge grade-${s.grade}`} style={{ padding: "4px 10px", fontSize: "0.75rem" }}>
+                            <span
+                              className={`grade-badge grade-${s.grade}`}
+                              style={{
+                                padding: "4px 10px",
+                                fontSize: "0.75rem",
+                              }}
+                            >
                               Grade {s.grade}
                             </span>
                           </td>
+                          <td>{s.gender || "—"}</td>
                           <td>{s.age}</td>
                           <td>{s.contact}</td>
                           <td>
@@ -769,11 +778,18 @@ function ManageStudents() {
                               title="Download Student ID Card"
                               disabled={downloadingId}
                             >
-                              <i className={downloadingId && idTargetStudent?.id === s.id ? "fas fa-spinner fa-spin" : "fas fa-id-card"}></i>
+                              <i
+                                className={
+                                  downloadingId && idTargetStudent?.id === s.id
+                                    ? "fas fa-spinner fa-spin"
+                                    : "fas fa-id-card"
+                                }
+                              ></i>
                             </button>
                             <button
                               className="btn-edit-student"
                               onClick={() => handleEdit(s)}
+                              title="Edit Student"
                             >
                               <i className="fas fa-edit"></i>
                             </button>
@@ -835,6 +851,7 @@ function ManageStudents() {
                           firstName: "",
                           middleName: "",
                           lastName: "",
+                          gender: "",
                           dob: "",
                           age: "",
                           contact: "",
@@ -874,16 +891,27 @@ function ManageStudents() {
             <table className="data-table-ms">
               <thead>
                 <tr>
-                  <th onClick={() => handleSortToggle("lrn")} className="sortable-table-header">
+                  <th
+                    onClick={() => handleSortToggle("lrn")}
+                    className="sortable-table-header"
+                  >
                     LRN
-                    <i className={`fas ${sortField === "lrn" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
-                    <span className="mt-sort-hint-label">(sort)</span>
+                    <i
+                      className={`fas ${sortField === "lrn" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                    ></i>
+                    <span className="mt-sort-hint-label"></span>
                   </th>
-                  <th onClick={() => handleSortToggle("name")} className="sortable-table-header">
+                  <th
+                    onClick={() => handleSortToggle("name")}
+                    className="sortable-table-header"
+                  >
                     Name
-                    <i className={`fas ${sortField === "name" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
-                    <span className="mt-sort-hint-label">(sort)</span>
+                    <i
+                      className={`fas ${sortField === "name" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                    ></i>
+                    <span className="mt-sort-hint-label"></span>
                   </th>
+                  <th>Gender</th>
                   <th>Age</th>
                   <th>Contact</th>
                   <th>Action</th>
@@ -893,7 +921,7 @@ function ManageStudents() {
                 {sortedGradeStudents.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="5"
+                      colSpan="6"
                       style={{ textAlign: "center", padding: "20px" }}
                     >
                       No students registered inside Grade {selectedGrade} yet.
@@ -906,7 +934,7 @@ function ManageStudents() {
                       <td>
                         <button
                           className="student-clickable-name-link"
-                          onClick={() => handleEdit(s)}
+                          onClick={() => handleViewProfile(s)}
                           title="Click to view student profile details"
                         >
                           {s.lastName}, {s.firstName}
@@ -915,6 +943,7 @@ function ManageStudents() {
                             : ""}
                         </button>
                       </td>
+                      <td>{s.gender || "—"}</td>
                       <td>{s.age}</td>
                       <td>{s.contact}</td>
                       <td>
@@ -924,11 +953,18 @@ function ManageStudents() {
                           title="Download Student ID Card"
                           disabled={downloadingId}
                         >
-                          <i className={downloadingId && idTargetStudent?.id === s.id ? "fas fa-spinner fa-spin" : "fas fa-id-card"}></i>
+                          <i
+                            className={
+                              downloadingId && idTargetStudent?.id === s.id
+                                ? "fas fa-spinner fa-spin"
+                                : "fas fa-id-card"
+                            }
+                          ></i>
                         </button>
                         <button
                           className="btn-edit-student"
                           onClick={() => handleEdit(s)}
+                          title="Edit Student"
                         >
                           <i className="fas fa-edit"></i>
                         </button>
@@ -949,55 +985,230 @@ function ManageStudents() {
         </div>
       )}
 
-      {/* ── PROFILE MAINTENANCE DATA SHEET MODAL ── */}
-      {modalOpen && (
+      {viewModalOpen && viewingStudent && (
         <div
-          className="modal-overlay"
-          style={{ display: "flex", zIndex: 9999 }}
+          className="ms-modal-overlay"
+          onClick={() => setViewModalOpen(false)}
         >
-          <div className="modal-content-student add-student-modal">
+          <div
+            className="ms-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
               <h3>
+                <div className="modal-header-icon">
+                  <i className="fas fa-address-card"></i>
+                </div>
+                Student Information
+              </h3>
+              <button
+                className="close-modal"
+                onClick={() => setViewModalOpen(false)}
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="student-info-top">
+                <div className="student-name-block">
+                  <h2 className="student-name">
+                    {viewingStudent.lastName}, {viewingStudent.firstName}{" "}
+                    {viewingStudent.middleName}
+                  </h2>
+                  <span className="student-grade-pill">
+                    Grade {viewingStudent.grade}
+                    {viewingStudent.enrolledSection
+                      ? ` - Section ${viewingStudent.enrolledSection}`
+                      : viewingStudent.section
+                        ? ` - Section ${viewingStudent.section}`
+                        : ""}
+                  </span>
+                </div>
+              </div>
+
+              <hr className="student-info-divider" />
+
+              <div className="ms-grid">
+                <div className="ms-field-group">
+                  <label className="ms-field-label">First name</label>
+                  <div className="ms-view-box">{viewingStudent.firstName}</div>
+                </div>
+                <div className="ms-field-group">
+                  <label className="ms-field-label">Middle name</label>
+                  <div className="ms-view-box">
+                    {viewingStudent.middleName || "—"}
+                  </div>
+                </div>
+                <div className="ms-field-group">
+                  <label className="ms-field-label">Last name</label>
+                  <div className="ms-view-box">{viewingStudent.lastName}</div>
+                </div>
+
+                <div className="ms-field-group">
+                  <label className="ms-field-label">
+                    Learner Reference No.
+                  </label>
+                  <div className="ms-view-box lrn-highlight">
+                    {viewingStudent.lrn}
+                  </div>
+                </div>
+                <div className="ms-field-group">
+                  <label className="ms-field-label">Date of birth</label>
+                  <div className="ms-view-box">{viewingStudent.dob}</div>
+                </div>
+                <div className="ms-field-group">
+                  <label className="ms-field-label">Age</label>
+                  <div className="ms-view-box">
+                    {viewingStudent.age} years old
+                  </div>
+                </div>
+
+                {viewingStudent.gender && (
+                  <div className="ms-field-group">
+                    <label className="ms-field-label">Gender</label>
+                    <div className="ms-view-box">{viewingStudent.gender}</div>
+                  </div>
+                )}
+                <div className="ms-field-group">
+                  <label className="ms-field-label">Contact number</label>
+                  <div className="ms-view-box">{viewingStudent.contact}</div>
+                </div>
+                <div className="ms-field-group">
+                  <label className="ms-field-label">Parent / Guardian</label>
+                  <div className="ms-view-box">{viewingStudent.guardian}</div>
+                </div>
+
+                <div className="ms-field-group ms-grid-span-3">
+                  <label className="ms-field-label">Complete address</label>
+                  <div className="ms-view-box">{viewingStudent.address}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer-ms">
+              {/* <button
+                className="btn-cancel"
+                onClick={() => setViewModalOpen(false)}
+              >
+                Close
+              </button> */}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ADD/EDIT PROFILE MODAL ── */}
+      {modalOpen && (
+        <div
+          className="ms-modal-overlay"
+          onClick={() => {
+            setModalOpen(false);
+            setError("");
+          }}
+        >
+          <div
+            className="ms-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>
+                <div className="modal-header-icon">
+                  <i
+                    className={
+                      editingStudent ? "fas fa-user-edit" : "fas fa-user-plus"
+                    }
+                  ></i>
+                </div>
                 {editingStudent
                   ? "Edit Student Profile"
                   : "Add Student Profile"}
               </h3>
-              <div
+              <button
                 className="close-modal"
                 onClick={() => {
                   setModalOpen(false);
                   setError("");
                 }}
               >
-                &times;
-              </div>
+                <i className="fas fa-times"></i>
+              </button>
             </div>
+
             <div className="modal-body">
               {error && (
                 <div
                   style={{
-                    color: "red",
+                    color: "#c0392b",
                     fontSize: "0.85rem",
-                    marginBottom: "10px",
-                    background: "#fff0f0",
-                    padding: "8px",
-                    borderRadius: "6px",
+                    marginBottom: "15px",
+                    background: "rgba(231, 76, 60, 0.1)",
+                    padding: "10px 14px",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(231, 76, 60, 0.2)",
                   }}
                 >
-                  ⚠ {error}
+                  <i
+                    className="fas fa-exclamation-circle"
+                    style={{ marginRight: "6px" }}
+                  ></i>{" "}
+                  {error}
                 </div>
               )}
+
               <form
-                className="grid-form"
+                className="ms-grid"
                 onSubmit={handleSubmit}
                 id="studentForm"
               >
-                <div className="form-group span-3">
-                  <label>
+                <div className="ms-field-group">
+                  <label className="ms-field-label">First name:</label>
+                  <input
+                    className="ms-input"
+                    type="text"
+                    name="firstName"
+                    value={formData.firstName}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+                <div className="ms-field-group">
+                  <label className="ms-field-label">Middle name:</label>
+                  <input
+                    className="ms-input"
+                    type="text"
+                    name="middleName"
+                    value={formData.middleName}
+                    onChange={handleChange}
+                  />
+                </div>
+                <div className="ms-field-group">
+                  <label className="ms-field-label">Last name:</label>
+                  <input
+                    className="ms-input"
+                    type="text"
+                    name="lastName"
+                    value={formData.lastName}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="ms-field-group">
+                  <label className="ms-field-label">
                     LRN{" "}
-                    <small style={{ color: "#888" }}>(12-digit number)</small>
+                    <span
+                      style={{
+                        textTransform: "none",
+                        letterSpacing: "normal",
+                        fontWeight: "500",
+                      }}
+                    >
+                      (12 digits)
+                    </span>
                   </label>
                   <input
+                    className="ms-input lrn-highlight"
                     type="text"
                     name="lrn"
                     value={formData.lrn}
@@ -1009,42 +1220,13 @@ function ManageStudents() {
                     }}
                     pattern="\d{12}"
                     maxLength={12}
-                    placeholder="Enter 12-digit LRN"
                     required
                   />
                 </div>
-                <div className="form-group">
-                  <label>First Name</label>
+                <div className="ms-field-group">
+                  <label className="ms-field-label">Date of birth:</label>
                   <input
-                    type="text"
-                    name="firstName"
-                    value={formData.firstName}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Middle Name</label>
-                  <input
-                    type="text"
-                    name="middleName"
-                    value={formData.middleName}
-                    onChange={handleChange}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Last Name</label>
-                  <input
-                    type="text"
-                    name="lastName"
-                    value={formData.lastName}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Date of Birth</label>
-                  <input
+                    className="ms-input"
                     type="date"
                     name="dob"
                     value={formData.dob}
@@ -1052,15 +1234,45 @@ function ManageStudents() {
                     required
                   />
                 </div>
-                <div className="form-group">
-                  <label>Age</label>
-                  <input type="number" value={formData.age} readOnly />
+                <div className="ms-field-group">
+                  <label className="ms-field-label">Age:</label>
+                  <input
+                    className="ms-input"
+                    type="number"
+                    value={formData.age}
+                    readOnly
+                  />
                 </div>
-                <div className="form-group">
-                  <label>
-                    Contact <small style={{ color: "#888" }}>(11 digits)</small>
+
+                <div className="ms-field-group">
+                  <label className="ms-field-label">Gender:</label>
+                  <select
+                    className="ms-input"
+                    name="gender"
+                    value={formData.gender}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="">-- Select --</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+                <div className="ms-field-group">
+                  <label className="ms-field-label">
+                    Contact{" "}
+                    <span
+                      style={{
+                        textTransform: "none",
+                        letterSpacing: "normal",
+                        fontWeight: "500",
+                      }}
+                    >
+                      (11 digits)
+                    </span>
                   </label>
                   <input
+                    className="ms-input"
                     type="text"
                     name="contact"
                     value={formData.contact}
@@ -1072,13 +1284,15 @@ function ManageStudents() {
                     }}
                     pattern="\d{11}"
                     maxLength={11}
-                    placeholder="e.g. 09xxxxxxxxx"
                     required
                   />
                 </div>
-                <div className="form-group span-3">
-                  <label>Parent/Guardian</label>
+                <div className="ms-field-group">
+                  <label className="ms-field-label">
+                    Parent / Guardian name:
+                  </label>
                   <input
+                    className="ms-input"
                     type="text"
                     name="guardian"
                     value={formData.guardian}
@@ -1086,9 +1300,11 @@ function ManageStudents() {
                     required
                   />
                 </div>
-                <div className="form-group span-3">
-                  <label>Address</label>
+
+                <div className="ms-field-group ms-grid-span-3">
+                  <label className="ms-field-label">Complete address:</label>
                   <input
+                    className="ms-input"
                     type="text"
                     name="address"
                     value={formData.address}
@@ -1097,20 +1313,21 @@ function ManageStudents() {
                   />
                 </div>
               </form>
-              <div className="modal-footer-ms">
-                <button
-                  className="btn-cancel"
-                  onClick={() => {
-                    setModalOpen(false);
-                    setError("");
-                  }}
-                >
-                  Cancel
-                </button>
-                <button className="btn-save" type="submit" form="studentForm">
-                  {editingStudent ? "Update Profile" : "Save Profile"}
-                </button>
-              </div>
+            </div>
+
+            <div className="modal-footer-ms">
+              {/* <button
+                className="btn-cancel"
+                onClick={() => {
+                  setModalOpen(false);
+                  setError("");
+                }}
+              >
+                Cancel
+              </button> */}
+              <button className="btn-save" type="submit" form="studentForm">
+                {editingStudent ? "Update Profile" : "Save Profile"}
+              </button>
             </div>
           </div>
         </div>
@@ -1118,25 +1335,22 @@ function ManageStudents() {
 
       {/* ── IMPORT PREVIEW MODAL ── */}
       {importModalOpen && (
-        <div
-          className="modal-overlay"
-          style={{ display: "flex", zIndex: 9999 }}
-        >
+        <div className="ms-modal-overlay" onClick={closeImportModal}>
           <div
-            className="modal-content-student add-student-modal"
-            style={{ maxWidth: "780px", width: "95%" }}
+            className="ms-modal-content"
+            style={{ maxWidth: "850px", width: "95%" }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-header">
               <h3>
-                <i
-                  className="fas fa-file-import"
-                  style={{ marginRight: "8px" }}
-                ></i>
+                <div className="modal-header-icon">
+                  <i className="fas fa-file-import"></i>
+                </div>
                 Import Students — Grade {selectedGrade}
               </h3>
-              <span className="close-modal" onClick={closeImportModal}>
-                &times;
-              </span>
+              <button className="close-modal" onClick={closeImportModal}>
+                <i className="fas fa-times"></i>
+              </button>
             </div>
 
             <div className="modal-body">
@@ -1154,7 +1368,7 @@ function ManageStudents() {
                     style={{
                       display: "flex",
                       gap: "12px",
-                      marginBottom: "10px",
+                      marginBottom: "15px",
                       flexWrap: "wrap",
                     }}
                   >
@@ -1171,13 +1385,15 @@ function ManageStudents() {
                   <div
                     style={{
                       overflowX: "auto",
-                      maxHeight: "300px",
+                      maxHeight: "350px",
                       overflowY: "auto",
+                      borderRadius: "12px",
+                      border: "1px solid #eef1f6",
                     }}
                   >
                     <table
                       className="data-table-ms"
-                      style={{ fontSize: "0.8rem" }}
+                      style={{ fontSize: "0.8rem", margin: 0 }}
                     >
                       <thead>
                         <tr>
@@ -1185,6 +1401,7 @@ function ManageStudents() {
                           <th>LRN</th>
                           <th>First Name</th>
                           <th>Last Name</th>
+                          <th>Gender</th>
                           <th>DOB</th>
                           <th>Contact</th>
                           <th>Guardian</th>
@@ -1196,20 +1413,24 @@ function ManageStudents() {
                           <tr
                             key={r.row}
                             style={{
-                              background: r.errs.length > 0 ? "#fff5f5" : "",
+                              background:
+                                r.errs.length > 0
+                                  ? "rgba(231, 76, 60, 0.05)"
+                                  : "",
                             }}
                           >
                             <td>{r.row}</td>
                             <td>{r.lrn}</td>
                             <td>{r.firstName}</td>
                             <td>{r.lastName}</td>
+                            <td>{r.gender}</td>
                             <td>{r.dob}</td>
                             <td>{r.contact}</td>
                             <td>{r.guardian}</td>
                             <td>
                               {r.errs.length === 0 ? (
                                 <span
-                                  style={{ color: "#27ae60", fontWeight: 600 }}
+                                  style={{ color: "#27ae60", fontWeight: 700 }}
                                 >
                                   ✓ OK
                                 </span>
@@ -1218,6 +1439,7 @@ function ManageStudents() {
                                   style={{
                                     color: "#e74c3c",
                                     fontSize: "0.75rem",
+                                    fontWeight: 600,
                                   }}
                                 >
                                   {r.errs.join(", ")}
@@ -1276,9 +1498,16 @@ function ManageStudents() {
 
       {/* ── BACKGROUND AUTOMATION TEMPLATE CANVAS NODES ── */}
       {idTargetStudent && (
-        <div style={{ position: "absolute", left: "-9999px", top: "-9999px", zIndex: -1 }}>
+        <div
+          style={{
+            position: "absolute",
+            left: "-9999px",
+            top: "-9999px",
+            zIndex: -1,
+          }}
+        >
           {/* FRONT */}
-          <div id="student-row-id-front" className="id-card">
+          <div id="student-action-id-front" className="id-card">
             <div className="id-card-topbar">
               <img src="/logo.jpg" alt="School Logo" className="id-card-logo" />
               <div className="id-card-titles">
@@ -1297,7 +1526,9 @@ function ManageStudents() {
                 </div>
                 <div className="id-info-row">
                   <label>Birthdate</label>
-                  <span>{idTargetStudent.birthdate || idTargetStudent.dob || "—"}</span>
+                  <span>
+                    {idTargetStudent.birthdate || idTargetStudent.dob || "—"}
+                  </span>
                 </div>
                 <div className="id-info-row">
                   <label>LRN</label>
@@ -1308,7 +1539,7 @@ function ManageStudents() {
           </div>
 
           {/* BACK */}
-          <div id="student-row-id-back" className="id-card">
+          <div id="student-action-id-back" className="id-card">
             <div className="id-card-topbar small">
               <img src="/logo.jpg" alt="School Logo" className="id-card-logo" />
               <span className="id-card-school">MALAIG ELEMENTARY SCHOOL</span>
@@ -1322,7 +1553,11 @@ function ManageStudents() {
                 </div>
                 <div className="id-info-row">
                   <label>Contact No.</label>
-                  <span>{idTargetStudent.guardianContact || idTargetStudent.contact || "—"}</span>
+                  <span>
+                    {idTargetStudent.guardianContact ||
+                      idTargetStudent.contact ||
+                      "—"}
+                  </span>
                 </div>
                 <div className="id-info-row">
                   <label>Address</label>

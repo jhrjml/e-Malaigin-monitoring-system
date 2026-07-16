@@ -184,18 +184,20 @@
   background: #d6dae0;
 }
 
-/* ── Self-contained confirm modal ──────────────────────────────────────────── */
-.archive-modal-overlay {
+/* ── Modern Modal (Matching image_d78d43.png design) ──────────────────────── */
+.archive-modern-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9998;
-  animation: overlay-in 0.18s ease-out;
+  animation: archive-fade-in 0.2s ease;
 }
-@keyframes overlay-in {
+
+@keyframes archive-fade-in {
   from {
     opacity: 0;
   }
@@ -204,97 +206,155 @@
   }
 }
 
-.archive-modal {
-  background: #fff;
-  border-radius: 12px;
-  padding: 28px 32px;
-  width: 420px;
-  max-width: 90vw;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-  animation: modal-in 0.2s ease-out;
+.archive-modern-content {
+  background: #ffffff;
+  width: 480px;
+  max-width: 95vw;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+  animation: archive-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
 }
-@keyframes modal-in {
+
+@keyframes archive-pop {
   from {
+    transform: translateY(20px) scale(0.95);
     opacity: 0;
-    transform: translateY(-16px) scale(0.97);
   }
   to {
-    opacity: 1;
     transform: translateY(0) scale(1);
+    opacity: 1;
   }
 }
 
-.archive-modal-header {
+.archive-modern-header {
+  background: #ffffff;
+  padding: 24px 30px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #f0f2f5;
+  flex-shrink: 0;
+}
+
+.archive-modern-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1a1a2e;
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 12px;
 }
-.archive-modal-header i {
-  color: #2ecc71;
+
+.archive-modern-header-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 1.1rem;
 }
-.archive-modal-header h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  color: black;
+
+.archive-modern-close {
+  background: #f4f6f8;
+  color: #95a5a6;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.archive-modern-close:hover {
+  background: #e74c3c;
+  color: white;
+}
+
+.archive-modern-body {
+  padding: 24px 30px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.archive-modern-footer {
+  padding: 16px 30px 24px;
+  border-top: 1px solid #f0f2f5;
+  display: flex;
+  gap: 12px;
+  background: #ffffff;
+  flex-shrink: 0;
 }
 
 .archive-modal-message {
-  color: #555;
-  font-size: 0.9rem;
+  color: #5c6a79;
+  font-size: 0.95rem;
   line-height: 1.6;
-  margin: 0 0 24px;
+  margin: 0 0 20px;
 }
 
-.archive-modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
-.archive-modal-cancel {
-  padding: 9px 20px;
-  border: 1.5px solid #dde1e7;
-  border-radius: 7px;
-  background: #fff;
-  color: #555;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.archive-modal-cancel:hover:not(:disabled) {
-  border-color: #aaa;
-  background: #f5f5f5;
-}
-.archive-modal-cancel:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.archive-modal-confirm {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 20px;
+/* Secondary Button matching the "Close" style in image */
+.archive-btn-cancel {
+  flex: 1;
+  background: #f8f9fa;
+  color: #5c6a79;
   border: none;
-  border-radius: 7px;
-  background: #2ecc71;
-  color: #fff;
-  font-size: 0.875rem;
-  font-weight: 600;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.2s ease;
 }
-.archive-modal-confirm:hover:not(:disabled) {
-  background: #27ae60;
+
+.archive-btn-cancel:hover:not(:disabled) {
+  background: #eef1f6;
+  color: #1a1a2e;
 }
-.archive-modal-confirm:disabled {
+
+.archive-btn-cancel:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
+/* Primary Button using exact a65f81 color */
+.archive-btn-confirm {
+  flex: 1;
+  background: #a65f81;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.archive-btn-confirm:hover:not(:disabled) {
+  background: #8f4d6d;
+  transform: translateY(-1px);
+}
+
+.archive-btn-confirm:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── States ────────────────────────────────────────────────────────────────── */
 .archive-loading,
 .archive-empty {
   display: flex;
@@ -371,7 +431,7 @@
   flex-shrink: 0;
 }
 .archive-avatar.student {
-  background: #8e44ad;
+  background: #a65f81;
 }
 .archive-avatar.teacher {
   background: #16a085;
@@ -402,8 +462,8 @@
   white-space: nowrap;
 }
 .archive-grade-badge {
-  background: #eaf4fb;
-  color: #2980b9;
+  background: #fcf4f8;
+  color: #a65f81;
   padding: 3px 10px;
   border-radius: 20px;
   font-size: 0.78rem;
@@ -460,9 +520,9 @@
   align-items: center;
   gap: 6px;
   padding: 7px 14px;
-  background: #eafaf1;
-  color: #1e8449;
-  border: 1.5px solid #a9dfbf;
+  background: #fcf4f8;
+  color: #a65f81;
+  border: 1.5px solid #eecbdc;
   border-radius: 7px;
   font-size: 0.8rem;
   font-weight: 600;
@@ -471,9 +531,9 @@
   white-space: nowrap;
 }
 .archive-unarchive-btn:hover {
-  background: #2ecc71;
+  background: #a65f81;
   color: #fff;
-  border-color: #2ecc71;
+  border-color: #a65f81;
 }
 
 @media (max-width: 768px) {
@@ -486,16 +546,12 @@
   }
 }
 
-/* ── Grade Picker Modal ──────────────────────────────────────────────────────── */
-.archive-grade-modal {
-  width: 460px;
-}
-
+/* ── Grade Picker Specifics ────────────────────────────────────────────────── */
 .archive-grade-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin: 0 0 16px;
+  gap: 12px;
+  margin: 0 0 20px;
 }
 
 .archive-grade-option {
@@ -504,24 +560,24 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 14px 10px;
-  border: 2px solid #dde1e7;
-  border-radius: 10px;
-  background: #fff;
+  padding: 16px 10px;
+  border: 1.5px solid #eef1f6;
+  border-radius: 12px;
+  background: #fdfdfd;
   cursor: pointer;
   transition: all 0.17s;
   position: relative;
 }
 
 .archive-grade-option:hover {
-  border-color: #8e44ad;
-  background: #f9f0ff;
+  border-color: #a65f81;
+  background: #fcf4f8;
 }
 
 .archive-grade-option.selected {
-  border-color: #8e44ad;
-  background: #f3e5ff;
-  box-shadow: 0 0 0 3px rgba(142, 68, 173, 0.15);
+  border-color: #a65f81;
+  background: #fcf4f8;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #a65f81 15%, transparent);
 }
 
 .archive-grade-option.original {
@@ -529,17 +585,17 @@
 }
 
 .archive-grade-option.original.selected {
-  border-color: #8e44ad;
+  border-color: #a65f81;
 }
 
 .archive-grade-num {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  color: black;
+  color: #1a1a2e;
 }
 
 .archive-grade-option.selected .archive-grade-num {
-  color: #6c2fa0;
+  color: #a65f81;
 }
 
 .archive-grade-tag {
@@ -547,38 +603,31 @@
   font-weight: 700;
   color: #7f8c8d;
   background: #eef0f2;
-  padding: 1px 7px;
+  padding: 2px 8px;
   border-radius: 20px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
 
 .archive-grade-option.selected .archive-grade-tag {
-  background: #e0c8f8;
-  color: #6c2fa0;
+  background: color-mix(in srgb, #a65f81 15%, transparent);
+  color: #a65f81;
 }
 
 .archive-grade-confirm-hint {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 0.82rem;
-  color: #6c2fa0;
-  background: #f3e5ff;
-  border: 1px solid #d7b3f5;
-  border-radius: 7px;
-  padding: 8px 12px;
-  margin: 0 0 20px;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #a65f81;
+  background: #fcf4f8;
+  border: 1px solid color-mix(in srgb, #a65f81 25%, transparent);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 0 0 10px;
 }
 
 .archive-grade-confirm-hint i {
   flex-shrink: 0;
-  color: #8e44ad;
-}
-
-/* Disable the Continue button until a grade is selected */
-.archive-modal-confirm:disabled {
-  background: #bdc3c7;
-  cursor: not-allowed;
-  opacity: 1;
+  color: #a65f81;
 }

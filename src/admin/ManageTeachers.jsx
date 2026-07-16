@@ -1,6 +1,3 @@
-// ManageTeachers.jsx  (Firebase version — custom modals + batch import)
-// OFFLINE-SAFE VERSION — see ManageStudents.jsx header comment for the
-// full explanation of the pattern used here.
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import {
@@ -15,7 +12,7 @@ import ConfirmModal from "../common/ConfirmModal";
 import Toast from "../common/Toast";
 import { useToast } from "../common/useToast.js";
 import useSubmitGuard from "../common/useSubmitGuard";
-import useNetworkStatus from "../common/useNetworkStatus"; // adjust path if different
+import useNetworkStatus from "../common/useNetworkStatus";
 import "./ManageTeachers.css";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 
@@ -34,7 +31,6 @@ const TIME_SLOTS = [
   { value: "17:00-18:00", label: "5:00 PM – 6:00 PM" },
 ];
 
-// ── Advisory options (single source of truth) ─────────────────────────────────
 const ADVISORY_OPTIONS = [
   "Grade 1 - Section A",
   "Grade 1 - Section B",
@@ -53,29 +49,19 @@ const ADVISORY_OPTIONS = [
 const slotLabel = (value) =>
   TIME_SLOTS.find((s) => s.value === value)?.label ?? value ?? "—";
 
-// Normalizes a string for "fuzzy" advisory matching — strips ALL whitespace
-// and lowercases, so "grade1-sectiona", "Grade 1-SectionA", and
-// "Grade 1 - Section A" all resolve to the same canonical option.
 const normalizeForMatch = (s) =>
   String(s || "")
     .toLowerCase()
     .replace(/\s+/g, "");
 
-// Given any raw advisory text, returns the canonically-formatted option from
-// ADVISORY_OPTIONS (matching regardless of case/spacing), or null if it
-// doesn't match any known advisory class.
 const matchAdvisoryOption = (raw) => {
   const norm = normalizeForMatch(raw);
   if (!norm) return null;
   return ADVISORY_OPTIONS.find((o) => normalizeForMatch(o) === norm) || null;
 };
 
-// ── Gender options (single source of truth) ───────────────────────────────
 const GENDER_OPTIONS = ["Male", "Female"];
 
-// Matches raw gender text ("M", "m", "male", "Female", "f", ...) to the
-// canonical "Male" / "Female" label used everywhere else. Returns null if
-// the text doesn't resolve to either.
 const matchGenderOption = (raw) => {
   const norm = String(raw || "")
     .trim()
@@ -86,17 +72,6 @@ const matchGenderOption = (raw) => {
   return null;
 };
 
-function SortIcon({ active, direction }) {
-  if (!active) {
-    return <i className="fas fa-sort mt-sort-icon"></i>;
-  }
-  return direction === "asc" ? (
-    <i className="fas fa-sort-up mt-sort-icon mt-sort-icon--active"></i>
-  ) : (
-    <i className="fas fa-sort-down mt-sort-icon mt-sort-icon--active"></i>
-  );
-}
-
 function ManageTeachers() {
   const [modalOpen, setModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -106,24 +81,25 @@ function ManageTeachers() {
   const [error, setError] = useState(null);
   const [formError, setFormError] = useState("");
 
-  // ── Sorting State Containers ──────────────────────────────────────────────
-  const [sortField, setSortField] = useState("empId"); 
-  const [sortOrder, setSortOrder] = useState("asc");   
+  const [sortField, setSortField] = useState("empId");
+  const [sortOrder, setSortOrder] = useState("asc");
 
-  // ── toast / network ──────────────────────────────────────────────────────
+  const [teacherSearch, setTeacherSearch] = useState("");
+  const [scheduleSortConfig, setScheduleSortConfig] = useState({
+    key: "time",
+    direction: "asc",
+  });
+
   const { toast, showToast } = useToast();
   const { isOnline } = useNetworkStatus();
 
-  // ── submit guards ────────────────────────────────────────────────────────
   const guardSubmit = useSubmitGuard();
   const guardImport = useSubmitGuard();
 
-  // ── add menu dropdown ───────────────────────────────────────────────────
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // ── import state ────────────────────────────────────────────────────────
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importRows, setImportRows] = useState([]);
   const [importErrors, setImportErrors] = useState([]);
@@ -131,7 +107,10 @@ function ManageTeachers() {
   const [importDone, setImportDone] = useState({ success: 0, failed: 0 });
   const [importFinished, setImportFinished] = useState(false);
 
-  // View schedule modal
+  // Separate states for Profile View vs Schedule View
+  const [viewProfileOpen, setViewProfileOpen] = useState(false);
+  const [viewingProfile, setViewingProfile] = useState(null);
+
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [viewTeacher, setViewTeacher] = useState(null);
   const [teacherSchedules, setTeacherSchedules] = useState([]);
@@ -165,7 +144,6 @@ function ManageTeachers() {
     fetchTeachers();
   }, []);
 
-  // Close add menu on outside click
   useEffect(() => {
     const handler = (e) => {
       if (addMenuRef.current && !addMenuRef.current.contains(e.target))
@@ -188,18 +166,26 @@ function ManageTeachers() {
     }
   };
 
-  // ── Auto-generate Employee ID ─────────────────────────────────────────
   const generateEmpId = (teacherList) => {
     const year = new Date().getFullYear();
-    const nextNum = (teacherList.length + 1).toString().padStart(3, "0");
+    let maxNum = 0;
+
+    teacherList.forEach((t) => {
+      if (t.empId) {
+        const parts = t.empId.split("-");
+        if (parts.length === 3) {
+          const num = parseInt(parts[2], 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      }
+    });
+
+    const nextNum = (maxNum + 1).toString().padStart(3, "0");
     return `T-${year}-${nextNum}`;
   };
 
-  // ── Advisory classes already assigned to another teacher ────────────────
-  // Used to disable those options in the Add/Edit dropdown so an advisory
-  // that's already taken can't be picked again. When editing, the teacher's
-  // own current advisory is excluded from this "taken" set so it stays
-  // selectable for them.
   const takenAdvisories = new Set(
     teachers
       .filter((t) => t.id !== editId)
@@ -238,7 +224,6 @@ function ManageTeachers() {
     setForm({ ...form, [name]: value });
   };
 
-  // ── ADD / EDIT (offline-safe) ───────────────────────────────────────────
   const handleSubmit = (e) => {
     e.preventDefault();
     setFormError("");
@@ -257,8 +242,6 @@ function ManageTeachers() {
       mname: form.mname || "",
       lname: form.lname,
       gender: form.gender || "",
-      // Explicitly "" clears the advisory back to Subject Teacher — this is
-      // a real, intentional value, not something to skip/omit.
       advisory: form.advisory || "",
       contact: form.contact,
       email: form.email || "",
@@ -273,10 +256,6 @@ function ManageTeachers() {
         : `${form.fname} ${form.lname} saved offline — will sync when back online.`,
     );
 
-    // Optimistically reflect the edit in the table right away (including
-    // clearing the advisory to Subject Teacher) instead of waiting for the
-    // network round-trip — this is what makes the change to "Subject
-    // Teacher" (or any other change) visibly stick immediately.
     if (wasEditing) {
       setTeachers((prev) =>
         prev.map((t) => (t.id === editingId ? { ...t, ...payload } : t)),
@@ -290,8 +269,7 @@ function ManageTeachers() {
     savePromise
       .then(() => fetchTeachers())
       .catch((err) => {
-        // Roll back the optimistic change since the save didn't go through.
-        if (wasEditing) setTeachers(previousTeachers);
+        if (wasEditing) fetchTeachers();
         showToast(
           `Failed to save ${form.fname} ${form.lname}: ${err.message}`,
           true,
@@ -300,12 +278,6 @@ function ManageTeachers() {
   };
 
   const editTeacher_ = (t) => {
-    // If the stored advisory doesn't exactly match a dropdown option (e.g.
-    // it was saved with different casing/spacing before the import
-    // normalization fix), resolve it to the canonical option so it shows up
-    // correctly selected instead of silently falling back to "Subject
-    // Teacher" in the dropdown. Falls back to the raw value if it truly
-    // doesn't match anything, so no data is lost.
     const resolvedAdvisory = t.advisory
       ? matchAdvisoryOption(t.advisory) || t.advisory
       : "";
@@ -360,6 +332,13 @@ function ManageTeachers() {
     });
   };
 
+  // Opens the read-only Teacher Information Modal
+  const handleViewProfile = (t) => {
+    setViewingProfile(t);
+    setViewProfileOpen(true);
+  };
+
+  // Opens the Teacher Schedule Modal
   const viewTeacher_ = async (t) => {
     setViewTeacher(t);
     setTeacherSchedules([]);
@@ -377,8 +356,6 @@ function ManageTeachers() {
       setScheduleLoading(false);
     }
   };
-
-  // ── BATCH IMPORT ─────────────────────────────────────────────────────────
 
   const downloadTemplate = () => {
     const wb = XLSX.utils.book_new();
@@ -416,7 +393,6 @@ function ManageTeachers() {
 
     if (!ws["!dataValidation"]) ws["!dataValidation"] = [];
 
-    // ── Data validation: dropdown on column D (Gender) ─────────────────────
     ws["!dataValidation"].push({
       sqref: "D2:D200",
       type: "list",
@@ -431,7 +407,6 @@ function ManageTeachers() {
       prompt: "Select Male or Female.",
     });
 
-    // ── Data validation: dropdown on column E (Advisory Class) ─────────────
     ws["!dataValidation"].push({
       sqref: "E2:E200",
       type: "list",
@@ -470,7 +445,18 @@ function ManageTeachers() {
         const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
         const rows = raw.slice(1).filter((r) => r.some((c) => c !== ""));
 
-        const baseCount = teachers.length;
+        let maxNum = 0;
+        teachers.forEach((t) => {
+          if (t.empId) {
+            const parts = t.empId.split("-");
+            if (parts.length === 3) {
+              const num = parseInt(parts[2], 10);
+              if (!isNaN(num) && num > maxNum) {
+                maxNum = num;
+              }
+            }
+          }
+        });
 
         const takenAdvisoriesInDb = new Set(
           teachers
@@ -478,7 +464,7 @@ function ManageTeachers() {
             .filter(Boolean),
         );
 
-        const advisorySeenInBatch = new Map(); 
+        const advisorySeenInBatch = new Map();
 
         const parsed = rows.map((r, i) => {
           const fname = String(r[0] || "").trim();
@@ -493,7 +479,7 @@ function ManageTeachers() {
           const email = String(r[6] || "").trim();
 
           const year = new Date().getFullYear();
-          const seqNum = (baseCount + i + 1).toString().padStart(3, "0");
+          const seqNum = (maxNum + i + 1).toString().padStart(3, "0");
           const empId = `T-${year}-${seqNum}`;
 
           const errs = [];
@@ -503,23 +489,14 @@ function ManageTeachers() {
           if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
             errs.push("Invalid email");
 
-          if (advisory) {
-            const normAdvisory = advisory.toLowerCase();
-
-            const isValidOption = ADVISORY_OPTIONS.some(
-              (o) => o.toLowerCase() === normAdvisory,
-            );
+          let gender = "";
+          const matchedGender = matchGenderOption(genderRaw);
+          if (genderRaw && !matchedGender) {
+            errs.push(`"${genderRaw}" is not a valid gender`);
           } else {
             gender = matchedGender;
           }
 
-          // ── Advisory normalization + validation ──────────────────────────
-          // Matches regardless of case or missing spaces (e.g.
-          // "grade1-sectiona" or "GRADE 1-SECTION A" both resolve to the
-          // canonical "Grade 1 - Section A"), then stores/displays the
-          // canonical, dropdown-formatted value. A blank cell simply means
-          // "Subject Teacher" — no advisory assigned, which is a valid,
-          // error-free default.
           let advisory = "";
           if (advisoryRaw) {
             const matchedOption = matchAdvisoryOption(advisoryRaw);
@@ -527,7 +504,7 @@ function ManageTeachers() {
             if (!matchedOption) {
               errs.push(`"${advisoryRaw}" is not a valid advisory class`);
             } else {
-              advisory = matchedOption; // canonical formatting
+              advisory = matchedOption;
               const normAdvisory = matchedOption.toLowerCase();
 
               if (takenAdvisoriesInDb.has(normAdvisory)) {
@@ -547,7 +524,6 @@ function ManageTeachers() {
               }
             }
           }
-          // advisory stays "" (Subject Teacher) whenever the cell was left blank.
 
           return {
             row: i + 2,
@@ -665,10 +641,6 @@ function ManageTeachers() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const validCount = importRows.filter((r) => r.errs.length === 0).length;
-  const invalidCount = importRows.filter((r) => r.errs.length > 0).length;
-
-  // ── COLUMN SORTING LOGIC ──
   const handleSortToggle = (field) => {
     if (sortField === field) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -678,7 +650,21 @@ function ManageTeachers() {
     }
   };
 
-  const sortedTeachers = [...teachers].sort((a, b) => {
+  const filteredTeachers = teachers.filter((t) => {
+    if (!teacherSearch) return true;
+
+    const term = teacherSearch.toLowerCase();
+    const fullName =
+      `${t.fname || ""} ${t.mname || ""} ${t.lname || ""}`.toLowerCase();
+    const empId = (t.empId || "").toLowerCase();
+    const advisory = (t.advisory || "").toLowerCase();
+
+    return (
+      fullName.includes(term) || empId.includes(term) || advisory.includes(term)
+    );
+  });
+
+  const sortedTeachers = [...filteredTeachers].sort((a, b) => {
     if (sortField === "empId") {
       const idA = a.empId || "";
       const idB = b.empId || "";
@@ -690,11 +676,45 @@ function ManageTeachers() {
     if (sortField === "name") {
       const nameA = `${a.lname || ""} ${a.fname || ""}`.toLowerCase();
       const nameB = `${b.lname || ""} ${b.fname || ""}`.toLowerCase();
-      return sortOrder === "asc" 
-        ? nameA.localeCompare(nameB) 
+      return sortOrder === "asc"
+        ? nameA.localeCompare(nameB)
         : nameB.localeCompare(nameA);
     }
     return 0;
+  });
+
+  const handleScheduleSort = (key) => {
+    let direction = "asc";
+    if (
+      scheduleSortConfig.key === key &&
+      scheduleSortConfig.direction === "asc"
+    ) {
+      direction = "desc";
+    }
+    setScheduleSortConfig({ key, direction });
+  };
+
+  const visibleSchedules = [...teacherSchedules].sort((a, b) => {
+    const dir = scheduleSortConfig.direction === "asc" ? 1 : -1;
+
+    if (scheduleSortConfig.key === "gradeSection") {
+      const gradeA = parseInt(a.grade, 10) || 0;
+      const gradeB = parseInt(b.grade, 10) || 0;
+      if (gradeA !== gradeB) return (gradeA - gradeB) * dir;
+      const secA = (a.section || "").toLowerCase();
+      const secB = (b.section || "").toLowerCase();
+      return secA.localeCompare(secB) * dir;
+    }
+
+    if (scheduleSortConfig.key === "time") {
+      const timeA = a.timeSlot || a.start || "";
+      const timeB = b.timeSlot || b.start || "";
+      return timeA.localeCompare(timeB) * dir;
+    }
+
+    const valA = String(a[scheduleSortConfig.key] || "").toLowerCase();
+    const valB = String(b[scheduleSortConfig.key] || "").toLowerCase();
+    return valA.localeCompare(valB, undefined, { numeric: true }) * dir;
   });
 
   return (
@@ -718,10 +738,31 @@ function ManageTeachers() {
           <div className="toolbar-mt">
             <div>
               <h2>Teacher Masterlist</h2>
-              <p>Manage school faculty and class advisers.</p>
+              <p>Manage school faculty</p>
             </div>
 
             <div className="teacher-toolbar-actions">
+              <div className="mt-search-input-wrap">
+                <i className="fas fa-search mt-search-icon"></i>
+                <input
+                  type="text"
+                  className="mt-search-input"
+                  placeholder="Search name or ID..."
+                  value={teacherSearch}
+                  onChange={(e) => setTeacherSearch(e.target.value)}
+                />
+
+                {teacherSearch && (
+                  <button
+                    type="button"
+                    className="mt-search-clear"
+                    onClick={() => setTeacherSearch("")}
+                    aria-label="Clear search"
+                  >
+                    <i className="fas fa-times"></i>
+                  </button>
+                )}
+              </div>
               <button className="btn-import-mt" onClick={downloadTemplate}>
                 <i className="fas fa-download"></i> Download Template
               </button>
@@ -782,67 +823,52 @@ function ManageTeachers() {
             <div style={{ color: "red", marginBottom: "1rem" }}>{error}</div>
           )}
 
-          {/* ── search bar (same design as the admin dashboard search) ── */}
-          <div className="mt-search-bar-row">
-            <div className="mt-search-input-wrap">
-              <i className="fas fa-search mt-search-icon"></i>
-              <input
-                type="text"
-                className="mt-search-input"
-                placeholder="Search name, employee ID, advisory, or contact…"
-                value={teacherSearch}
-                onChange={(e) => setTeacherSearch(e.target.value)}
-              />
-              {teacherSearch && (
-                <button
-                  type="button"
-                  className="mt-search-clear"
-                  onClick={() => setTeacherSearch("")}
-                  aria-label="Clear search"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          </div>
-
           <div className="table-container">
             <table className="data-table-mt">
               <thead>
                 <tr>
-                  {/* ── STREAMLINED FIXED SORT LABELS ── */}
-                  <th 
-                    onClick={() => handleSortToggle("empId")} 
+                  <th
+                    onClick={() => handleSortToggle("empId")}
                     className="sortable-table-header"
                   >
                     Employee ID
-                    <i className={`fas ${sortField === "empId" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
-                    <span className="mt-sort-hint-label">(sort)</span>
+                    <i
+                      className={`fas ${sortField === "empId" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                    ></i>
+                    <span className="mt-sort-hint-label"></span>
                   </th>
-                  <th 
-                    onClick={() => handleSortToggle("name")} 
+                  <th
+                    onClick={() => handleSortToggle("name")}
                     className="sortable-table-header"
                   >
                     Teacher Name
-                    <i className={`fas ${sortField === "name" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
-                    <span className="mt-sort-hint-label">(sort)</span>
+                    <i
+                      className={`fas ${sortField === "name" ? (sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                    ></i>
+                    <span className="mt-sort-hint-label"></span>
                   </th>
+                  <th>Gender</th>
                   <th>Advisory Class</th>
-                  <th>Contact No.</th>
-                  <th>Actions</th>
+                  <th style={{ textAlign: "center" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="6" style={{ textAlign: "center" }}>
+                    <td
+                      colSpan="5"
+                      style={{ textAlign: "center", padding: "20px" }}
+                    >
                       Loading...
                     </td>
                   </tr>
                 ) : sortedTeachers.length === 0 ? (
                   <tr>
-                    <td colSpan="6" style={{ textAlign: "center" }}>
-                      {teacherQuery
+                    <td
+                      colSpan="5"
+                      style={{ textAlign: "center", padding: "20px" }}
+                    >
+                      {teacherSearch
                         ? `No teachers found for "${teacherSearch}".`
                         : "No teachers found."}
                     </td>
@@ -852,25 +878,30 @@ function ManageTeachers() {
                     <tr key={t.id}>
                       <td>{t.empId}</td>
                       <td>
-                        <strong>
+                        <button
+                          className="teacher-clickable-name-link"
+                          onClick={() => handleViewProfile(t)}
+                          title="Click to view teacher profile details"
+                        >
                           {t.lname}, {t.fname}
                           {t.mname
                             ? ` ${t.mname.charAt(0).toUpperCase()}.`
                             : ""}
-                        </strong>
+                        </button>
                         <br />
-                        <small>{t.email || "No Email"}</small>
+                        <small style={{ color: "#7f8c8d" }}>
+                          {t.email || "No Email"}
+                        </small>
                       </td>
                       <td>{t.gender || "—"}</td>
                       <td>
                         {t.advisory ? (
                           <strong>{t.advisory} Adviser</strong>
                         ) : (
-                          <span>Subject Teacher</span>
+                          <span style={{ color: "#888" }}>Subject Teacher</span>
                         )}
                       </td>
-                      <td>{t.contact}</td>
-                      <td>
+                      <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
                         <button
                           className="btn-view-teacher"
                           onClick={() => viewTeacher_(t)}
@@ -902,73 +933,225 @@ function ManageTeachers() {
         </div>
       </main>
 
+      {/* ── EXACT READ-ONLY VIEW PROFILE MODAL ── */}
+      {viewProfileOpen && viewingProfile && (
+        <div
+          className="mt-modal-overlay"
+          onClick={() => setViewProfileOpen(false)}
+        >
+          <div
+            className="mt-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>
+                <div className="modal-header-icon">
+                  <i className="fas fa-address-card"></i>
+                </div>
+                Teacher Information
+              </h3>
+              <button
+                className="close-modal"
+                onClick={() => setViewProfileOpen(false)}
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <div className="teacher-info-top">
+                <div className="teacher-name-block">
+                  <h2 className="teacher-name">
+                    {viewingProfile.lname}, {viewingProfile.fname}{" "}
+                    {viewingProfile.mname}
+                  </h2>
+                  {viewingProfile.advisory ? (
+                    <span className="teacher-role-pill">
+                      Adviser: {viewingProfile.advisory}
+                    </span>
+                  ) : (
+                    <span className="teacher-role-pill">Subject Teacher</span>
+                  )}
+                </div>
+              </div>
+
+              <hr className="teacher-info-divider" />
+
+              <div className="mt-grid">
+                <div className="mt-field-group mt-grid-span-2">
+                  <label className="mt-field-label">Employee ID</label>
+                  <div className="mt-view-box emp-highlight">
+                    {viewingProfile.empId}
+                  </div>
+                </div>
+                <div className="mt-field-group">
+                  <label className="mt-field-label">First name</label>
+                  <div className="mt-view-box">{viewingProfile.fname}</div>
+                </div>
+                <div className="mt-field-group">
+                  <label className="mt-field-label">Middle name</label>
+                  <div className="mt-view-box">
+                    {viewingProfile.mname || "—"}
+                  </div>
+                </div>
+                <div className="mt-field-group">
+                  <label className="mt-field-label">Last name</label>
+                  <div className="mt-view-box">{viewingProfile.lname}</div>
+                </div>
+
+                {viewingProfile.gender && (
+                  <div className="mt-field-group">
+                    <label className="mt-field-label">Gender</label>
+                    <div className="mt-view-box">{viewingProfile.gender}</div>
+                  </div>
+                )}
+                <div className="mt-field-group">
+                  <label className="mt-field-label">Advisory Class</label>
+                  <div className="mt-view-box">
+                    {viewingProfile.advisory || "Subject Teacher"}
+                  </div>
+                </div>
+                <div className="mt-field-group">
+                  <label className="mt-field-label">Contact number</label>
+                  <div className="mt-view-box">{viewingProfile.contact}</div>
+                </div>
+
+                <div className="mt-field-group mt-grid-span-3">
+                  <label className="mt-field-label">E-mail address</label>
+                  <div className="mt-view-box">
+                    {viewingProfile.email || "—"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* <div className="modal-footer-mt">
+              <button
+                className="btn-cancel"
+                onClick={() => setViewProfileOpen(false)}
+              >
+                Close
+              </button>
+            </div> */}
+          </div>
+        </div>
+      )}
+
       {/* ── ADD / EDIT MODAL ── */}
       {modalOpen && (
         <div
-          className="modal-overlay"
-          style={{ display: "flex", zIndex: 9999 }}
+          className="mt-modal-overlay"
+          onClick={() => {
+            setModalOpen(false);
+            setFormError("");
+          }}
         >
-          <div className="modal-content-teacher add-teacher-modal">
+          <div
+            className="mt-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
               <h3>
+                <div className="modal-header-icon">
+                  <i
+                    className={
+                      isEditing ? "fas fa-user-edit" : "fas fa-user-plus"
+                    }
+                  ></i>
+                </div>
                 {isEditing ? "Edit Teacher Profile" : "Add Teacher Profile"}
               </h3>
-              <span className="close-modal" onClick={closeModal}>
-                &times;
-              </span>
+              <button className="close-modal" onClick={closeModal}>
+                <i className="fas fa-times"></i>
+              </button>
             </div>
+
             <div className="modal-body">
+              {formError && (
+                <div
+                  style={{
+                    color: "#c0392b",
+                    fontSize: "0.85rem",
+                    marginBottom: "15px",
+                    background: "rgba(231, 76, 60, 0.1)",
+                    padding: "10px 14px",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(231, 76, 60, 0.2)",
+                  }}
+                >
+                  <i
+                    className="fas fa-exclamation-circle"
+                    style={{ marginRight: "6px" }}
+                  ></i>{" "}
+                  {formError}
+                </div>
+              )}
+
               <form
                 id="teacherForm"
-                className="grid-form"
+                className="mt-grid"
                 onSubmit={handleSubmit}
               >
-                <div className="form-group span-3">
-                  <label>
+                <div className="mt-field-group mt-grid-span-3">
+                  <label className="mt-field-label">
                     Employee ID{" "}
                     {!isEditing && (
-                      <small style={{ color: "#a65f81" }}>
+                      <span
+                        style={{
+                          textTransform: "none",
+                          letterSpacing: "normal",
+                          fontWeight: "500",
+                        }}
+                      >
                         (auto-generated)
-                      </small>
+                      </span>
                     )}
                   </label>
-                  <div className="empID-auto">{form.empId}</div>
-                </div>
-                <div className="form-group">
-                  <label>First Name</label>
                   <input
+                    className="mt-input emp-highlight"
+                    type="text"
+                    value={form.empId}
+                    readOnly
+                  />
+                </div>
+
+                <div className="mt-field-group">
+                  <label className="mt-field-label">First Name</label>
+                  <input
+                    className="mt-input"
                     type="text"
                     name="fname"
-                    placeholder="First Name"
                     value={form.fname}
                     onChange={handleChange}
                     required
                   />
                 </div>
-                <div className="form-group">
-                  <label>Middle Name</label>
+                <div className="mt-field-group">
+                  <label className="mt-field-label">Middle Name</label>
                   <input
+                    className="mt-input"
                     type="text"
                     name="mname"
-                    placeholder="Middle Name"
                     value={form.mname}
                     onChange={handleChange}
                   />
                 </div>
-                <div className="form-group">
-                  <label>Last Name</label>
+                <div className="mt-field-group">
+                  <label className="mt-field-label">Last Name</label>
                   <input
+                    className="mt-input"
                     type="text"
                     name="lname"
-                    placeholder="Last Name"
                     value={form.lname}
                     onChange={handleChange}
                     required
                   />
                 </div>
-                <div className="form-group">
-                  <label>Gender</label>
+
+                <div className="mt-field-group">
+                  <label className="mt-field-label">Gender</label>
                   <select
+                    className="mt-input"
                     name="gender"
                     value={form.gender}
                     onChange={handleChange}
@@ -982,9 +1165,10 @@ function ManageTeachers() {
                     ))}
                   </select>
                 </div>
-                <div className="form-group">
-                  <label>Advisory Class</label>
+                <div className="mt-field-group">
+                  <label className="mt-field-label">Advisory Class</label>
                   <select
+                    className="mt-input"
                     name="advisory"
                     value={form.advisory}
                     onChange={handleChange}
@@ -1002,12 +1186,21 @@ function ManageTeachers() {
                     })}
                   </select>
                 </div>
-                <div className="form-group">
-                  <label>
+                <div className="mt-field-group">
+                  <label className="mt-field-label">
                     Contact Number{" "}
-                    <small style={{ color: "#888" }}>(11 digits)</small>
+                    <span
+                      style={{
+                        textTransform: "none",
+                        letterSpacing: "normal",
+                        fontWeight: "500",
+                      }}
+                    >
+                      (11 digits)
+                    </span>
                   </label>
                   <input
+                    className="mt-input"
                     type="text"
                     name="contact"
                     placeholder="e.g. 09123456789"
@@ -1018,9 +1211,10 @@ function ManageTeachers() {
                     required
                   />
                 </div>
-                <div className="form-group span-3">
-                  <label>E-mail Address</label>
+                <div className="mt-field-group mt-grid-span-3">
+                  <label className="mt-field-label">E-mail Address</label>
                   <input
+                    className="mt-input"
                     type="email"
                     name="email"
                     placeholder="e.g. teacher@deped.gov.ph"
@@ -1029,32 +1223,19 @@ function ManageTeachers() {
                   />
                 </div>
               </form>
-              {formError && (
-                <div
-                  style={{
-                    color: "red",
-                    fontSize: "0.85rem",
-                    marginTop: "8px",
-                    background: "#fff0f0",
-                    padding: "8px",
-                    borderRadius: "6px",
-                  }}
-                >
-                  ⚠ {formError}
-                </div>
-              )}
-              <div className="modal-footer-mt">
-                <button
-                  type="button"
-                  className="btn-cancel"
-                  onClick={closeModal}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-save" form="teacherForm">
-                  {isEditing ? "Update Profile" : "Save Profile"}
-                </button>
-              </div>
+            </div>
+
+            <div className="modal-footer-mt">
+              {/* <button
+                type="button"
+                className="btn-cancel"
+                onClick={closeModal}
+              >
+                Cancel
+              </button> */}
+              <button type="submit" className="btn-save" form="teacherForm">
+                {isEditing ? "Update Profile" : "Save Profile"}
+              </button>
             </div>
           </div>
         </div>
@@ -1063,80 +1244,94 @@ function ManageTeachers() {
       {/* ── VIEW SCHEDULE MODAL ── */}
       {viewModalOpen && viewTeacher && (
         <div
-          className="modal-overlay"
-          style={{ display: "flex", zIndex: 9999 }}
+          className="mt-modal-overlay"
+          onClick={() => setViewModalOpen(false)}
         >
-          <div className="modal-content-teacher add-teacher-modal">
+          <div
+            className="mt-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="modal-header">
               <h3>
+                <div className="modal-header-icon">
+                  <i className="fas fa-calendar-alt"></i>
+                </div>
                 {viewTeacher.lname}, {viewTeacher.fname} — Schedule
               </h3>
-              <span
+              <button
                 className="close-modal"
                 onClick={() => setViewModalOpen(false)}
               >
-                &times;
-              </span>
+                <i className="fas fa-times"></i>
+              </button>
             </div>
+
             <div className="modal-body">
               {scheduleLoading ? (
-                <p style={{ textAlign: "center", padding: "20px" }}>
-                  Loading...
+                <p
+                  style={{
+                    textAlign: "center",
+                    padding: "30px",
+                    color: "#95a5a6",
+                  }}
+                >
+                  Loading schedules...
                 </p>
               ) : teacherSchedules.length === 0 ? (
                 <p
                   style={{
                     textAlign: "center",
-                    color: "#999",
-                    padding: "20px",
+                    padding: "30px",
+                    color: "#95a5a6",
                   }}
                 >
                   No schedules assigned to this teacher.
                 </p>
               ) : (
-                <div className="table-container">
-                  <table className="data-table-mt">
+                <div
+                  className="table-container"
+                  style={{
+                    borderRadius: "12px",
+                    border: "1px solid #eef1f6",
+                    boxShadow: "none",
+                    marginTop: "0",
+                  }}
+                >
+                  <table className="data-table-mt" style={{ margin: "0" }}>
                     <thead>
                       <tr>
                         <th
-                          className="mt-th-sortable"
+                          className="sortable-table-header"
                           onClick={() => handleScheduleSort("subject")}
+                          style={{ borderTop: "none" }}
                         >
                           Subject{" "}
-                          <SortIcon
-                            active={scheduleSortConfig.key === "subject"}
-                            direction={scheduleSortConfig.direction}
-                          />
+                          <i
+                            className={`fas ${scheduleSortConfig.key === "subject" ? (scheduleSortConfig.direction === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                          ></i>
+                          <span className="mt-sort-hint-label"></span>
                         </th>
                         <th
-                          className="mt-th-sortable"
+                          className="sortable-table-header"
                           onClick={() => handleScheduleSort("gradeSection")}
+                          style={{ borderTop: "none" }}
                         >
                           Grade & Section{" "}
-                          <SortIcon
-                            active={scheduleSortConfig.key === "gradeSection"}
-                            direction={scheduleSortConfig.direction}
-                          />
+                          <i
+                            className={`fas ${scheduleSortConfig.key === "gradeSection" ? (scheduleSortConfig.direction === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                          ></i>
+                          <span className="mt-sort-hint-label"></span>
                         </th>
                         <th
-                          className="mt-th-sortable"
-                          onClick={() => handleScheduleSort("days")}
-                        >
-                          Days{" "}
-                          <SortIcon
-                            active={scheduleSortConfig.key === "days"}
-                            direction={scheduleSortConfig.direction}
-                          />
-                        </th>
-                        <th
-                          className="mt-th-sortable"
+                          className="sortable-table-header"
                           onClick={() => handleScheduleSort("time")}
+                          style={{ borderTop: "none" }}
                         >
                           Time{" "}
-                          <SortIcon
-                            active={scheduleSortConfig.key === "time"}
-                            direction={scheduleSortConfig.direction}
-                          />
+                          <i
+                            className={`fas ${scheduleSortConfig.key === "time" ? (scheduleSortConfig.direction === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                          ></i>
+                          <span className="mt-sort-hint-label"></span>
                         </th>
                       </tr>
                     </thead>
@@ -1145,9 +1340,16 @@ function ManageTeachers() {
                         <tr key={s.id}>
                           <td>{s.subject}</td>
                           <td>
-                            Grade {s.grade} — {s.section}
+                            <span
+                              className={`grade-badge grade-${s.grade}`}
+                              style={{
+                                padding: "4px 10px",
+                                fontSize: "0.75rem",
+                              }}
+                            >
+                              Grade {s.grade} — {s.section}
+                            </span>
                           </td>
-                          <td>{s.days || "Sunday – Thursday"}</td>
                           <td>
                             {slotLabel(
                               s.timeSlot ||
@@ -1163,31 +1365,37 @@ function ManageTeachers() {
                 </div>
               )}
             </div>
+
+            <div className="modal-footer-mt">
+              {/* <button
+                className="btn-cancel"
+                onClick={() => setViewModalOpen(false)}
+              >
+                Close
+              </button> */}
+            </div>
           </div>
         </div>
       )}
 
       {/* ── IMPORT PREVIEW MODAL ── */}
       {importModalOpen && (
-        <div
-          className="modal-overlay"
-          style={{ display: "flex", zIndex: 9999 }}
-        >
+        <div className="mt-modal-overlay" onClick={closeImportModal}>
           <div
-            className="modal-content-teacher add-teacher-modal"
-            style={{ maxWidth: "780px", width: "95%" }}
+            className="mt-modal-content"
+            style={{ maxWidth: "850px", width: "95%" }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="modal-header">
               <h3>
-                <i
-                  className="fas fa-file-import"
-                  style={{ marginRight: "8px" }}
-                ></i>
+                <div className="modal-header-icon">
+                  <i className="fas fa-file-import"></i>
+                </div>
                 Import Teachers
               </h3>
-              <span className="close-modal" onClick={closeImportModal}>
-                &times;
-              </span>
+              <button className="close-modal" onClick={closeImportModal}>
+                <i className="fas fa-times"></i>
+              </button>
             </div>
 
             <div className="modal-body">
@@ -1205,7 +1413,7 @@ function ManageTeachers() {
                     style={{
                       display: "flex",
                       gap: "12px",
-                      marginBottom: "10px",
+                      marginBottom: "15px",
                       flexWrap: "wrap",
                     }}
                   >
@@ -1222,13 +1430,15 @@ function ManageTeachers() {
                   <div
                     style={{
                       overflowX: "auto",
-                      maxHeight: "300px",
+                      maxHeight: "350px",
                       overflowY: "auto",
+                      borderRadius: "12px",
+                      border: "1px solid #eef1f6",
                     }}
                   >
                     <table
                       className="data-table-mt"
-                      style={{ fontSize: "0.8rem" }}
+                      style={{ fontSize: "0.8rem", margin: 0 }}
                     >
                       <thead>
                         <tr>
@@ -1247,7 +1457,10 @@ function ManageTeachers() {
                           <tr
                             key={r.row}
                             style={{
-                              background: r.errs.length > 0 ? "#fff5f5" : "",
+                              background:
+                                r.errs.length > 0
+                                  ? "rgba(231, 76, 60, 0.05)"
+                                  : "",
                             }}
                           >
                             <td>{r.row}</td>
@@ -1264,9 +1477,9 @@ function ManageTeachers() {
                                     fontSize: "0.75rem",
                                     background: "#eaf4fb",
                                     color: "#2980b9",
-                                    padding: "2px 8px",
+                                    padding: "4px 10px",
                                     borderRadius: "12px",
-                                    fontWeight: 600,
+                                    fontWeight: 700,
                                     whiteSpace: "nowrap",
                                   }}
                                 >
@@ -1284,7 +1497,7 @@ function ManageTeachers() {
                             <td>
                               {r.errs.length === 0 ? (
                                 <span
-                                  style={{ color: "#27ae60", fontWeight: 600 }}
+                                  style={{ color: "#27ae60", fontWeight: 700 }}
                                 >
                                   ✓ OK
                                 </span>
@@ -1293,6 +1506,7 @@ function ManageTeachers() {
                                   style={{
                                     color: "#e74c3c",
                                     fontSize: "0.75rem",
+                                    fontWeight: 600,
                                   }}
                                 >
                                   {r.errs.join("; ")}

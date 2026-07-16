@@ -301,7 +301,7 @@ function Repository() {
                       className="card-link-rep"
                       onClick={() => selectLoad(l)}
                     >
-                      <div className="icon-box bg-blue">
+                      <div className="icon-box">
                         <i className="fas fa-book"></i>
                       </div>
                       <h3>
@@ -311,7 +311,7 @@ function Repository() {
                       {/* ⏰ Added Schedule Time Block */}
                       {l.start && l.end && (
                         <span className="rep-card-time">
-                          <i className="fas fa-clock"></i> {l.start} – {l.end}
+                          <i className="far fa-clock"></i> {l.start} – {l.end}
                         </span>
                       )}
                     </div>
@@ -367,10 +367,7 @@ function Repository() {
                       className="card-link-rep month-card"
                       onClick={() => selectMonth(m.id)}
                     >
-                      <div
-                        className="icon-box bg-blue"
-                        style={{ fontSize: "1.5rem" }}
-                      >
+                      <div className="icon-box">
                         <i className="fas fa-calendar-alt"></i>
                       </div>
                       <h3>{m.name}</h3>

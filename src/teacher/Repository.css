@@ -10,7 +10,7 @@
   --white: #ffffff;
   --gray: #95a5a6; /* Text Gray */
   --sidebar-bg: #1a252f; /* Darker sidebar */
-  --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .grid-container-rep {
@@ -20,69 +20,60 @@
   padding-right: 15px;
 }
 
-/* Card Styles */
+/* ── MODERN CENTERED CARDS (Matches Academic Activity) ── */
 .card-link-rep {
   background: var(--white);
-  padding: 30px;
-  border-radius: 12px;
+  border: 1.5px solid transparent;
+  border-radius: 14px;
+  padding: 26px 20px;
   text-align: center;
   box-shadow: var(--shadow-sm);
-  transition: all 0.3s ease;
-  border: 1px solid transparent;
   cursor: pointer;
+  transition: all 0.25s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
+  box-sizing: border-box;
 }
 
-.card-link:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+.card-link-rep:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
   border-color: var(--accent);
 }
 
 .card-link-rep h3 {
   color: black;
-  font-size: 1.2rem;
-  margin-bottom: 5px;
-}
-.card-link-rep p {
-  color: var(--gray);
-  font-size: 0.9rem;
+  font-size: 1.05rem;
+  margin: 0 0 4px 0;
+  font-weight: 700;
 }
 
-/* Icon Boxes inside Cards */
+.card-link-rep p {
+  color: var(--gray);
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+/* ── PASTEL TINTED ICON BOXES ── */
 .icon-box {
-  width: 70px;
-  height: 70px;
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 2rem;
-  color: white;
-  margin-bottom: 15px;
-  transition: 0.3s;
+  font-size: 1.6rem;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  transition: 0.3s ease;
+  margin-bottom: 12px;
 }
 
-.card-link:hover .icon-box {
+.card-link-rep:hover .icon-box {
   transform: scale(1.1);
-}
-
-/* Background Colors for Icons */
-.bg-blue {
-  background: var(--accent);
-  box-shadow: 0 4px 10px rgba(52, 152, 219, 0.4);
-}
-.bg-green {
-  background: var(--success);
-  box-shadow: 0 4px 10px rgba(46, 204, 113, 0.4);
-}
-.bg-purple {
-  background: var(--purple);
-  box-shadow: 0 4px 10px rgba(155, 89, 182, 0.4);
 }
 
 /* --- TOOLBAR --- */
@@ -127,7 +118,7 @@
   left: 14px;
   top: 50%;
   transform: translateY(-50%);
-  color: #a65f81;
+  color: #95a5a6;
   font-size: 0.85rem;
   pointer-events: none;
 }
@@ -135,20 +126,21 @@
 .search-box input {
   width: 100%;
   box-sizing: border-box;
-  padding: 9px 14px 9px 38px;
-  border: 1.5px solid #a65f81;
+  padding: 10px 14px 10px 38px;
+  border: 1.5px solid var(--accent);
   border-radius: 30px;
   font-size: 0.85rem;
   outline: none;
   background: #fff;
   color: black;
-  transition: border-color 0.15s;
+  transition: all 0.2s ease;
 }
 .search-box input::placeholder {
-  color: #999;
+  color: #95a5a6;
 }
 .search-box input:focus {
-  border-color: #8a4d6b;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 @media (max-width: 600px) {
@@ -195,6 +187,11 @@
   gap: 12px;
   font-size: x-large;
   font-weight: bold;
+  transition: color 0.15s ease;
+}
+
+.btn-back-rep:hover {
+  color: var(--accent);
 }
 
 @media (max-width: 600px) {
@@ -210,19 +207,21 @@
   background: var(--accent);
   color: white;
   border: none;
-  padding: 8px 20px;
-  border-radius: 5px;
+  padding: 10px 20px;
+  border-radius: 10px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 500;
-  box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3);
-  transition: 0.2s;
+  font-weight: 700;
+  font-size: 0.9rem;
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--accent) 30%, transparent);
+  transition: all 0.2s ease;
 }
 .btn-download:hover:not(:disabled) {
-  background: #2d83b8;
+  background: #8f4d6d;
   transform: translateY(-2px);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .btn-download:disabled {
   background: var(--gray);
@@ -233,10 +232,11 @@
 /* --- TABLE STYLES --- */
 .table-container {
   background: white;
-  border-radius: 8px;
+  border-radius: 12px;
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   overflow-x: auto;
+  border: 1px solid #eaedf1;
 }
 .data-table-rep {
   width: 100%;
@@ -246,14 +246,16 @@
 .data-table-rep td {
   padding: 18px 20px;
   text-align: left;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #e9ecef;
 }
 .data-table-rep th {
   background: #f8f9fa;
   color: var(--gray);
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   font-size: 0.85rem;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #e9ecef;
 }
 
 /* Center Status Column */
@@ -279,6 +281,7 @@
   background: var(--white);
   border: 1px solid #000;
   border-radius: 0;
+  box-shadow: none;
 }
 .matrix-table {
   border-collapse: collapse;
@@ -392,7 +395,8 @@
   align-items: center;
   gap: 6px;
   color: var(--gray);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 600;
   white-space: nowrap;
 }
 .matrix-legend .status-mark {
@@ -405,9 +409,12 @@
 }
 
 .rep-card-time {
-  font-size: 0.78rem;
-  color: var(--am-accent);
+  font-size: 0.82rem;
+  color: var(--accent);
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
+  margin-top: 8px;
+  font-weight: 600;
 }

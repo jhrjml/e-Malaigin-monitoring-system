@@ -52,13 +52,22 @@ async function getSectionAdvisor(grade, section) {
 }
 
 const ChildProfile = () => {
-  const [children, setChildren] = useState([]); 
-  const [selected, setSelected] = useState(null); 
+  const [children, setChildren] = useState([]);
+  const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const [advisorName, setAdvisorName] = useState("");
   const [advisorLoading, setAdvisorLoading] = useState(false);
 
+  // Timeline States
+  const [schedule, setSchedule] = useState([]);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleSortConfig, setScheduleSortConfig] = useState({
+    key: "time",
+    direction: "asc",
+  });
+
+  // 1. Fetch Assigned Children
   useEffect(() => {
     const userId = localStorage.getItem("userId");
     if (!userId) {
@@ -121,13 +130,17 @@ const ChildProfile = () => {
     load();
   }, []);
 
-  // Resolve the section adviser whenever the selected child changes
+  // 2. Resolve Adviser & Class Schedule whenever selected child changes
   useEffect(() => {
     if (!selected) {
       setAdvisorName("");
+      setSchedule([]);
       return;
     }
+
     let active = true;
+
+    // Fetch Adviser
     setAdvisorLoading(true);
     getSectionAdvisor(selected.enrolledGrade, selected.enrolledSection).then(
       (name) => {
@@ -137,21 +150,58 @@ const ChildProfile = () => {
         }
       },
     );
+
+    // Fetch Academic Timeline Schedule
+    const fetchSchedule = async () => {
+      setScheduleLoading(true);
+      try {
+        const q = query(
+          col("Schedule"),
+          where("section", "==", selected.enrolledSection),
+        );
+        const snap = await getDocs(q);
+
+        const rawSchedData = snap.docs
+          .map((d) => d.data())
+          .filter((d) => String(d.grade) === String(selected.enrolledGrade));
+
+        const enrichedSchedule = await Promise.all(
+          rawSchedData.map(async (s) => {
+            let teacherName = "TBA";
+            if (s.teacherId) {
+              try {
+                const tSnap = await getDoc(doc(db, "Teacher", s.teacherId));
+                if (tSnap.exists()) {
+                  const t = tSnap.data();
+                  teacherName = `${t.lname}, ${t.fname}`;
+                }
+              } catch (err) {}
+            }
+            return { ...s, teacherName };
+          }),
+        );
+
+        if (active) setSchedule(enrichedSchedule);
+      } catch (err) {
+        console.error("Failed to load class schedule:", err);
+      } finally {
+        if (active) setScheduleLoading(false);
+      }
+    };
+
+    fetchSchedule();
+
     return () => {
       active = false;
     };
   }, [selected]);
-
-  const avatarUrl = (name) => {
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "Student")}&background=3f3f97&color=fff&size=120`;
-  };
 
   const formatDob = (dob) => {
     if (!dob) return "—";
     try {
       return new Date(dob).toLocaleDateString("en-US", {
         year: "numeric",
-        month: "long",
+        month: "short",
         day: "numeric",
       });
     } catch {
@@ -159,14 +209,51 @@ const ChildProfile = () => {
     }
   };
 
+  const formatTimeSlot = (item) => {
+    if (item.timeSlot) return item.timeSlot;
+    if (item.start && item.end) return `${item.start} - ${item.end}`;
+    return "Time TBA";
+  };
+
+  // Table Sorting logic
+  const handleScheduleSort = (key) => {
+    let direction = "asc";
+    if (
+      scheduleSortConfig.key === key &&
+      scheduleSortConfig.direction === "asc"
+    ) {
+      direction = "desc";
+    }
+    setScheduleSortConfig({ key, direction });
+  };
+
+  const sortedSchedule = [...schedule].sort((a, b) => {
+    const dir = scheduleSortConfig.direction === "asc" ? 1 : -1;
+    if (scheduleSortConfig.key === "time") {
+      const timeA = formatTimeSlot(a) || "";
+      const timeB = formatTimeSlot(b) || "";
+      return timeA.localeCompare(timeB) * dir;
+    }
+    if (scheduleSortConfig.key === "subject") {
+      const subA = (a.subject || "").toLowerCase();
+      const subB = (b.subject || "").toLowerCase();
+      return subA.localeCompare(subB) * dir;
+    }
+    return 0;
+  });
+
   if (loading) {
     return (
       <div className="app-container">
         <main className="main-content">
           <div className="page-container">
-            <p style={{ padding: "30px", textAlign: "center", color: "#a65f81", fontWeight: "600" }}>
-              <i className="fas fa-spinner fa-spin"></i> Loading child profile…
-            </p>
+            <div className="cp-loading-status">
+              <i
+                className="fas fa-spinner fa-spin"
+                style={{ marginRight: "8px" }}
+              ></i>{" "}
+              Loading child profile...
+            </div>
           </div>
         </main>
       </div>
@@ -181,9 +268,19 @@ const ChildProfile = () => {
             <div className="toolbar-cp">
               <h2 className="section-title-cp">My Child</h2>
             </div>
-            <p style={{ padding: "30px", textAlign: "center", color: "#999" }}>
-              No children linked to this account. Please contact the administrator.
-            </p>
+            <div className="cp-empty-status">
+              <i
+                className="fas fa-user-slash"
+                style={{
+                  fontSize: "2rem",
+                  color: "#dde1e7",
+                  marginBottom: "12px",
+                  display: "block",
+                }}
+              ></i>
+              No children linked to this account. Please contact the
+              administrator.
+            </div>
           </div>
         </main>
       </div>
@@ -199,10 +296,10 @@ const ChildProfile = () => {
       <main className="main-content">
         <div className="page-container">
           <div className="toolbar-cp">
-            <h2 className="section-title-cp">My Child</h2>
+            <h2 className="section-title-cp">My Child Profile</h2>
           </div>
 
-          {/* CHILD FILTER — same pattern as the admin Archive.jsx filter bar */}
+          {/* ── CHILD FILTER BAR ── */}
           {children.length > 1 && (
             <div className="cp-filter-group">
               {children.map((c) => (
@@ -219,72 +316,174 @@ const ChildProfile = () => {
           )}
 
           {selected && (
-            <div className="profile-layout-cp">
-              {/* Premium Header Profile Deck */}
-              <div className="profile-header-card">
-                <div className="profile-header-banner-accent"></div>
-                <div className="profile-header-content-block">
-                  <img
-                    src={avatarUrl(`${selected.firstName} ${selected.lastName}`)}
-                    alt="Student"
-                    className="student-photo"
-                  />
-                  <h1>{fullName}</h1>
-                  <div className="profile-header-badge-row">
-                    <span className="profile-badge-pill">
-                      <i className="fas fa-award"></i> Grade {selected.enrolledGrade} — Section {selected.enrolledSection}
-                    </span>
-                    <span className="profile-badge-pill advisor">
-                      <i className="fas fa-chalkboard-teacher"></i>{" "}
-                      {advisorLoading ? "Loading adviser…" : `Adviser: ${advisorName || "—"}`}
-                    </span>
+            <>
+              {/* ── COMPACT INFORMATION CARD ── */}
+              <div className="cp-view-container">
+                <div className="cp-profile-header">
+                  <div className="cp-avatar">
+                    <i className="fas fa-user-graduate"></i>
+                  </div>
+
+                  <div className="cp-profile-titles">
+                    <h2 className="cp-student-name">{fullName}</h2>
+                    <div className="cp-pill-group">
+                      <span className="cp-grade-pill">
+                        <i className="fas fa-award"></i> Grade{" "}
+                        {selected.enrolledGrade} — Section{" "}
+                        {selected.enrolledSection}
+                      </span>
+                      <span className="cp-adviser-pill">
+                        <i className="fas fa-chalkboard-teacher"></i>{" "}
+                        {advisorLoading
+                          ? "Loading adviser…"
+                          : `Adviser: ${advisorName || "—"}`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <hr className="cp-divider" />
+
+                <div className="cp-grid">
+                  <div className="cp-field-group">
+                    <label className="cp-field-label">First name</label>
+                    <div className="cp-view-box">
+                      {selected.firstName || "—"}
+                    </div>
+                  </div>
+                  <div className="cp-field-group">
+                    <label className="cp-field-label">Middle name</label>
+                    <div className="cp-view-box">
+                      {selected.middleName || "—"}
+                    </div>
+                  </div>
+                  <div className="cp-field-group">
+                    <label className="cp-field-label">Last name</label>
+                    <div className="cp-view-box">
+                      {selected.lastName || "—"}
+                    </div>
+                  </div>
+
+                  <div className="cp-field-group">
+                    <label className="cp-field-label">
+                      Learner Reference No.
+                    </label>
+                    <div className="cp-view-box cp-lrn-box">
+                      {selected.lrn || "—"}
+                    </div>
+                  </div>
+                  <div className="cp-field-group">
+                    <label className="cp-field-label">Date of birth</label>
+                    <div className="cp-view-box">
+                      {formatDob(selected.dob) || "—"}
+                    </div>
+                  </div>
+                  <div className="cp-field-group">
+                    <label className="cp-field-label">Age</label>
+                    <div className="cp-view-box">
+                      {selected.age ? `${selected.age} years old` : "—"}
+                    </div>
+                  </div>
+
+                  <div className="cp-field-group">
+                    <label className="cp-field-label">Gender</label>
+                    <div className="cp-view-box">{selected.gender || "—"}</div>
+                  </div>
+                  <div className="cp-field-group">
+                    <label className="cp-field-label">Contact number</label>
+                    <div className="cp-view-box">{selected.contact || "—"}</div>
+                  </div>
+                  <div className="cp-field-group">
+                    <label className="cp-field-label">Parent / Guardian</label>
+                    <div className="cp-view-box">
+                      {selected.guardian ||
+                        selected.guardianName ||
+                        selected.parentName ||
+                        "—"}
+                    </div>
+                  </div>
+
+                  <div className="cp-field-group cp-grid-span-3">
+                    <label className="cp-field-label">Complete address</label>
+                    <div className="cp-view-box">{selected.address || "—"}</div>
                   </div>
                 </div>
               </div>
 
-              {/* Enhanced Visual Details Information Grid Matrix */}
-              <div className="profile-details-grid grid-two-columns">
-                <div className="info-card">
-                  <h3>
-                    <i className="fas fa-user"></i> Personal Information
-                  </h3>
-                  <ul className="info-list">
-                    <li>
-                      <div className="info-item-label"><i className="far fa-id-card"></i> Learner Reference Number (LRN)</div>
-                      <strong className="sml-font-monospace">{selected.lrn}</strong>
-                    </li>
-                    <li>
-                      <div className="info-item-label"><i className="far fa-calendar-alt"></i> Date of Birth</div>
-                      <strong>{formatDob(selected.dob)}</strong>
-                    </li>
-                    <li>
-                      <div className="info-item-label"><i className="fas fa-birthday-cake"></i> Age</div>
-                      <strong>{selected.age ? `${selected.age} years old` : "—"}</strong>
-                    </li>
-                  </ul>
-                </div>
+              {/* ── ACADEMIC CLASS TABLE SCHEDULE ── */}
+              <div className="cp-timeline-container">
+                <h3 className="cp-section-subtitle">
+                  <i className="fas fa-calendar-alt"></i> School Year Timeline
+                </h3>
 
-                <div className="info-card">
-                  <h3>
-                    <i className="fas fa-map-marker-alt"></i> Contact &amp; Address
-                  </h3>
-                  <ul className="info-list">
-                    <li>
-                      <div className="info-item-label"><i className="fas fa-home"></i> Address</div>
-                      <strong>{selected.address || "—"}</strong>
-                    </li>
-                    <li>
-                      <div className="info-item-label"><i className="fas fa-phone-alt"></i> Contact No.</div>
-                      <strong>{selected.contact || "—"}</strong>
-                    </li>
-                    <li>
-                      <div className="info-item-label"><i className="fas fa-user-shield"></i> Parent / Guardian</div>
-                      <strong>{selected.guardian || "—"}</strong>
-                    </li>
-                  </ul>
-                </div>
+                {scheduleLoading ? (
+                  <div
+                    className="cp-loading-status"
+                    style={{ padding: "15px" }}
+                  >
+                    <i className="fas fa-spinner fa-spin"></i> Retrieving class
+                    schedule...
+                  </div>
+                ) : schedule.length === 0 ? (
+                  <div className="cp-empty-status" style={{ padding: "20px" }}>
+                    No class schedule has been recorded for this section yet.
+                  </div>
+                ) : (
+                  <div className="cp-table-container">
+                    <table className="cp-table">
+                      <thead>
+                        <tr>
+                          <th
+                            className="sortable-table-header"
+                            onClick={() => handleScheduleSort("time")}
+                          >
+                            Time
+                            <i
+                              className={`fas ${scheduleSortConfig.key === "time" ? (scheduleSortConfig.direction === "asc" ? "fa-sort-up cp-header-sorted" : "fa-sort-down cp-header-sorted") : "fa-sort cp-header-unsorted"}`}
+                            ></i>
+                          </th>
+                          <th
+                            className="sortable-table-header"
+                            onClick={() => handleScheduleSort("subject")}
+                          >
+                            Subject Name
+                            <i
+                              className={`fas ${scheduleSortConfig.key === "subject" ? (scheduleSortConfig.direction === "asc" ? "fa-sort-up cp-header-sorted" : "fa-sort-down cp-header-sorted") : "fa-sort cp-header-unsorted"}`}
+                            ></i>
+                          </th>
+                          <th>Teacher Name</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedSchedule.map((item, index) => (
+                          <tr key={index}>
+                            <td style={{ whiteSpace: "nowrap" }}>
+                              <i
+                                className="far fa-clock"
+                                style={{
+                                  color: "var(--cp-accent)",
+                                  marginRight: "6px",
+                                }}
+                              ></i>
+                              {formatTimeSlot(item)}
+                            </td>
+                            <td style={{ fontWeight: 700, color: "#1a1a2e" }}>
+                              {item.subject}
+                            </td>
+                            <td>
+                              <div className="cp-teacher-cell">
+                                <i className="fas fa-chalkboard-teacher"></i>{" "}
+                                {item.teacherName}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            </div>
+            </>
           )}
         </div>
       </main>

@@ -31,6 +31,7 @@ import "./AdminHomepage.css";
 import "./Archive.css";
 import "../Layout.css";
 import ProfileModal from "../common/ProfileModal";
+import ConfirmModal from "../common/ConfirmModal"; // Already imported!
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
@@ -60,10 +61,6 @@ const MONTH_NAMES = [
 ];
 const WEEKDAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
-// Palette cycled through for each distinct SECTION NAME in the grade/section
-// stacked bar chart — sections are sorted alphabetically once, then each
-// gets a fixed color from this list, so e.g. "Rizal" is always the same
-// blue in every grade's bar and the legend stays consistent.
 const STACK_COLORS = [
   { bg: "#186FAF", text: "#ffffff" },
   { bg: "#A8C8EA", text: "#1a3a55" },
@@ -75,15 +72,6 @@ const STACK_COLORS = [
   { bg: "#e67e22", text: "#ffffff" },
 ];
 
-/**
- * stackValueLabelsPlugin
- * A Chart.js plugin (scoped to just the grade/section chart via the
- * `plugins` prop, not globally registered) that draws:
- *   1. The raw count centered inside each stacked segment.
- *   2. A "Total: N" label above the topmost segment of each bar.
- * Segment counts under ~14px tall are skipped so the number never
- * overflows a sliver-thin segment.
- */
 const stackValueLabelsPlugin = {
   id: "stackValueLabels",
   afterDatasetsDraw(chart) {
@@ -148,7 +136,6 @@ function AdminHomepage() {
 
   const storedUsername = localStorage.getItem("username") || "Admin";
 
-  // ── Persist activePage across refresh ──────────────────────────────────
   const [activePage, setActivePage] = useState(
     () => localStorage.getItem("adminPage") || "dashboard",
   );
@@ -156,7 +143,6 @@ function AdminHomepage() {
     () => titleMap[localStorage.getItem("adminPage")] || "Overview",
   );
 
-  // ── Dashboard data ───────────────────────────────────────────────────────
   const [dashboardStats, setDashboardStats] = useState({
     studentCount: 0,
     teacherCount: 0,
@@ -168,42 +154,42 @@ function AdminHomepage() {
   const loadDashboardData = useCallback(async () => {
     setDashboardLoading(true);
     try {
-      // 1. Fetch baseline statistics and historical charts logs
       const [stats, enrollment] = await Promise.all([
         getDashboardStats(),
         getEnrollmentDropoutStats(),
       ]);
 
-      // 2. Fetch live classroom section rosters to compile an accurate snapshot
       const gradeLevels = [1, 2, 3, 4, 5, 6];
       const compiledMetrics = await Promise.all(
         gradeLevels.map(async (grade) => {
           const enrolledA = await getEnrolled(grade, "A");
           const enrolledB = await getEnrolled(grade, "B");
 
-          const countA = enrolledA.filter((e) => e.status === "Enrolled").length;
-          const countB = enrolledB.filter((e) => e.status === "Enrolled").length;
+          const countA = enrolledA.filter(
+            (e) => e.status === "Enrolled",
+          ).length;
+          const countB = enrolledB.filter(
+            (e) => e.status === "Enrolled",
+          ).length;
 
           return {
             grade,
             sectionA: countA,
             sectionB: countB,
           };
-        })
+        }),
       );
 
-      // 3. Compute the absolute live active student population count
       const totalLiveEnrolled = compiledMetrics.reduce(
         (sum, d) => sum + d.sectionA + d.sectionB,
-        0
+        0,
       );
 
-      // 4. Determine the current school year string label dynamically (e.g., "2026-2027")
       const now = new Date();
-      const startYear = now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;
+      const startYear =
+        now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;
       const currentSyLabel = `${startYear}-${startYear + 1}`;
 
-      // 5. Patch the historical log array so the active school year matches the live total precisely
       const patchedEnrollment = enrollment.map((item) => {
         if (item.year === currentSyLabel) {
           return { ...item, enrolled: totalLiveEnrolled };
@@ -212,7 +198,7 @@ function AdminHomepage() {
       });
 
       setDashboardStats({
-        studentCount: totalLiveEnrolled, // Synchronizes the dashboard top card metrics
+        studentCount: totalLiveEnrolled,
         teacherCount: stats.teacherCount,
       });
       setEnrollmentStats(patchedEnrollment);
@@ -261,7 +247,6 @@ function AdminHomepage() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Close profile dropdown on outside click
   useEffect(() => {
     const handler = (e) => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(e.target))
@@ -411,28 +396,18 @@ function AdminHomepage() {
           {activePage === "archive" && <Archive />}
         </div>
 
-        {/* LOGOUT MODAL */}
-        {logoutOpen && (
-          <div className="modal-overlay-admin">
-            <div className="modal-admin logout-modal-admin">
-              <div className="modal-header-admin">
-                <h2>Confirm Logout</h2>
-              </div>
-              <p>Are you sure you want to logout?</p>
-              <div className="modal-buttons-admin">
-                <button
-                  className="btn-cancel"
-                  onClick={() => setLogoutOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button className="btn-confirm" onClick={handleLogout}>
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* LOGOUT MODAL — Replaced HTML with our uniform App-style ConfirmModal! */}
+        <ConfirmModal
+          open={logoutOpen}
+          title="Confirm Logout"
+          titleIcon="fa-sign-out-alt"
+          titleColor="#a65f81"
+          message="Are you sure you want to log out of the admin portal?"
+          confirmText="Logout"
+          confirmColor="primary"
+          onConfirm={handleLogout}
+          onCancel={() => setLogoutOpen(false)}
+        />
 
         <ProfileModal
           open={profileOpen}
@@ -447,7 +422,13 @@ function AdminHomepage() {
 // DASHBOARD OVERVIEW
 // ════════════════════════════════════════════════════════════════════════════
 
-function DashboardOverview({ stats, enrollment, distribution, loading, onRefresh }) {
+function DashboardOverview({
+  stats,
+  enrollment,
+  distribution,
+  loading,
+  onRefresh,
+}) {
   return (
     <div className="overview-grid">
       <div className="overview-main-row">
@@ -465,10 +446,12 @@ function DashboardOverview({ stats, enrollment, distribution, loading, onRefresh
               value={stats.teacherCount}
               accent="orange"
             />
-            <GradeSectionStackedChart data={gradeSection} loading={loading} />
           </div>
 
-          <StudentDistributionChart chartData={distribution} loading={loading} />
+          <StudentDistributionChart
+            chartData={distribution}
+            loading={loading}
+          />
 
           <EnrollmentDropoutChart
             data={enrollment}
@@ -497,7 +480,6 @@ function StatCard({ icon, label, value, accent }) {
   );
 }
 
-// ── NEW PURE CSS STACKED COLUMN POPULATION DISTRIBUTION CHART ──
 function StudentDistributionChart({ chartData, loading }) {
   const maxCount = useMemo(() => {
     if (!chartData || chartData.length === 0) return 4;
@@ -508,7 +490,9 @@ function StudentDistributionChart({ chartData, loading }) {
   if (loading) {
     return (
       <div className="enrollment-chart-card">
-        <div className="enrollment-chart-empty">Loading student statistics…</div>
+        <div className="enrollment-chart-empty">
+          Loading student statistics…
+        </div>
       </div>
     );
   }
@@ -531,8 +515,6 @@ function StudentDistributionChart({ chartData, loading }) {
 
       <div className="clustered-chart-outer-wrapper">
         <div className="clustered-chart-main-row">
-          
-          {/* Left Side Y-Axis Scale Numbers */}
           <div className="chart-y-axis">
             <span>{maxCount}</span>
             <span>{Math.round(maxCount * 0.75)}</span>
@@ -541,49 +523,48 @@ function StudentDistributionChart({ chartData, loading }) {
             <span>0</span>
           </div>
 
-          {/* Right Side Bar Stack Work Area Canvas */}
           <div className="clustered-chart-canvas-area">
             {chartData.map((data) => (
               <div key={data.grade} className="stacked-bars-column-wrapper">
-                
-                {/* Total Counter instantly visible right above the highest stacked edge segment */}
                 {data.sectionA + data.sectionB > 0 && (
                   <div className="stacked-total-label">
                     {data.sectionA + data.sectionB}
                   </div>
                 )}
-                
-                {/* Section B Bar (Top) */}
-                <div 
+
+                <div
                   className={`stacked-chart-bar bar-section-b bar-outline-${data.grade}`}
                   style={{ height: `${(data.sectionB / maxCount) * 100}%` }}
                   title={`Grade ${data.grade} - Section B: ${data.sectionB} Students`}
                 >
                   {data.sectionB > 0 && (
-                    <span className="bar-value-bubble">Section B: {data.sectionB}</span>
+                    <span className="bar-value-bubble">
+                      Section B: {data.sectionB}
+                    </span>
                   )}
                 </div>
 
-                {/* Section A Bar (Bottom) */}
-                <div 
+                <div
                   className={`stacked-chart-bar bar-section-a ms-grade-gradient-${data.grade}`}
                   style={{ height: `${(data.sectionA / maxCount) * 100}%` }}
                   title={`Grade ${data.grade} - Section A: ${data.sectionA} Students`}
                 >
                   {data.sectionA > 0 && (
-                    <span className="bar-value-bubble">Section A: {data.sectionA}</span>
+                    <span className="bar-value-bubble">
+                      Section A: {data.sectionA}
+                    </span>
                   )}
                 </div>
-
               </div>
             ))}
           </div>
         </div>
 
-        {/* Bottom X-Axis Labels Row */}
         <div className="clustered-chart-x-axis-row">
           {chartData.map((data) => (
-            <div key={data.grade} className="cluster-axis-label">Grade {data.grade}</div>
+            <div key={data.grade} className="cluster-axis-label">
+              Grade {data.grade}
+            </div>
           ))}
         </div>
       </div>

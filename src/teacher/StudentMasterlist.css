@@ -1,7 +1,7 @@
 /* StudentMasterlist.css */
 :root {
   --sml-primary: #3f3f97;
-  --sml-accent: #a65f81; 
+  --sml-accent: #a65f81;
   --sml-white: #ffffff;
   --sml-light-bg: #f8f9fa;
   --sml-text-muted: #95a5a6;
@@ -87,11 +87,14 @@
   outline: none;
   background: #f7f8fa;
   color: black;
-  transition: border-color 0.18s, background-color 0.18s;
+  transition:
+    border-color 0.18s,
+    background-color 0.18s;
 }
 
 .sml-search-input-box-wrapper input:focus {
-  border-color: var(--sml-primary);
+  border-color: var(--sml-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sml-accent) 15%, transparent);
   background: var(--sml-white);
 }
 
@@ -152,12 +155,14 @@
   cursor: pointer;
   outline: none;
   width: 100%;
-  max-width: 320px;
-  transition: border-color 0.2s, background-color 0.2s;
+  max-width: 380px;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
 }
 
 .sml-dropdown-menu-filter:focus {
-  border-color: var(--sml-primary);
+  border-color: var(--sml-accent);
   background-color: var(--sml-white);
 }
 
@@ -165,7 +170,37 @@
   min-height: 120px;
 }
 
-/* Inline Column Header Sorting Rules matching Admin Modules precisely */
+/* Class Info Banner Rules */
+.sml-class-info-banner {
+  display: flex;
+  gap: 24px;
+  background: #fafbfc;
+  border: 1px solid #eef1f6;
+  padding: 14px 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.sml-class-info-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95rem;
+  color: #1a1a2e;
+}
+
+.sml-table-grade-badge {
+  background: #f4f6f8;
+  color: var(--sml-primary);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Inline Column Header Sorting Rules */
 .sortable-table-header {
   cursor: pointer;
   user-select: none;
@@ -192,7 +227,7 @@
 
 .mt-sort-hint-label {
   font-size: 0.75rem;
-  color: var(--sml-accent); 
+  color: var(--sml-accent);
   margin-left: 6px;
   font-weight: 500;
   text-transform: none;
@@ -207,7 +242,7 @@
   font-size: 0.9rem;
 }
 .sml-table-loading-placeholder i {
-  color: var(--sml-primary);
+  color: var(--sml-accent);
   margin-right: 8px;
 }
 
@@ -224,7 +259,7 @@
   text-align: left;
 }
 
-.sml-custom-data-table th, 
+.sml-custom-data-table th,
 .sml-custom-data-table td {
   padding: 14px 18px;
   border-bottom: 1px solid #f2f4f8;
@@ -257,8 +292,9 @@
 
 .sml-clickable-name {
   color: var(--sml-primary);
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  transition: color 0.15s;
 }
 .sml-clickable-name:hover {
   color: var(--sml-accent);
@@ -273,121 +309,224 @@
   font-weight: 500;
 }
 
-/* Popover Cards Info Modal Window Layer Rules */
+/* ═════════════════════════════════════════════════════════════════════════
+   MODERN 3-COLUMN STUDENT INFORMATION MODAL
+   ═════════════════════════════════════════════════════════════════════════ */
+
 .sml-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  z-index: 99999 !important;
+  display: flex !important;
   justify-content: center;
-  z-index: 9999;
+  align-items: center;
+  animation: sml-fade-in 0.2s ease;
+}
+
+@keyframes sml-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .sml-modal-content {
-  background: #fff;
-  width: min(90vw, 550px);
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  background: #ffffff;
+  width: 780px;
+  max-width: 95%;
+  border-radius: 20px;
   overflow: hidden;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+  animation: sml-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+@keyframes sml-pop {
+  from {
+    transform: translateY(20px) scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
 }
 
 .sml-modal-header {
-  background: var(--sml-primary);
-  color: #fff;
-  padding: 16px 24px;
+  background: #ffffff;
+  padding: 24px 30px 16px;
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #f0f2f5;
+  flex-shrink: 0;
 }
 
 .sml-modal-header h3 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #1a1a2e;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
-.sml-modal-close {
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 1.6rem;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.sml-modal-body {
-  padding: 24px;
-}
-
-.sml-profile-header {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  margin-bottom: 24px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #eee;
-}
-
-.sml-profile-avatar {
-  width: 65px;
-  height: 65px;
-  border-radius: 50%;
-  background: #f0f2f5;
-  color: var(--sml-primary);
+.sml-modal-header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sml-accent) 15%, transparent);
+  color: var(--sml-accent);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.8rem;
+  font-size: 1.1rem;
+}
+
+.sml-modal-close {
+  background: #f4f6f8;
+  color: #95a5a6;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sml-modal-close:hover {
+  background: #e74c3c;
+  color: white;
+}
+
+.sml-modal-body {
+  padding: 24px 30px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Modal Top Info (Name & Pill) */
+.sml-student-info-top {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.sml-student-name-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sml-student-name {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #1a1a2e;
+  margin: 0;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+}
+
+.sml-student-grade-pill {
+  background: color-mix(in srgb, var(--sml-accent) 10%, transparent);
+  color: var(--sml-accent);
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: inline-block;
+  width: fit-content;
+}
+
+.sml-student-info-divider {
+  border: 0;
+  height: 1px;
+  background: #f0f2f5;
+  margin: 0 0 20px 0;
+}
+
+/* 3-Column Grid System */
+.sml-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  width: 100%;
+}
+
+.sml-grid-span-3 {
+  grid-column: span 3;
+}
+
+.sml-field-group {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.sml-field-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #95a5a6;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.sml-view-box {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  color: #1a1a2e;
+  background: #fdfdfd;
+  border: 1.5px solid #eef1f6;
+  font-weight: 600;
+}
+
+.sml-lrn-box {
+  background: #f4f6f8;
+  border-color: #f4f6f8;
+  font-family: monospace;
+  font-size: 0.95rem;
+}
+
+/* Full Width Close Footer */
+.sml-modal-footer {
+  padding: 16px 30px 24px;
+  border-top: 1px solid #f0f2f5;
+  background: #ffffff;
   flex-shrink: 0;
 }
 
-.sml-profile-title h4 {
-  margin: 0 0 6px 0;
-  font-size: 1.25rem;
-  color: #111;
-}
-
-.sml-profile-badge {
-  background: rgba(166, 95, 129, 0.1);
-  color: var(--sml-accent);
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.sml-info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-.sml-col-span-2 {
-  grid-column: span 2;
-}
-
-.sml-info-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sml-info-group label {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--sml-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.sml-info-group p {
-  margin: 0;
+.sml-btn-close-full {
+  width: 100%;
+  background: #f8f9fa;
+  color: #5c6a79;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 10px;
   font-size: 0.95rem;
-  color: #222;
-  font-weight: 500;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sml-btn-close-full:hover {
+  background: #eef1f6;
+  color: #1a1a2e;
 }
 
 @media (max-width: 768px) {
@@ -398,10 +537,17 @@
   .sml-search-input-box-wrapper {
     max-width: 100%;
   }
-  .sml-info-grid {
+  .sml-grid {
     grid-template-columns: 1fr;
   }
-  .sml-col-span-2 {
+  .sml-grid-span-3 {
     grid-column: span 1;
+  }
+  .sml-modal-content {
+    width: 95%;
+  }
+  .sml-class-info-banner {
+    flex-direction: column;
+    gap: 12px;
   }
 }

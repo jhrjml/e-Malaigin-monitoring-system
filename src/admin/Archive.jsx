@@ -6,7 +6,6 @@ import {
   unarchiveStudent,
   unarchiveTeacher,
 } from "../api/firebaseApi";
-import ConfirmModal from "../common/ConfirmModal";
 import "./Archive.css";
 import "../Layout.css";
 
@@ -66,54 +65,139 @@ const GradePickerModal = ({
   if (!open) return null;
 
   return (
-    <div className="archive-modal-overlay" onClick={onCancel}>
+    <div className="archive-modern-overlay" onClick={onCancel}>
       <div
-        className="archive-modal archive-grade-modal"
+        className="archive-modern-content"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="archive-modal-header">
-          <i className="fas fa-user-graduate" style={{ color: "#8e44ad" }}></i>
-          <h3>Select Grade Level to Restore</h3>
-        </div>
-
-        <p className="archive-modal-message">
-          Choose the grade level <strong>{studentName}</strong> should be
-          restored to. The student was archived from{" "}
-          <strong>Grade {currentGrade}</strong>.
-        </p>
-
-        <div className="archive-grade-grid">
-          {GRADE_LEVELS.map((g) => (
-            <button
-              key={g}
-              className={`archive-grade-option${selected === g ? " selected" : ""}${g === currentGrade ? " original" : ""}`}
-              onClick={() => setSelected(g)}
+        <div className="archive-modern-header">
+          <h3>
+            <div
+              className="archive-modern-header-icon"
+              style={{
+                background: "color-mix(in srgb, #a65f81 15%, transparent)",
+                color: "#a65f81",
+              }}
             >
-              <span className="archive-grade-num">Grade {g}</span>
-              {g === currentGrade && (
-                <span className="archive-grade-tag">Original</span>
-              )}
-            </button>
-          ))}
+              <i className="fas fa-user-graduate"></i>
+            </div>
+            Restore Grade Level
+          </h3>
+          <button className="archive-modern-close" onClick={onCancel}>
+            <i className="fas fa-times"></i>
+          </button>
         </div>
 
-        {selected && (
-          <p className="archive-grade-confirm-hint">
-            <i className="fas fa-info-circle"></i> Student will be restored to{" "}
-            <strong>Grade {selected}</strong>.
+        <div className="archive-modern-body">
+          <p className="archive-modal-message">
+            Choose the grade level <strong>{studentName}</strong> should be
+            restored to. The student was archived from{" "}
+            <strong>Grade {currentGrade}</strong>.
           </p>
-        )}
 
-        <div className="archive-modal-actions">
-          <button className="archive-modal-cancel" onClick={onCancel}>
+          <div className="archive-grade-grid">
+            {GRADE_LEVELS.map((g) => (
+              <button
+                key={g}
+                className={`archive-grade-option${selected === g ? " selected" : ""}${g === currentGrade ? " original" : ""}`}
+                onClick={() => setSelected(g)}
+              >
+                <span className="archive-grade-num">Grade {g}</span>
+                {g === currentGrade && (
+                  <span className="archive-grade-tag">Original</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {selected && (
+            <p className="archive-grade-confirm-hint">
+              <i className="fas fa-info-circle"></i> Student will be restored to{" "}
+              <strong>Grade {selected}</strong>.
+            </p>
+          )}
+        </div>
+
+        <div className="archive-modern-footer">
+          <button className="archive-btn-cancel" onClick={onCancel}>
             Cancel
           </button>
           <button
-            className="archive-modal-confirm"
+            className="archive-btn-confirm"
             disabled={selected === null}
             onClick={() => onSelect(selected)}
           >
-            <i className="fas fa-arrow-right"></i> Continue
+            Continue <i className="fas fa-arrow-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Modern Confirmation Modal ─────────────────────────────────────────────────
+const ArchiveConfirmModal = ({
+  open,
+  title,
+  titleIcon,
+  titleColor,
+  message,
+  confirmText,
+  cancelText,
+  onConfirm,
+  onCancel,
+  disabled,
+}) => {
+  if (!open) return null;
+  return (
+    <div
+      className="archive-modern-overlay"
+      onClick={!disabled ? onCancel : undefined}
+    >
+      <div
+        className="archive-modern-content"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="archive-modern-header">
+          <h3>
+            <div
+              className="archive-modern-header-icon"
+              style={{
+                background: `color-mix(in srgb, ${titleColor} 15%, transparent)`,
+                color: titleColor,
+              }}
+            >
+              <i className={`fas ${titleIcon}`}></i>
+            </div>
+            {title}
+          </h3>
+          <button
+            className="archive-modern-close"
+            onClick={onCancel}
+            disabled={disabled}
+          >
+            <i className="fas fa-times"></i>
+          </button>
+        </div>
+
+        <div className="archive-modern-body">
+          <p className="archive-modal-message">{message}</p>
+        </div>
+
+        <div className="archive-modern-footer">
+          <button
+            className="archive-btn-cancel"
+            onClick={onCancel}
+            disabled={disabled}
+          >
+            {cancelText || "Cancel"}
+          </button>
+          <button
+            className="archive-btn-confirm"
+            onClick={onConfirm}
+            disabled={disabled}
+          >
+            {confirmText}
           </button>
         </div>
       </div>
@@ -199,7 +283,7 @@ const Archive = () => {
         studentConfirmTarget.targetGrade,
       );
       showToast(
-        `${studentConfirmTarget.name} has been restored to Grade ${studentConfirmTarget.targetGrade} in Manage Students.`
+        `${studentConfirmTarget.name} has been restored to Grade ${studentConfirmTarget.targetGrade} in Manage Students.`,
       );
       setStudents((prev) =>
         prev.filter((r) => r.student.id !== studentConfirmTarget.id),
@@ -276,7 +360,9 @@ const Archive = () => {
     if (studentSortField === "name") {
       const nameA = fullStudentName(a.student).toLowerCase();
       const nameB = fullStudentName(b.student).toLowerCase();
-      return studentSortOrder === "asc" ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+      return studentSortOrder === "asc"
+        ? nameA.localeCompare(nameB)
+        : nameB.localeCompare(nameA);
     }
     if (studentSortField === "archivedAt") {
       const timeA = getTimeValue(a.student.archivedAt);
@@ -289,7 +375,9 @@ const Archive = () => {
   const sortedTeachers = [...filteredTeachers].sort((a, b) => {
     const nameA = fullTeacherName(a.teacher).toLowerCase();
     const nameB = fullTeacherName(b.teacher).toLowerCase();
-    return teacherSortOrder === "asc" ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+    return teacherSortOrder === "asc"
+      ? nameA.localeCompare(nameB)
+      : nameB.localeCompare(nameA);
   });
 
   const records = filter === "students" ? sortedStudents : sortedTeachers;
@@ -382,23 +470,27 @@ const Archive = () => {
               <thead>
                 <tr>
                   {/* Sortable Header Components */}
-                  <th 
-                    onClick={() => handleStudentSortToggle("name")} 
+                  <th
+                    onClick={() => handleStudentSortToggle("name")}
                     className="sortable-table-header"
                   >
                     Student
-                    <i className={`fas ${studentSortField === "name" ? (studentSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
-                    <span className="mt-sort-hint-label">(sort)</span>
+                    <i
+                      className={`fas ${studentSortField === "name" ? (studentSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                    ></i>
+                    <span className="mt-sort-hint-label"></span>
                   </th>
                   <th>LRN</th>
                   <th>Grade</th>
-                  <th 
-                    onClick={() => handleStudentSortToggle("archivedAt")} 
+                  <th
+                    onClick={() => handleStudentSortToggle("archivedAt")}
                     className="sortable-table-header"
                   >
                     Archived On
-                    <i className={`fas ${studentSortField === "archivedAt" ? (studentSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
-                    <span className="mt-sort-hint-label">(sort)</span>
+                    <i
+                      className={`fas ${studentSortField === "archivedAt" ? (studentSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                    ></i>
+                    <span className="mt-sort-hint-label"></span>
                   </th>
                   <th>Parent Account</th>
                   <th>Account Status</th>
@@ -474,13 +566,15 @@ const Archive = () => {
               <thead>
                 <tr>
                   {/* Sortable Header Components */}
-                  <th 
-                    onClick={handleTeacherSortToggle} 
+                  <th
+                    onClick={handleTeacherSortToggle}
                     className="sortable-table-header"
                   >
                     Teacher
-                    <i className={`fas ${teacherSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted"}`}></i>
-                    <span className="mt-sort-hint-label">(sort)</span>
+                    <i
+                      className={`fas ${teacherSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted"}`}
+                    ></i>
+                    <span className="mt-sort-hint-label"></span>
                   </th>
                   <th>Employee ID</th>
                   <th>Advisory</th>
@@ -565,15 +659,20 @@ const Archive = () => {
       />
 
       {/* ── Step 2: Confirm unarchive for students (after grade chosen) ── */}
-      <ConfirmModal
+      <ArchiveConfirmModal
         open={!!studentConfirmTarget}
         title="Unarchive Student"
         titleIcon="fa-undo"
-        titleColor="#2ecc71"
-        message={`Restore ${studentConfirmTarget?.name} back to Manage Students at Grade ${studentConfirmTarget?.targetGrade}? Their parent account will also be reactivated if it exists.`}
+        titleColor="#a65f81"
+        message={
+          <>
+            Restore <strong>{studentConfirmTarget?.name}</strong> back to Manage
+            Students at Grade {studentConfirmTarget?.targetGrade}? Their parent
+            account will also be reactivated if it exists.
+          </>
+        }
         confirmText={processing ? "Restoring…" : "Yes, Unarchive"}
         cancelText="Back"
-        confirmColor="success"
         disabled={processing}
         onConfirm={handleStudentConfirm}
         onCancel={() => {
@@ -590,15 +689,19 @@ const Archive = () => {
       />
 
       {/* ── Confirm unarchive for teachers ── */}
-      <ConfirmModal
+      <ArchiveConfirmModal
         open={!!confirmTarget}
         title="Unarchive Teacher"
         titleIcon="fa-undo"
-        titleColor="#2ecc71"
-        message={`Restore ${confirmTarget?.name} back to Manage Teachers? Their teacher account will also be reactivated.`}
+        titleColor="#a65f81"
+        message={
+          <>
+            Restore <strong>{confirmTarget?.name}</strong> back to Manage
+            Teachers? Their teacher account will also be reactivated.
+          </>
+        }
         confirmText={processing ? "Restoring…" : "Yes, Unarchive"}
         cancelText="Cancel"
-        confirmColor="success"
         disabled={processing}
         onConfirm={handleTeacherConfirm}
         onCancel={() => {

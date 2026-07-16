@@ -27,7 +27,7 @@ import ConfirmModal from "../common/ConfirmModal";
 import Toast from "../common/Toast";
 import { useToast } from "../common/useToast.js";
 import useSubmitGuard from "../common/useSubmitGuard";
-import useNetworkStatus from "../common/useNetworkStatus"; // adjust path if different
+import useNetworkStatus from "../common/useNetworkStatus";
 import "./ManageClasses.css";
 
 const SUBJECTS = [
@@ -52,27 +52,14 @@ const formatTimeLabel = (timeStr) => {
   return `${h}:${mins} ${ampm}`;
 };
 
-// ── Sort icon (same visual design as ManageStudents.jsx) ──────────────────
-function SortIcon({ active, direction }) {
-  if (!active) {
-    return <i className="fas fa-sort mc-sort-icon"></i>;
-  }
-  return direction === "asc" ? (
-    <i className="fas fa-sort-up mc-sort-icon mc-sort-icon--active"></i>
-  ) : (
-    <i className="fas fa-sort-down mc-sort-icon mc-sort-icon--active"></i>
-  );
-}
-
-// ── Helper: fault-tolerant section-student loader ─────────────────────────
+// Helper: fault-tolerant section-student loader
 async function loadSectionStudents(enrolledDocs) {
   const details = (
     await Promise.all(
-      enrolledDocs.map(
-        (e) =>
-          getStudent(e.studentId)
-            .then((s) => ({ ...s, enrollStatus: e.status, enrollId: e.id }))
-            .catch(() => null), // missing / archived doc → skip silently
+      enrolledDocs.map((e) =>
+        getStudent(e.studentId)
+          .then((s) => ({ ...s, enrollStatus: e.status, enrollId: e.id }))
+          .catch(() => null),
       ),
     )
   ).filter(Boolean);
@@ -88,9 +75,6 @@ const ManageClasses = () => {
   const [sectionStudents, setSectionStudents] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [schedules, setSchedules] = useState([]);
-  // All Schedule docs across every grade/section — used only for the
-  // "teacher already booked at this time somewhere else" conflict check
-  // in the schedule modal. Refreshed each time that modal opens.
   const [allSchedules, setAllSchedules] = useState([]);
 
   const [loading, setLoading] = useState(false);
@@ -102,18 +86,13 @@ const ManageClasses = () => {
   const [editSchedId, setEditSchedId] = useState(null);
   const [selectedStudentId, setSelectedStudentId] = useState("");
 
-  // ── Masterlist Filtering & Sorting State ────────────────────────────────
   const [studentSearchQuery, setStudentSearchQuery] = useState("");
-  const [studentSortField, setStudentSortField] = useState("lrn"); 
+  const [studentSortField, setStudentSortField] = useState("lrn");
   const [studentSortOrder, setStudentSortOrder] = useState("asc");
 
-  // ── bulk select ─────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState(new Set());
-
-  // ── masterlist search (same behavior as Manage Students) ───────────────
   const [masterlistSearch, setMasterlistSearch] = useState("");
 
-  // ── masterlist sorting ───────────────────────────────────────────────────
   const [masterlistSort, setMasterlistSort] = useState({
     key: "lrn",
     direction: "asc",
@@ -126,7 +105,6 @@ const ManageClasses = () => {
     );
   };
 
-  // ── schedule sorting (sort only, no search) ─────────────────────────────
   const [scheduleSort, setScheduleSort] = useState({
     key: "time",
     direction: "asc",
@@ -139,7 +117,6 @@ const ManageClasses = () => {
     );
   };
 
-  // ── student add/import menu ─────────────────────────────────────────────
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const addMenuRef = useRef(null);
   const studentFileRef = useRef(null);
@@ -154,9 +131,8 @@ const ManageClasses = () => {
   });
   const [studentImportFinished, setStudentImportFinished] = useState(false);
 
-  // ── Updated Form Hook state to manage timeline inputs ──
   const [schedForm, setSchedForm] = useState({
-    subject: "Math",
+    subject: SUBJECTS[0],
     startTime: "",
     endTime: "",
     teacherId: "",
@@ -166,7 +142,6 @@ const ManageClasses = () => {
   const { toast, showToast } = useToast();
   const { isOnline } = useNetworkStatus();
 
-  // ── submit guards (separate lock per action) ────────────────────────────
   const guardEnroll = useSubmitGuard();
   const guardSchedule = useSubmitGuard();
   const guardStudentImport = useSubmitGuard();
@@ -183,11 +158,14 @@ const ManageClasses = () => {
   });
   const closeConfirm = () => setConfirm((c) => ({ ...c, open: false }));
 
-  // ── INTERCEPT SIDEBAR NAVIGATION CLICKS TO RESET DESTINATION CONTEXT ──
   useEffect(() => {
     const handleSidebarClick = (e) => {
-      const target = e.target.closest("a, button, div, li, span");
-      if (target && target.textContent && target.textContent.includes("Manage Classes")) {
+      const target = e.target.closest(".menu li");
+      if (
+        target &&
+        target.textContent &&
+        target.textContent.includes("Manage Classes")
+      ) {
         setCurrentView("view-grade");
         setCurrentGrade(null);
         setCurrentSection("");
@@ -199,14 +177,12 @@ const ManageClasses = () => {
     return () => document.removeEventListener("mousedown", handleSidebarClick);
   }, []);
 
-  // ── fetch teachers once ───────────────────────────────────────────────
   useEffect(() => {
     getTeachers()
       .then(setTeachers)
       .catch((e) => setError(e.message));
   }, []);
 
-  // ── fetch section data ────────────────────────────────────────────────
   useEffect(() => {
     if (!currentGrade || !currentSection) return;
     const load = async () => {
@@ -229,7 +205,6 @@ const ManageClasses = () => {
     load();
   }, [currentGrade, currentSection]);
 
-  // Close add menu on outside click
   useEffect(() => {
     const handler = (e) => {
       if (addMenuRef.current && !addMenuRef.current.contains(e.target))
@@ -239,7 +214,6 @@ const ManageClasses = () => {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── helper: clear schedules when section becomes empty ────────────────
   const maybeClearSchedules = async (remaining) => {
     if (remaining.length === 0 && schedules.length > 0) {
       try {
@@ -251,7 +225,6 @@ const ManageClasses = () => {
     }
   };
 
-  // ── manual enroll ─────────────────────────────────────────────────────
   const openEnrollModal = async () => {
     setFormError("");
     setSelectedStudentId("");
@@ -304,7 +277,6 @@ const ManageClasses = () => {
       });
   };
 
-  // ── bulk select helpers (operate on the currently visible/filtered rows) ─
   const toggleSelectOne = (enrollId) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -314,7 +286,6 @@ const ManageClasses = () => {
     });
   };
 
-  // ── drop (bulk) ───────────────────────────────────────────────────────
   const bulkDrop = () => {
     if (selectedIds.size === 0) return;
     setConfirm({
@@ -351,7 +322,6 @@ const ManageClasses = () => {
     });
   };
 
-  // ── promote / graduate (bulk) ─────────────────────────────────────────
   const bulkPromote = () => {
     if (selectedIds.size === 0) return;
     const isGrade6 = currentGrade === 6;
@@ -397,9 +367,6 @@ const ManageClasses = () => {
     });
   };
 
-  // ════════════════════════════════════════════════════════════════════════
-  // STUDENT BATCH ENROLL
-  // ════════════════════════════════════════════════════════════════════════
   const handleStudentFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -545,7 +512,18 @@ const ManageClasses = () => {
     (r) => r.errs.length > 0,
   ).length;
 
-  // ── save schedule (add / edit) ────────────────────────────────────────
+  const takenSubjectsInSection = new Set(
+    schedules.filter((s) => s.id !== editSchedId).map((s) => s.subject),
+  );
+
+  const teacherConflictMap = {};
+  allSchedules.forEach((s) => {
+    if (s.id === editSchedId) return;
+    if (s.start === schedForm.startTime && s.end === schedForm.endTime) {
+      teacherConflictMap[s.teacherId] = { grade: s.grade, section: s.section };
+    }
+  });
+
   const saveSchedule = (e) => {
     e.preventDefault();
     setFormError("");
@@ -554,7 +532,9 @@ const ManageClasses = () => {
       return;
     }
     if (schedForm.startTime >= schedForm.endTime) {
-      setFormError("Start time must be strictly before the end time parameter.");
+      setFormError(
+        "Start time must be strictly before the end time parameter.",
+      );
       return;
     }
     if (!schedForm.teacherId) {
@@ -643,23 +623,14 @@ const ManageClasses = () => {
     setFormError("");
     setShowScheduleModal(true);
 
-    // Refresh the full cross-section/grade schedule list so the subject
-    // and teacher dropdowns reflect the latest conflicts, not stale data.
-  
- async function refresherSchedules(){
-    try {
-      setAllSchedules(await getSchedules());
-    } catch (e) {
-      console.error("Failed to refresh schedules for conflict check:", e);
-    }
-  };
-
-  async function checkConflicts(){
-    try {
-      setAllSchedules(await getSchedules());
-    } catch (e) {
-      console.error("Failed to refresh schedules for conflict check:", e);
-    }
+    const checkConflicts = async () => {
+      try {
+        setAllSchedules(await getSchedules());
+      } catch (e) {
+        console.error("Failed to refresh schedules for conflict check:", e);
+      }
+    };
+    checkConflicts();
   };
 
   const handleSelectGrade = (level) =>
@@ -678,7 +649,6 @@ const ManageClasses = () => {
   const studentDisplayName = (s) =>
     `${s.lastName}, ${s.firstName}${s.middleName ? ` ${s.middleName.charAt(0).toUpperCase()}.` : ""}`;
 
-  // ── SEARCH AND INLINE MASTERLIST SORT MATRIX ENGINE (FIXED) ──
   const handleStudentSortToggle = (field) => {
     if (studentSortField === field) {
       setStudentSortOrder(studentSortOrder === "asc" ? "desc" : "asc");
@@ -706,14 +676,13 @@ const ManageClasses = () => {
     if (studentSortField === "name") {
       const nameA = studentDisplayName(a).toLowerCase();
       const nameB = studentDisplayName(b).toLowerCase();
-      return studentSortOrder === "asc" 
-        ? nameA.localeCompare(nameB) 
+      return studentSortOrder === "asc"
+        ? nameA.localeCompare(nameB)
         : nameB.localeCompare(nameA);
     }
     return 0;
   });
 
-  // Accurate check to see if every single sorted student is explicitly selected
   const allSelected =
     sortedSectionStudents.length > 0 &&
     sortedSectionStudents.every((s) => selectedIds.has(s.enrollId));
@@ -734,8 +703,26 @@ const ManageClasses = () => {
     }
   };
 
+  // ── Fully Custom Accurate Sorting Engine ──
   const sortedSchedules = [...schedules].sort((a, b) => {
-    return (a.start || "").localeCompare(b.start || "");
+    const dir = scheduleSort.direction === "asc" ? 1 : -1;
+
+    if (scheduleSort.key === "time") {
+      const timeA = a.start || "";
+      const timeB = b.start || "";
+      return timeA.localeCompare(timeB) * dir;
+    }
+    if (scheduleSort.key === "subject") {
+      const subjA = (a.subject || "").toLowerCase();
+      const subjB = (b.subject || "").toLowerCase();
+      return subjA.localeCompare(subjB) * dir;
+    }
+    if (scheduleSort.key === "teacher") {
+      const tA = teacherName(a.teacherId).toLowerCase();
+      const tB = teacherName(b.teacherId).toLowerCase();
+      return tA.localeCompare(tB) * dir;
+    }
+    return 0;
   });
 
   return (
@@ -847,13 +834,15 @@ const ManageClasses = () => {
                 className="btn-back-mc"
                 onClick={() => {
                   setCurrentView("view-action");
-                  setStudentSearchQuery(""); 
+                  setStudentSearchQuery("");
                 }}
               >
                 <i className="fas fa-arrow-left" />
               </button>
-              
-              <h3>Grade {currentGrade} – Section {currentSection} Masterlist</h3>
+
+              <h3>
+                Grade {currentGrade} – Section {currentSection} Masterlist
+              </h3>
 
               <input
                 ref={studentFileRef}
@@ -862,7 +851,7 @@ const ManageClasses = () => {
                 style={{ display: "none" }}
                 onChange={handleStudentFileChange}
               />
-              
+
               <div className="mc-toolbar-actions">
                 <div className="mc-student-search-container">
                   <i className="fas fa-search mc-student-search-icon"></i>
@@ -878,22 +867,56 @@ const ManageClasses = () => {
                       className="mc-student-search-clear"
                       onClick={() => setStudentSearchQuery("")}
                     >
-                      &times;
+                      <i className="fas fa-times"></i>
                     </button>
                   )}
                 </div>
 
-                {/* Bulk Options (Visible when selectedIds.size > 0) */}
                 {selectedIds.size > 0 && (
                   <>
-                    <span className="selected-count-badge" style={{ background: "#ddeeff", color: "#2c6fad", padding: "6px 14px", borderRadius: "20px", fontWeight: "700", fontSize: "0.85rem" }}>
+                    <span
+                      className="selected-count-badge"
+                      style={{
+                        background: "#ddeeff",
+                        color: "#2c6fad",
+                        padding: "6px 14px",
+                        borderRadius: "20px",
+                        fontWeight: "700",
+                        fontSize: "0.85rem",
+                      }}
+                    >
                       {selectedIds.size} selected
                     </span>
-                    <button className="btn-bulk-drop" onClick={bulkDrop} style={{ background: "#f1c40f", color: "black", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}>
+                    <button
+                      className="btn-bulk-drop"
+                      onClick={bulkDrop}
+                      style={{
+                        background: "#f1c40f",
+                        color: "black",
+                        border: "none",
+                        padding: "8px 16px",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                      }}
+                    >
                       <i className="fas fa-user-minus"></i> Drop
                     </button>
-                    <button className="btn-bulk-promote" onClick={bulkPromote} style={{ background: "#a55f81", color: "white", border: "none", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}>
-                      <i className="fas fa-arrow-up"></i> {currentGrade === 6 ? "Graduate" : "Promote"}
+                    <button
+                      className="btn-bulk-promote"
+                      onClick={bulkPromote}
+                      style={{
+                        background: "#a55f81",
+                        color: "white",
+                        border: "none",
+                        padding: "8px 16px",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                      }}
+                    >
+                      <i className="fas fa-arrow-up"></i>{" "}
+                      {currentGrade === 6 ? "Graduate" : "Promote"}
                     </button>
                   </>
                 )}
@@ -940,30 +963,6 @@ const ManageClasses = () => {
               </div>
             </div>
 
-            {/* ── search bar (same design as Manage Students) ── */}
-            <div className="mc-search-bar-row">
-              <div className="mc-search-input-wrap">
-                <i className="fas fa-search mc-search-icon"></i>
-                <input
-                  type="text"
-                  className="mc-search-input"
-                  placeholder="Search name or LRN…"
-                  value={masterlistSearch}
-                  onChange={(e) => setMasterlistSearch(e.target.value)}
-                />
-                {masterlistSearch && (
-                  <button
-                    type="button"
-                    className="mc-search-clear"
-                    onClick={() => setMasterlistSearch("")}
-                    aria-label="Clear search"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            </div>
-
             <div className="table-container-mc">
               <table className="data-table-mc">
                 <thead>
@@ -981,16 +980,20 @@ const ManageClasses = () => {
                       className="sortable-table-header"
                     >
                       LRN
-                      <i className={`fas ${studentSortField === "lrn" ? (studentSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
-                      <span className="mt-sort-hint-label">(sort)</span>
+                      <i
+                        className={`fas ${studentSortField === "lrn" ? (studentSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                      ></i>
+                      <span className="mt-sort-hint-label"></span>
                     </th>
                     <th
                       onClick={() => handleStudentSortToggle("name")}
                       className="sortable-table-header"
                     >
                       Name
-                      <i className={`fas ${studentSortField === "name" ? (studentSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}></i>
-                      <span className="mt-sort-hint-label">(sort)</span>
+                      <i
+                        className={`fas ${studentSortField === "name" ? (studentSortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                      ></i>
+                      <span className="mt-sort-hint-label"></span>
                     </th>
                   </tr>
                 </thead>
@@ -999,7 +1002,11 @@ const ManageClasses = () => {
                     sortedSectionStudents.map((student) => (
                       <tr
                         key={student.enrollId}
-                        className={selectedIds.has(student.enrollId) ? "row-selected" : ""}
+                        className={
+                          selectedIds.has(student.enrollId)
+                            ? "row-selected"
+                            : ""
+                        }
                       >
                         <td>
                           <input
@@ -1008,8 +1015,18 @@ const ManageClasses = () => {
                             onChange={() => toggleSelectOne(student.enrollId)}
                           />
                         </td>
-                        <td onClick={() => toggleSelectOne(student.enrollId)} style={{ cursor: "pointer" }}>{student.lrn}</td>
-                        <td onClick={() => toggleSelectOne(student.enrollId)} style={{ cursor: "pointer" }}>{studentDisplayName(student)}</td>
+                        <td
+                          onClick={() => toggleSelectOne(student.enrollId)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          {student.lrn}
+                        </td>
+                        <td
+                          onClick={() => toggleSelectOne(student.enrollId)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          {studentDisplayName(student)}
+                        </td>
                       </tr>
                     ))
                   ) : (
@@ -1018,7 +1035,9 @@ const ManageClasses = () => {
                         colSpan="3"
                         style={{ textAlign: "center", padding: "20px" }}
                       >
-                        {studentSearchQuery ? `No matching students found inside this section configuration records.` : "No students enrolled in this section."}
+                        {studentSearchQuery
+                          ? `No matching students found inside this section configuration records.`
+                          : "No students enrolled in this section."}
                       </td>
                     </tr>
                   )}
@@ -1039,7 +1058,7 @@ const ManageClasses = () => {
                 <i className="fas fa-arrow-left" />
               </button>
               <h3>Class Schedule</h3>
-              
+
               <button className="btn-add-mc" onClick={openAddScheduleModal}>
                 <i className="fas fa-plus"></i> Add Schedule
               </button>
@@ -1056,34 +1075,31 @@ const ManageClasses = () => {
                 <thead>
                   <tr>
                     <th
-                      className="mc-th-sortable"
+                      className="sortable-table-header"
                       onClick={() => handleScheduleSort("time")}
                     >
                       Time{" "}
-                      <SortIcon
-                        active={scheduleSort.key === "time"}
-                        direction={scheduleSort.direction}
-                      />
+                      <i
+                        className={`fas ${scheduleSort.key === "time" ? (scheduleSort.direction === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                      ></i>
                     </th>
                     <th
-                      className="mc-th-sortable"
+                      className="sortable-table-header"
                       onClick={() => handleScheduleSort("subject")}
                     >
                       Subject{" "}
-                      <SortIcon
-                        active={scheduleSort.key === "subject"}
-                        direction={scheduleSort.direction}
-                      />
+                      <i
+                        className={`fas ${scheduleSort.key === "subject" ? (scheduleSort.direction === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                      ></i>
                     </th>
                     <th
-                      className="mc-th-sortable"
+                      className="sortable-table-header"
                       onClick={() => handleScheduleSort("teacher")}
                     >
                       Teacher{" "}
-                      <SortIcon
-                        active={scheduleSort.key === "teacher"}
-                        direction={scheduleSort.direction}
-                      />
+                      <i
+                        className={`fas ${scheduleSort.key === "teacher" ? (scheduleSort.direction === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted") : "fa-sort mt-header-unsorted"}`}
+                      ></i>
                     </th>
                     <th style={{ textAlign: "center" }}>Action</th>
                   </tr>
@@ -1094,18 +1110,26 @@ const ManageClasses = () => {
                       <tr key={sched.id}>
                         <td>
                           <strong>
-                            {formatTimeLabel(sched.start)} – {formatTimeLabel(sched.end)}
+                            {formatTimeLabel(sched.start)} –{" "}
+                            {formatTimeLabel(sched.end)}
                           </strong>
                         </td>
                         <td>{sched.subject}</td>
                         <td>{teacherName(sched.teacherId)}</td>
                         <td style={{ textAlign: "center" }}>
-                          <button
-                            className="btn-action btn-edit"
-                            onClick={() => openEditScheduleModal(sched)}
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "center",
+                            }}
                           >
-                            Edit
-                          </button>
+                            <button
+                              className="btn-action btn-edit"
+                              onClick={() => openEditScheduleModal(sched)}
+                            >
+                              Edit
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -1113,9 +1137,14 @@ const ManageClasses = () => {
                     <tr>
                       <td
                         colSpan="4"
-                        style={{ textAlign: "center", padding: "30px", color: "#888" }}
+                        style={{
+                          textAlign: "center",
+                          padding: "30px",
+                          color: "#888",
+                        }}
                       >
-                        No timelines configured yet. Click "+ Add Schedule" to allocate a custom timeline slot.
+                        No timelines configured yet. Click "+ Add Schedule" to
+                        allocate a custom timeline slot.
                       </td>
                     </tr>
                   )}
@@ -1128,27 +1157,63 @@ const ManageClasses = () => {
 
       {/* ── MANUAL ENROLL MODAL ── */}
       {showStudentModal && (
-        <div className="modal-overlay modal-open">
-          <div className="modal-content-mc">
-            <div className="modal-header-mc">
-              <h3>Enroll Student</h3>
-              <span
-                className="close-modal-mc"
+        <div
+          className="mc-modal-overlay"
+          onClick={() => setShowStudentModal(false)}
+        >
+          <div
+            className="mc-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>
+                <div className="modal-header-icon">
+                  <i className="fas fa-user-plus"></i>
+                </div>
+                Enroll Student
+              </h3>
+              <button
+                className="close-modal"
                 onClick={() => setShowStudentModal(false)}
               >
-                &times;
-              </span>
+                <i className="fas fa-times"></i>
+              </button>
             </div>
-            <form onSubmit={enroll}>
-              <div className="modal-body-mc">
-                <div className="form-group-mc">
-                  <label>Select Student</label>
+
+            <div className="modal-body">
+              {formError && (
+                <div
+                  style={{
+                    color: "#c0392b",
+                    fontSize: "0.85rem",
+                    marginBottom: "15px",
+                    background: "rgba(231, 76, 60, 0.1)",
+                    padding: "10px 14px",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(231, 76, 60, 0.2)",
+                  }}
+                >
+                  <i
+                    className="fas fa-exclamation-circle"
+                    style={{ marginRight: "6px" }}
+                  ></i>{" "}
+                  {formError}
+                </div>
+              )}
+
+              <form className="mc-grid" onSubmit={enroll} id="enrollForm">
+                <div className="mc-field-group mc-grid-span-2">
+                  <label className="mc-field-label">Select Student</label>
                   {eligibleStudents.length === 0 ? (
-                    <p style={{ color: "#888", fontSize: "0.9rem" }}>
+                    <div
+                      className="mc-view-box"
+                      style={{ color: "#95a5a6", textAlign: "center" }}
+                    >
                       No eligible students for Grade {currentGrade}.
-                    </p>
+                    </div>
                   ) : (
                     <select
+                      className="mc-input"
                       required
                       value={selectedStudentId}
                       onChange={(e) => setSelectedStudentId(e.target.value)}
@@ -1164,82 +1229,111 @@ const ManageClasses = () => {
                     </select>
                   )}
                 </div>
-                {formError && (
-                  <p
-                    style={{
-                      color: "red",
-                      fontSize: "0.85rem",
-                      marginTop: "8px",
-                    }}
-                  >
-                    ⚠ {formError}
-                  </p>
-                )}
-              </div>
-              <div className="modal-footer-mc">
-                <button
-                  type="button"
-                  className="btn-cancel-mc"
-                  onClick={() => setShowStudentModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn-save-mc"
-                  disabled={eligibleStudents.length === 0}
-                >
-                  Enroll Student
-                </button>
-              </div>
-            </form>
+              </form>
+            </div>
+            <div className="modal-footer-mc">
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={() => setShowStudentModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn-save"
+                form="enrollForm"
+                disabled={eligibleStudents.length === 0}
+              >
+                Enroll Student
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* ── TIMELINE SCHEDULE MODAL ── */}
       {showScheduleModal && (
-        <div className="modal-overlay modal-open">
-          <div className="modal-content-mc">
-            <div className="modal-header-mc">
-              <h3>{isEditingSched ? "Modify Timeline Slot" : "Add Timeline Slot"}</h3>
-              <span
-                className="close-modal-mc"
+        <div
+          className="mc-modal-overlay"
+          onClick={() => setShowScheduleModal(false)}
+        >
+          <div
+            className="mc-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>
+                <div className="modal-header-icon">
+                  <i
+                    className={isEditingSched ? "fas fa-edit" : "fas fa-plus"}
+                  ></i>
+                </div>
+                {isEditingSched ? "Modify Timeline Slot" : "Add Timeline Slot"}
+              </h3>
+              <button
+                className="close-modal"
                 onClick={() => setShowScheduleModal(false)}
               >
-                &times;
-              </span>
+                <i className="fas fa-times"></i>
+              </button>
             </div>
-            <form onSubmit={saveSchedule}>
-              <div className="modal-body-mc">
-                <div className="form-group-mc" style={{ display: "flex", gap: "12px", BoneBottom: "15px" }}>
-                  <div style={{ flex: 1 }}>
-                    <label>Start Time</label>
-                    <input
-                      type="time"
-                      required
-                      value={schedForm.startTime}
-                      onChange={(e) =>
-                        setSchedForm({ ...schedForm, startTime: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label>End Time</label>
-                    <input
-                      type="time"
-                      required
-                      value={schedForm.endTime}
-                      onChange={(e) =>
-                        setSchedForm({ ...schedForm, endTime: e.target.value })
-                      }
-                    />
-                  </div>
+
+            <div className="modal-body">
+              {formError && (
+                <div
+                  style={{
+                    color: "#c0392b",
+                    fontSize: "0.85rem",
+                    marginBottom: "15px",
+                    background: "rgba(231, 76, 60, 0.1)",
+                    padding: "10px 14px",
+                    borderRadius: "12px",
+                    border: "1px solid rgba(231, 76, 60, 0.2)",
+                  }}
+                >
+                  <i
+                    className="fas fa-exclamation-circle"
+                    style={{ marginRight: "6px" }}
+                  ></i>{" "}
+                  {formError}
+                </div>
+              )}
+
+              <form
+                className="mc-grid"
+                onSubmit={saveSchedule}
+                id="scheduleForm"
+              >
+                <div className="mc-field-group">
+                  <label className="mc-field-label">Start Time</label>
+                  <input
+                    className="mc-input"
+                    type="time"
+                    required
+                    value={schedForm.startTime}
+                    onChange={(e) =>
+                      setSchedForm({ ...schedForm, startTime: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="mc-field-group">
+                  <label className="mc-field-label">End Time</label>
+                  <input
+                    className="mc-input"
+                    type="time"
+                    required
+                    value={schedForm.endTime}
+                    onChange={(e) =>
+                      setSchedForm({ ...schedForm, endTime: e.target.value })
+                    }
+                  />
                 </div>
 
-                <div className="form-group-mc">
-                  <label>Subject</label>
+                <div className="mc-field-group mc-grid-span-2">
+                  <label className="mc-field-label">Subject</label>
                   <select
+                    className="mc-input"
                     value={schedForm.subject}
                     onChange={(e) =>
                       setSchedForm({ ...schedForm, subject: e.target.value })
@@ -1255,28 +1349,20 @@ const ManageClasses = () => {
                       );
                     })}
                   </select>
-                  {takenSubjectsInSection.has(schedForm.subject) && (
-                    <p
-                      style={{
-                        color: "#e67e22",
-                        fontSize: "0.78rem",
-                        marginTop: "4px",
-                      }}
-                    >
-                      ⚠ This subject is already scheduled in this section at
-                      another time slot.
-                    </p>
-                  )}
                 </div>
 
-                <div className="form-group-mc">
-                  <label>Teacher</label>
+                <div className="mc-field-group mc-grid-span-2">
+                  <label className="mc-field-label">Teacher</label>
                   {teachers.length === 0 ? (
-                    <p style={{ color: "#888", fontSize: "0.9rem" }}>
+                    <div
+                      className="mc-view-box"
+                      style={{ color: "#95a5a6", textAlign: "center" }}
+                    >
                       No teachers found.
-                    </p>
+                    </div>
                   ) : (
                     <select
+                      className="mc-input"
                       required
                       value={schedForm.teacherId}
                       onChange={(e) =>
@@ -1294,109 +1380,72 @@ const ManageClasses = () => {
                             {t.fname} {t.mname ? t.mname + " " : ""}
                             {t.lname}
                             {t.advisory ? ` (Advisory: ${t.advisory})` : ""}
-                            {/* CHANGED: shortened from the full
-                                "— Already teaching Grade X-Y at this time"
-                                sentence. Native <select>/<option> elements
-                                are rendered by the OS/browser widget, not
-                                by page CSS — white-space, max-width, and
-                                overflow rules don't apply inside <option>
-                                text, so a long label just pushes the whole
-                                dropdown wider than the modal (and the
-                                viewport). The full explanation is still
-                                shown to the admin below, in the warning
-                                <p> under this <select>, which is a normal
-                                DOM element and wraps correctly. */}
                             {conflict ? " — Unavailable" : ""}
                           </option>
                         );
                       })}
                     </select>
                   )}
-                  {schedForm.teacherId &&
-                    teacherConflictMap[schedForm.teacherId] && (
-                      <p
-                        style={{
-                          color: "#e67e22",
-                          fontSize: "0.78rem",
-                          marginTop: "4px",
-                        }}
-                      >
-                        ⚠ This teacher is already teaching Grade{" "}
-                        {teacherConflictMap[schedForm.teacherId].grade}-
-                        {teacherConflictMap[schedForm.teacherId].section} at
-                        this time slot.
-                      </p>
-                    )}
                 </div>
-
-                {formError && (
-                  <p
-                    style={{
-                      color: "red",
-                      fontSize: "0.85rem",
-                      marginTop: "8px",
-                    }}
-                  >
-                    ⚠ {formError}
-                  </p>
-                )}
-              </div>
-              <div className="modal-footer-mc">
-                <button
-                  type="button"
-                  className="btn-cancel-mc"
-                  onClick={() => setShowScheduleModal(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-save-mc">
-                  Save
-                </button>
-              </div>
-            </form>
+              </form>
+            </div>
+            <div className="modal-footer-mc">
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={() => setShowScheduleModal(false)}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn-save" form="scheduleForm">
+                Save
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* ── STUDENT IMPORT PREVIEW MODAL ── */}
       {studentImportOpen && (
-        <div className="modal-overlay modal-open" style={{ zIndex: 9999 }}>
+        <div className="mc-modal-overlay" onClick={closeStudentImportModal}>
           <div
-            className="modal-content-mc"
-            style={{ maxWidth: "720px", width: "95%" }}
+            className="mc-modal-content"
+            style={{ maxWidth: "780px", width: "95%" }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div className="modal-header-mc">
+            <div className="modal-header">
               <h3>
-                <i
-                  className="fas fa-file-import"
-                  style={{ marginRight: "8px" }}
-                ></i>
+                <div className="modal-header-icon">
+                  <i className="fas fa-file-import"></i>
+                </div>
                 Import Students — Grade {currentGrade} Section {currentSection}
               </h3>
-              <span
-                className="close-modal-mc"
-                onClick={closeStudentImportModal}
-              >
-                &times;
-              </span>
+              <button className="close-modal" onClick={closeStudentImportModal}>
+                <i className="fas fa-times"></i>
+              </button>
             </div>
-            <div className="modal-body-mc">
+
+            <div className="modal-body">
               <div
                 style={{
-                  background: "#eaf4fb",
-                  border: "1px solid #aed6f1",
-                  borderRadius: "8px",
-                  padding: "10px 14px",
-                  marginBottom: "14px",
-                  fontSize: "0.82rem",
-                  color: "#2980b9",
+                  background:
+                    "color-mix(in srgb, var(--accent) 8%, transparent)",
+                  border:
+                    "1px solid color-mix(in srgb, var(--accent) 15%, transparent)",
+                  borderRadius: "12px",
+                  padding: "12px 16px",
+                  marginBottom: "16px",
+                  fontSize: "0.85rem",
+                  color: "var(--accent)",
                   display: "flex",
                   alignItems: "center",
-                  gap: "8px",
+                  gap: "10px",
+                  fontWeight: "600",
                 }}
               >
                 <i className="fas fa-info-circle"></i>
-                Upload the Excel file downloaded from <strong>Manage Students</strong>. Students are matched by LRN.
+                Upload the Excel file downloaded from{" "}
+                <strong>Manage Students</strong>. Students are matched by LRN.
               </div>
 
               {studentImportErrors.length > 0 && !studentImportFinished && (
@@ -1413,7 +1462,7 @@ const ManageClasses = () => {
                     style={{
                       display: "flex",
                       gap: "12px",
-                      marginBottom: "10px",
+                      marginBottom: "15px",
                       flexWrap: "wrap",
                     }}
                   >
@@ -1431,13 +1480,15 @@ const ManageClasses = () => {
                   <div
                     style={{
                       overflowX: "auto",
-                      maxHeight: "300px",
+                      maxHeight: "350px",
                       overflowY: "auto",
+                      borderRadius: "12px",
+                      border: "1px solid #eef1f6",
                     }}
                   >
                     <table
                       className="data-table-mc"
-                      style={{ fontSize: "0.8rem" }}
+                      style={{ fontSize: "0.8rem", margin: "0" }}
                     >
                       <thead>
                         <tr>
@@ -1453,7 +1504,10 @@ const ManageClasses = () => {
                           <tr
                             key={r.row}
                             style={{
-                              background: r.errs.length > 0 ? "#fff5f5" : "",
+                              background:
+                                r.errs.length > 0
+                                  ? "rgba(231, 76, 60, 0.05)"
+                                  : "",
                             }}
                           >
                             <td>{r.row}</td>
@@ -1463,7 +1517,7 @@ const ManageClasses = () => {
                             <td>
                               {r.errs.length === 0 ? (
                                 <span
-                                  style={{ color: "#27ae60", fontWeight: 600 }}
+                                  style={{ color: "#27ae60", fontWeight: 700 }}
                                 >
                                   ✓ Ready to Enroll
                                 </span>
@@ -1472,6 +1526,7 @@ const ManageClasses = () => {
                                   style={{
                                     color: "#e74c3c",
                                     fontSize: "0.75rem",
+                                    fontWeight: 600,
                                   }}
                                 >
                                   {r.errs.join(", ")}
@@ -1507,18 +1562,16 @@ const ManageClasses = () => {
                 </div>
               )}
             </div>
+
             <div className="modal-footer-mc">
-              <button
-                className="btn-cancel-mc"
-                onClick={closeStudentImportModal}
-              >
+              <button className="btn-cancel" onClick={closeStudentImportModal}>
                 {studentImportFinished ? "Close" : "Cancel"}
               </button>
               {!studentImportFinished &&
                 studentImportRows.length > 0 &&
                 studentValidCount > 0 && (
                   <button
-                    className="btn-save-mc"
+                    className="btn-save"
                     onClick={handleStudentImportSave}
                     disabled={studentImportLoading}
                   >
@@ -1534,5 +1587,5 @@ const ManageClasses = () => {
     </main>
   );
 };
-}
+
 export default ManageClasses;

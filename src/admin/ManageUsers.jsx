@@ -20,13 +20,14 @@ function ManageUsers() {
   const [linkedStudents, setLinkedStudents] = useState([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
 
-  // ── Sorting State Containers ──────────────────────────────────────────────
+  // ── Search & Sorting State Containers ────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState("asc"); // 'asc' = A-Z, 'desc' = Z-A
 
   // ── On mount: run maintenance tasks then load users ────────────────────
   useEffect(() => {
     (async () => {
-      await runAccountMaintenanceTasks(); // auto-archive stale accounts
+      await runAccountMaintenanceTasks();
       fetchUsers();
     })();
   }, []);
@@ -35,9 +36,14 @@ function ManageUsers() {
   useEffect(() => {
     const handleSidebarClick = (e) => {
       const target = e.target.closest("a, button, div, li, span");
-      if (target && target.textContent && target.textContent.includes("Users Account")) {
+      if (
+        target &&
+        target.textContent &&
+        target.textContent.includes("Users Account")
+      ) {
         setCurrentView("categories");
         setCurrentRoleFilter("");
+        setSearchQuery("");
       }
     };
     document.addEventListener("mousedown", handleSidebarClick);
@@ -62,7 +68,8 @@ function ManageUsers() {
 
   const openUserList = (role) => {
     setCurrentRoleFilter(role);
-    setSortOrder("asc"); 
+    setSortOrder("asc");
+    setSearchQuery("");
     setCurrentView("list");
   };
 
@@ -113,10 +120,24 @@ function ManageUsers() {
     setSortOrder(sortOrder === "asc" ? "desc" : "asc");
   };
 
-  const sortedUsers = [...filteredUsers].sort((a, b) => {
+  const activeSearchQuery = searchQuery.trim().toLowerCase();
+
+  // Search Filter Pipeline
+  const searchedUsers = filteredUsers.filter((u) => {
+    if (!activeSearchQuery) return true;
+    const name = (u.role === "Teacher" ? u.fullName : u.guardianName) || "";
+    const username = u.username || "";
+    return (
+      name.toLowerCase().includes(activeSearchQuery) ||
+      username.toLowerCase().includes(activeSearchQuery)
+    );
+  });
+
+  // Sort Pipeline
+  const sortedUsers = [...searchedUsers].sort((a, b) => {
     const nameA = (a.role === "Teacher" ? a.fullName : a.guardianName) || "";
     const nameB = (b.role === "Teacher" ? b.fullName : b.guardianName) || "";
-    
+
     return sortOrder === "asc"
       ? nameA.toLowerCase().localeCompare(nameB.toLowerCase())
       : nameB.toLowerCase().localeCompare(nameA.toLowerCase());
@@ -140,7 +161,7 @@ function ManageUsers() {
               <div className="toolbar-mu">
                 <div>
                   <h2 className="page-title">System Accounts</h2>
-                  <p className="page-subtitle">
+                  <p className="page-subtitle" style={{ color: "#5c6a79" }}>
                     Select a user group to manage login credentials.
                   </p>
                 </div>
@@ -195,15 +216,36 @@ function ManageUsers() {
           {currentView === "list" && (
             <div className="view-section">
               <div className="toolbar-mu">
-                <button
-                  className="btn-back-mu"
-                  onClick={() => setCurrentView("categories")}
-                >
-                  <i className="fas fa-arrow-left"></i>
-                </button>
-                <h3 className="list-title">
-                  {currentRoleFilter} Accounts List
-                </h3>
+                <div className="toolbar-mu-header-group">
+                  <button
+                    className="btn-back-mu"
+                    onClick={() => setCurrentView("categories")}
+                  >
+                    <i className="fas fa-arrow-left"></i>
+                  </button>
+                  <h3 className="list-title">
+                    {currentRoleFilter} Accounts List
+                  </h3>
+                </div>
+
+                <div className="mu-global-search-container">
+                  <i className="fas fa-search mu-global-search-icon"></i>
+                  <input
+                    type="text"
+                    className="mu-global-search-input"
+                    placeholder="Search name or username..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <button
+                      className="mu-global-search-clear"
+                      onClick={() => setSearchQuery("")}
+                    >
+                      <i className="fas fa-times"></i>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {loading ? (
@@ -215,14 +257,16 @@ function ManageUsers() {
                   <table className="data-table-mu">
                     <thead>
                       <tr>
-                        <th 
-                          onClick={handleSortToggle} 
+                        <th
+                          onClick={handleSortToggle}
                           className="sortable-table-header"
                           style={{ cursor: "pointer", userSelect: "none" }}
                         >
                           Full Name
-                          <i className={`fas ${sortOrder === "asc" ? "fa-sort-up mt-header-sorted" : "fa-sort-down mt-header-sorted"}`}></i>
-                          <span className="mt-sort-hint-label">(sort)</span>
+                          <i
+                            className={`fas ${sortOrder === "asc" ? "fa-sort-up mu-header-sorted" : "fa-sort-down mu-header-sorted"}`}
+                          ></i>
+                          <span className="mt-sort-hint-label"></span>
                         </th>
                         <th>Username</th>
                         <th>Status</th>
@@ -236,7 +280,9 @@ function ManageUsers() {
                             colSpan="4"
                             style={{ textAlign: "center", padding: "20px" }}
                           >
-                            No {currentRoleFilter} accounts found.
+                            {searchQuery
+                              ? `No matching accounts found for "${searchQuery}".`
+                              : `No ${currentRoleFilter} accounts found.`}
                           </td>
                         </tr>
                       ) : (
@@ -305,45 +351,56 @@ function ManageUsers() {
 
       {/* ── VIEW ACCOUNT DETAILS MODAL ── */}
       {viewModalOpen && selectedUser && (
-        <div className="modal-overlay modal-open">
-          <div className="modal-content-view modal-view">
-            <div className="modal-header modal-view-header">
-              <h3>Account Details</h3>
-              <span className="close-modal" onClick={closeViewModal}>
-                &times;
-              </span>
+        <div className="mu-modal-overlay" onClick={closeViewModal}>
+          <div
+            className="mu-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h3>
+                <div className="modal-header-icon">
+                  <i
+                    className={
+                      selectedUser.role === "Teacher"
+                        ? "fas fa-chalkboard-teacher"
+                        : "fas fa-user-friends"
+                    }
+                  ></i>
+                </div>
+                Account Details
+              </h3>
+              <button className="close-modal" onClick={closeViewModal}>
+                <i className="fas fa-times"></i>
+              </button>
             </div>
 
             <div className="modal-body">
-              <div className="view-field">
-                <label>Role</label>
-                <div className="view-value">{selectedUser.role}</div>
+              <div className="mu-field-group">
+                <label className="mu-field-label">Role</label>
+                <div className="mu-view-box">{selectedUser.role}</div>
               </div>
 
-              <div className="view-field">
-                <label>
+              <div className="mu-field-group">
+                <label className="mu-field-label">
                   {selectedUser.role === "Teacher"
                     ? "Full Name"
                     : "Guardian Name"}
                 </label>
-                <div className="view-value">
+                <div className="mu-view-box">
                   {selectedUser.role === "Teacher"
                     ? selectedUser.fullName || "—"
                     : selectedUser.guardianName || "—"}
                 </div>
               </div>
 
-              <div className="view-field">
-                <label>Username</label>
-                <div className="view-value">{selectedUser.username}</div>
+              <div className="mu-field-group">
+                <label className="mu-field-label">Username</label>
+                <div className="mu-view-box">{selectedUser.username}</div>
               </div>
 
-              <div className="view-field">
-                <label>Password</label>
-                <div
-                  className="view-value"
-                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
-                >
+              <div className="mu-field-group">
+                <label className="mu-field-label">Password</label>
+                <div className="mu-view-box">
                   <span
                     style={{
                       letterSpacing: viewPassVisible ? "normal" : "3px",
@@ -355,73 +412,88 @@ function ManageUsers() {
                     className={`fas ${viewPassVisible ? "fa-eye-slash" : "fa-eye"}`}
                     style={{
                       cursor: "pointer",
-                      color: "#888",
-                      fontSize: "0.9rem",
+                      color: "#95a5a6",
+                      fontSize: "1.1rem",
+                      transition: "color 0.2s ease",
                     }}
                     onClick={() => setViewPassVisible(!viewPassVisible)}
+                    onMouseEnter={(e) => (e.target.style.color = "#a65f81")}
+                    onMouseLeave={(e) => (e.target.style.color = "#95a5a6")}
                   ></i>
                 </div>
               </div>
 
-              <div className="view-field">
-                <label>Status</label>
-                <span
-                  className={`status-pill ${
-                    selectedUser.status === "Active"
-                      ? "active-pill"
-                      : "inactive-pill"
-                  } view-status`}
-                >
-                  {selectedUser.status}
-                </span>
+              <div className="mu-field-group">
+                <label className="mu-field-label">Status</label>
+                <div>
+                  <span
+                    className={`status-pill ${
+                      selectedUser.status === "Active"
+                        ? "active-pill"
+                        : "inactive-pill"
+                    }`}
+                  >
+                    {selectedUser.status}
+                  </span>
+                </div>
               </div>
 
               {selectedUser.role === "Parent" &&
                 selectedUser.studentIds?.length > 0 && (
-                  <div className="view-field">
-                    <label>
+                  <div className="mu-field-group">
+                    <label className="mu-field-label">
                       Linked Students ({selectedUser.studentIds.length})
                     </label>
                     <div
                       style={{
-                        background: "#f5f5f5",
-                        borderRadius: "6px",
-                        padding: "8px 12px",
-                        fontSize: "0.85rem",
-                        color: "#555",
+                        background: "#f8f9fa",
+                        border: "1.5px solid #eef1f6",
+                        borderRadius: "12px",
+                        padding: "8px 16px",
+                        fontSize: "0.9rem",
+                        color: "#1a1a2e",
                       }}
                     >
                       {studentsLoading ? (
-                        <div style={{ padding: "4px 0", color: "#999" }}>
+                        <div
+                          style={{
+                            padding: "8px 0",
+                            color: "#95a5a6",
+                            fontStyle: "italic",
+                          }}
+                        >
                           <i
                             className="fas fa-spinner fa-spin"
-                            style={{ marginRight: "6px" }}
+                            style={{ marginRight: "8px" }}
                           ></i>
                           Loading students…
                         </div>
                       ) : linkedStudents.length > 0 ? (
-                        linkedStudents.map((s) => {
+                        linkedStudents.map((s, idx) => {
                           const isInactive = s.archived || s.grade === 7;
+                          const isLast = idx === linkedStudents.length - 1;
                           return (
                             <div
                               key={s.id}
                               style={{
-                                padding: "5px 0",
+                                padding: "10px 0",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "space-between",
-                                borderBottom: "1px solid #e8e8e8",
+                                borderBottom: isLast
+                                  ? "none"
+                                  : "1px solid #eef1f6",
                               }}
                             >
                               <span>
                                 <i
                                   className="fas fa-user-graduate"
                                   style={{
-                                    marginRight: "6px",
-                                    color: "#a65f81",
+                                    marginRight: "8px",
+                                    color: "var(--accent)",
                                   }}
                                 ></i>
-                                <strong>
+                                <strong style={{ fontWeight: "600" }}>
                                   {s.lastName}, {s.firstName}
                                   {s.middleName
                                     ? ` ${s.middleName.charAt(0).toUpperCase()}.`
@@ -431,18 +503,19 @@ function ManageUsers() {
                               <span
                                 style={{
                                   display: "flex",
-                                  gap: "6px",
+                                  gap: "8px",
                                   alignItems: "center",
                                 }}
                               >
                                 <span
                                   style={{
-                                    background: "#ddeeff",
-                                    color: "#2c6fad",
+                                    background:
+                                      "color-mix(in srgb, var(--primary) 10%, transparent)",
+                                    color: "var(--primary)",
                                     borderRadius: "12px",
-                                    padding: "1px 8px",
+                                    padding: "3px 10px",
                                     fontSize: "0.75rem",
-                                    fontWeight: 600,
+                                    fontWeight: 700,
                                   }}
                                 >
                                   {gradeLabel(s.grade)}
@@ -453,9 +526,9 @@ function ManageUsers() {
                                       background: "rgba(231,76,60,0.12)",
                                       color: "#e74c3c",
                                       borderRadius: "12px",
-                                      padding: "1px 8px",
-                                      fontSize: "0.7rem",
-                                      fontWeight: 600,
+                                      padding: "3px 10px",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 700,
                                     }}
                                   >
                                     {s.grade === 7 ? "Graduated" : "Archived"}
@@ -466,22 +539,19 @@ function ManageUsers() {
                           );
                         })
                       ) : (
-                        <div style={{ color: "#999", padding: "4px 0" }}>
+                        <div
+                          style={{
+                            color: "#95a5a6",
+                            padding: "8px 0",
+                            fontStyle: "italic",
+                          }}
+                        >
                           No student details found.
                         </div>
                       )}
                     </div>
                   </div>
                 )}
-            </div>
-
-            <div className="modal-footer-mu">
-              <button
-                className="btn-cancel btn-view-close"
-                onClick={closeViewModal}
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>

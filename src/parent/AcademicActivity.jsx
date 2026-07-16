@@ -9,7 +9,6 @@ import {
   where,
   getDocs,
 } from "firebase/firestore";
-import { getActiveSchoolYearLabel } from "../api/firebaseApi";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./AcademicActivity.css";
 
@@ -61,6 +60,16 @@ const formatEditedLabel = (editedAt) => {
   })}`;
 };
 
+// Properly defined sort logic so the file doesn't crash
+function sortMostRecentFirst(a, b) {
+  const ca = a.createdAt || "";
+  const cb = b.createdAt || "";
+  if (ca && cb) return cb.localeCompare(ca);
+  if (ca && !cb) return -1;
+  if (!ca && cb) return 1;
+  return (b.date || "9999-99-99").localeCompare(a.date || "9999-99-99");
+}
+
 function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
   const [children, setChildren] = useState([]);
   const [selectedChild, setSelectedChild] = useState(null);
@@ -81,14 +90,19 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
   useEffect(() => {
     const handleParentSidebarClick = (e) => {
       const target = e.target.closest("li, button, div, span, a");
-      if (target && target.textContent && target.textContent.includes("Academic Activity")) {
+      if (
+        target &&
+        target.textContent &&
+        target.textContent.includes("Academic Activity")
+      ) {
         setCurrentView("select-subject");
         setCurrentSubject("");
         setClassworkList([]);
       }
     };
     document.addEventListener("mousedown", handleParentSidebarClick);
-    return () => document.removeEventListener("mousedown", handleParentSidebarClick);
+    return () =>
+      document.removeEventListener("mousedown", handleParentSidebarClick);
   }, []);
 
   useEffect(() => {
@@ -159,8 +173,22 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
           where("section", "==", child.enrolledSection),
         ),
       );
-      const subs = [...new Set(snap.docs.map((d) => d.data().subject))];
-      setSubjects(subs.map((name) => ({ name, icon: iconFor(name) })));
+
+      const subsMap = new Map();
+      snap.docs.forEach((d) => {
+        const data = d.data();
+        if (!subsMap.has(data.subject)) {
+          subsMap.set(data.subject, {
+            name: data.subject,
+            icon: iconFor(data.subject),
+            time:
+              data.start && data.end
+                ? `${data.start} - ${data.end}`
+                : data.timeSlot || "",
+          });
+        }
+      });
+      setSubjects(Array.from(subsMap.values()));
     } catch (e) {
       console.error(e);
     } finally {
@@ -189,14 +217,12 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
     setCurrentSubject(subjectName);
     setLoading(true);
     try {
-      const activeYear = schoolYear || (await getActiveSchoolYearLabel());
       const snap = await getDocs(
         query(
           col("Classwork"),
           where("grade", "==", selectedChild.enrolledGrade),
           where("section", "==", selectedChild.enrolledSection),
           where("subject", "==", subjectName),
-          where("schoolYear", "==", activeYear),
         ),
       );
       const cws = snap.docs
@@ -239,14 +265,12 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
         }
         setCurrentSubject(focusClasswork.subject);
 
-        const activeYear = schoolYear || (await getActiveSchoolYearLabel());
         const snap = await getDocs(
           query(
             col("Classwork"),
             where("grade", "==", target.enrolledGrade),
             where("section", "==", target.enrolledSection),
             where("subject", "==", focusClasswork.subject),
-            where("schoolYear", "==", activeYear),
           ),
         );
         const cws = snap.docs
@@ -278,9 +302,13 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
   const sortedClassworkList = useMemo(() => {
     const list = [...classworkList];
     if (sortBy === "recent") {
-      return list.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+      return list.sort((a, b) =>
+        (b.createdAt || "").localeCompare(a.createdAt || ""),
+      );
     } else if (sortBy === "due") {
-      return list.sort((a, b) => (a.date || "9999-99-99").localeCompare(b.date || "9999-99-99"));
+      return list.sort((a, b) =>
+        (a.date || "9999-99-99").localeCompare(b.date || "9999-99-99"),
+      );
     }
     return list;
   }, [classworkList, sortBy]);
@@ -314,9 +342,7 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
             <div className="toolbar-aa">
               <h2 className="section-title-aa">Academic Activity</h2>
               {selectedChild && (
-                <p className="aa-main-sub-title">
-                  {selectedChild.firstName} {selectedChild.lastName} — Select Subject
-                </p>
+                <p className="aa-main-sub-title">Select Subject</p>
               )}
             </div>
           )}
@@ -325,7 +351,8 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
             <p className="aa-empty-text">No children linked to this account.</p>
           ) : (
             <>
-              {children.length > 1 && (
+              {/* Only show the child selector tabs on the "select-subject" view */}
+              {currentView === "select-subject" && children.length > 1 && (
                 <div className="aa-filter-group">
                   {children.map((c) => (
                     <button
@@ -357,14 +384,20 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
                           className="subject-card-aa"
                           onClick={() => selectSubject(sub.name)}
                         >
-                          <div className="subject-icon-aa">
+                          <div className="subject-icon-box-aa">
                             <i className={`fas ${sub.icon}`}></i>
                           </div>
                           <div className="subject-info-aa">
                             <h4>{sub.name}</h4>
                             <small>Tap to view classwork</small>
+
+                            {/* Injected Timeline Slot Display */}
+                            {sub.time && (
+                              <div className="subject-time-aa">
+                                <i className="far fa-clock"></i> {sub.time}
+                              </div>
+                            )}
                           </div>
-                          <i className="fas fa-chevron-right"></i>
                         </div>
                       ))
                     )}
@@ -385,16 +418,17 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
                     </button>
                     <div className="aa-split-header-text-column">
                       <h2>{currentSubject}</h2>
-                      <p>Classwork Feed • Grade {selectedChild?.enrolledGrade} – {selectedChild?.enrolledSection} | {selectedChild?.firstName} {selectedChild?.lastName}</p>
+                      <p>
+                        Classwork Feed • Grade {selectedChild?.enrolledGrade} –{" "}
+                        {selectedChild?.enrolledSection}
+                      </p>
                     </div>
                   </div>
 
                   {/* Operational Sort Control Dropdown row */}
                   {classworkList.length > 0 && (
                     <div className="aa-sort-controls-toolbar">
-                      <label htmlFor="aa-sort-select">
-                          Sort by:
-                      </label>
+                      <label htmlFor="aa-sort-select">Sort by:</label>
                       <select
                         id="aa-sort-select"
                         value={sortBy}
@@ -405,7 +439,7 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
                       </select>
                     </div>
                   )}
-                  
+
                   <div className="list-container-aa">
                     {sortedClassworkList.length === 0 ? (
                       <div className="aa-empty-state">
@@ -448,7 +482,9 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
                                       : "pill-pending-aa"
                                 }`}
                               >
-                                {cw.myStatus === "Missing" ? "Missed" : (cw.myStatus ?? "Not Marked")}
+                                {cw.myStatus === "Missing"
+                                  ? "Missed"
+                                  : (cw.myStatus ?? "Not Marked")}
                               </span>
                             </div>
                             <div className="cw-details-aa">

@@ -123,7 +123,7 @@
 }
 
 .ar-date-pill-badge {
-  background: var(--ar-primary);
+  background: var(--ar-accent);
   color: var(--ar-white);
   font-weight: 700;
   font-size: 0.95rem;
@@ -208,10 +208,22 @@
   text-align: center;
   min-width: 75px;
 }
-.ar-badge-present { background: rgba(46, 204, 113, 0.12); color: var(--ar-success); }
-.ar-badge-late { background: rgba(243, 156, 18, 0.12); color: #e67e22; }
-.ar-badge-absent { background: rgba(231, 76, 60, 0.12); color: var(--ar-danger); }
-.ar-badge-pending { background: #f0f2f5; color: #7f8c8d; }
+.ar-badge-present {
+  background: rgba(46, 204, 113, 0.12);
+  color: var(--ar-success);
+}
+.ar-badge-late {
+  background: rgba(243, 156, 18, 0.12);
+  color: #e67e22;
+}
+.ar-badge-absent {
+  background: rgba(231, 76, 60, 0.12);
+  color: var(--ar-danger);
+}
+.ar-badge-pending {
+  background: #f0f2f5;
+  color: #7f8c8d;
+}
 
 /* RIGHT COLUMN: Interactive Calendar Navigation Card */
 .ar-right-calendar-column {
