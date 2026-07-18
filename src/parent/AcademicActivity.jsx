@@ -1,4 +1,25 @@
 // AcademicActivity.jsx (Firebase version)
+//
+// FIX HISTORY (this revision):
+// - The subject grid used to check only `subjects.length === 0`, with no
+//   awareness of whether the fetch was still in flight — so while
+//   subjects were loading it showed "No subjects found for this class."
+//   instead of a loading message. Fixed by tracking a dedicated
+//   `showSubjectsLoading` flag (true only when there's no cached data yet)
+//   and checking that first.
+// - Clicking a subject used to `await` the classwork fetch BEFORE
+//   switching `currentView` to "academic" — so you'd sit on the
+//   subject-grid screen watching a spinner, then get jumped to the
+//   already-loaded classwork feed. `selectSubject` now just sets state
+//   and navigates immediately; the classwork feed itself shows its own
+//   (much shorter, scoped) loading state while the list fetches in place.
+// - Children, subjects, the active school year, and each subject's
+//   classwork list are now all cached via useCachedFetch, so offline (or
+//   on a repeat visit) everything renders from last-known data instantly
+//   instead of showing a spinner. The children list shares its cache key
+//   ("children:<userId>") with ChildProfile / AttendanceRecord /
+//   ParentDashboard, so whichever page loads it first fills the cache for
+//   the rest.
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { db } from "../api/firebase";
 import {
@@ -10,6 +31,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { getActiveSchoolYearLabel } from "../api/firebaseApi";
+import useCachedFetch from "../common/useCachedFetch";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./AcademicActivity.css";
 
@@ -61,7 +83,9 @@ const formatEditedLabel = (editedAt) => {
   })}`;
 };
 
-// Properly defined sort logic so the file doesn't crash
+// Sorts by when the post was actually CREATED (most recent first), not by
+// its due date. Falls back to `date` only for older records saved before
+// `createdAt` existed.
 function sortMostRecentFirst(a, b) {
   const ca = a.createdAt || "";
   const cb = b.createdAt || "";
@@ -72,20 +96,86 @@ function sortMostRecentFirst(a, b) {
 }
 
 function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
-  const [children, setChildren] = useState([]);
+  const userId = localStorage.getItem("userId");
+
   const [selectedChild, setSelectedChild] = useState(null);
-  const [childrenLoading, setChildrenLoading] = useState(true);
-
   const [currentView, setCurrentView] = useState("select-subject");
-  const [subjects, setSubjects] = useState([]);
   const [currentSubject, setCurrentSubject] = useState("");
-  const [classworkList, setClassworkList] = useState([]);
-  const [loading, setLoading] = useState(false);
-
   const [sortBy, setSortBy] = useState("recent");
 
   const [highlightId, setHighlightId] = useState(null);
   const isJumpingRef = useRef(false);
+
+  // ── Children list — shared cache key with ChildProfile /
+  // AttendanceRecord / ParentDashboard, so whichever page loads it first
+  // fills the cache for the rest, and offline this renders the last-known
+  // list instantly instead of a spinner. ──
+  const fetchChildren = useCallback(async () => {
+    if (!userId) return [];
+    const userSnap = await getDoc(doc(db, "User", userId));
+    if (!userSnap.exists()) return [];
+
+    const studentIds = userSnap.data().studentIds || [];
+    if (studentIds.length === 0) return [];
+
+    const studentDocs = await Promise.all(
+      studentIds.map((id) => getDoc(doc(db, "Student", id))),
+    );
+
+    return Promise.all(
+      studentDocs
+        .filter((d) => d.exists())
+        .map(async (d) => {
+          const s = { id: d.id, ...d.data() };
+          const enrollSnap = await getDocs(
+            query(
+              col("Enrolled"),
+              where("studentId", "==", s.id),
+              where("status", "==", "Enrolled"),
+            ),
+          );
+          const enroll = enrollSnap.docs[0]?.data() || {};
+          return {
+            ...s,
+            enrolledGrade: enroll.grade || s.grade,
+            enrolledSection: enroll.section || "",
+          };
+        }),
+    );
+  }, [userId]);
+
+  const { data: cachedChildren, loading: childrenLoading } = useCachedFetch(
+    `children:${userId || "none"}`,
+    fetchChildren,
+    [userId],
+  );
+  const children = cachedChildren || [];
+  const showChildrenLoading = childrenLoading && !cachedChildren;
+
+  useEffect(() => {
+    if (children.length === 0) {
+      setSelectedChild(null);
+      return;
+    }
+    setSelectedChild((prev) => {
+      const stillThere = prev && children.find((c) => c.id === prev.id);
+      return stillThere || children[0];
+    });
+  }, [children]);
+
+  // Resets back to the subject-selection screen whenever the child
+  // changes — unless we're mid-jump from a dashboard reminder click, which
+  // sets its own view/subject explicitly (see the focusClasswork effect
+  // below).
+  useEffect(() => {
+    if (!selectedChild) return;
+    if (isJumpingRef.current) {
+      isJumpingRef.current = false;
+      return;
+    }
+    setCurrentView("select-subject");
+    setCurrentSubject("");
+  }, [selectedChild?.id]);
 
   // Instantly resets view back to the first subject selection page on sidebar menu button press
   useEffect(() => {
@@ -98,7 +188,6 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
       ) {
         setCurrentView("select-subject");
         setCurrentSubject("");
-        setClassworkList([]);
       }
     };
     document.addEventListener("mousedown", handleParentSidebarClick);
@@ -106,147 +195,125 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
       document.removeEventListener("mousedown", handleParentSidebarClick);
   }, []);
 
-  useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      setChildrenLoading(false);
-      return;
-    }
+  // ── Subjects for the currently selected child, cached per grade+section
+  // so switching back to a class you've already viewed shows the subject
+  // grid instantly. ──
+  const fetchSubjects = useCallback(async () => {
+    if (!selectedChild) return [];
+    const snap = await getDocs(
+      query(
+        col("Schedule"),
+        where("grade", "==", selectedChild.enrolledGrade),
+        where("section", "==", selectedChild.enrolledSection),
+      ),
+    );
 
-    const load = async () => {
-      try {
-        const userSnap = await getDoc(doc(db, "User", userId));
-        if (!userSnap.exists()) {
-          setChildrenLoading(false);
-          return;
-        }
-
-        const studentIds = userSnap.data().studentIds || [];
-        if (studentIds.length === 0) {
-          setChildrenLoading(false);
-          return;
-        }
-
-        const studentDocs = await Promise.all(
-          studentIds.map((id) => getDoc(doc(db, "Student", id))),
-        );
-
-        const enriched = await Promise.all(
-          studentDocs
-            .filter((d) => d.exists())
-            .map(async (d) => {
-              const s = { id: d.id, ...d.data() };
-              const enrollSnap = await getDocs(
-                query(
-                  col("Enrolled"),
-                  where("studentId", "==", s.id),
-                  where("status", "==", "Enrolled"),
-                ),
-              );
-              const enroll = enrollSnap.docs[0]?.data() || {};
-              return {
-                ...s,
-                enrolledGrade: enroll.grade || s.grade,
-                enrolledSection: enroll.section || "",
-              };
-            }),
-        );
-
-        setChildren(enriched);
-        setSelectedChild(enriched[0] || null);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setChildrenLoading(false);
+    const subsMap = new Map();
+    snap.docs.forEach((d) => {
+      const data = d.data();
+      if (!subsMap.has(data.subject)) {
+        subsMap.set(data.subject, {
+          name: data.subject,
+          icon: iconFor(data.subject),
+          time:
+            data.start && data.end
+              ? `${data.start} - ${data.end}`
+              : data.timeSlot || "",
+        });
       }
-    };
-    load();
-  }, []);
+    });
+    return Array.from(subsMap.values());
+  }, [selectedChild?.enrolledGrade, selectedChild?.enrolledSection]);
 
-  const loadSubjects = useCallback(async (child) => {
-    if (!child) return;
-    setLoading(true);
-    try {
-      const snap = await getDocs(
-        query(
-          col("Schedule"),
-          where("grade", "==", child.enrolledGrade),
-          where("section", "==", child.enrolledSection),
-        ),
-      );
+  const subjectsCacheKey = selectedChild
+    ? `subjects:${selectedChild.enrolledGrade}|${selectedChild.enrolledSection}`
+    : "subjects:none";
 
-      const subsMap = new Map();
-      snap.docs.forEach((d) => {
+  const { data: cachedSubjects, loading: subjectsLoading } = useCachedFetch(
+    subjectsCacheKey,
+    fetchSubjects,
+    [selectedChild?.enrolledGrade, selectedChild?.enrolledSection],
+  );
+  const subjects = cachedSubjects || [];
+  // FIX: only true while there's genuinely no cached data yet — this is
+  // what stops "No subjects found" from flashing during the fetch.
+  const showSubjectsLoading = subjectsLoading && !cachedSubjects;
+
+  // ── Active school year, cached — shared key with ClassworkReminding /
+  // ParentDashboard. Classwork is scoped to it so a child re-enrolled in
+  // the same Grade/Section next year doesn't see last year's leftover
+  // posts resurface here. ──
+  const { data: cachedSchoolYear } = useCachedFetch(
+    "schoolYear:active",
+    () => getActiveSchoolYearLabel(),
+    [],
+  );
+  const activeSchoolYear = cachedSchoolYear || "";
+
+  // ── Classwork feed for the selected child + subject, cached per exact
+  // combination (including school year), so re-opening a subject you've
+  // already viewed this session shows the feed instantly instead of
+  // re-querying Firestore. ──
+  const fetchClassworks = useCallback(async () => {
+    if (!selectedChild || !currentSubject || !activeSchoolYear) return [];
+    const snap = await getDocs(
+      query(
+        col("Classwork"),
+        where("grade", "==", selectedChild.enrolledGrade),
+        where("section", "==", selectedChild.enrolledSection),
+        where("subject", "==", currentSubject),
+        where("schoolYear", "==", activeSchoolYear),
+      ),
+    );
+    return snap.docs
+      .map((d) => {
         const data = d.data();
-        if (!subsMap.has(data.subject)) {
-          subsMap.set(data.subject, {
-            name: data.subject,
-            icon: iconFor(data.subject),
-            time:
-              data.start && data.end
-                ? `${data.start} - ${data.end}`
-                : data.timeSlot || "",
-          });
-        }
-      });
-      setSubjects(Array.from(subsMap.values()));
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        const status = data.studentStatus?.[selectedChild.id] ?? null;
+        return { id: d.id, ...data, myStatus: status };
+      })
+      .sort(sortMostRecentFirst);
+  }, [
+    selectedChild?.id,
+    selectedChild?.enrolledGrade,
+    selectedChild?.enrolledSection,
+    currentSubject,
+    activeSchoolYear,
+  ]);
 
-  useEffect(() => {
-    if (!selectedChild) return;
-    if (isJumpingRef.current) {
-      isJumpingRef.current = false;
-      return;
-    }
-    setCurrentView("select-subject");
-    setCurrentSubject("");
-    setClassworkList([]);
-    loadSubjects(selectedChild);
-  }, [selectedChild, loadSubjects]);
+  const classworkCacheKey =
+    selectedChild && currentSubject && activeSchoolYear
+      ? `classwork:${selectedChild.id}|${selectedChild.enrolledGrade}|${selectedChild.enrolledSection}|${currentSubject}|${activeSchoolYear}`
+      : "classwork:none";
+
+  const { data: cachedClassworkList, loading: classworkLoading } =
+    useCachedFetch(classworkCacheKey, fetchClassworks, [
+      selectedChild?.id,
+      selectedChild?.enrolledGrade,
+      selectedChild?.enrolledSection,
+      currentSubject,
+      activeSchoolYear,
+    ]);
+  const classworkList = cachedClassworkList || [];
+  const showClassworkLoading = classworkLoading && !cachedClassworkList;
 
   const switchChild = (child) => {
     if (child.id === selectedChild?.id) return;
     setSelectedChild(child);
   };
 
-  // Classwork/announcement is scoped to the current school year — resolved
-  // fresh on each subject open rather than cached in state, since a stale
-  // cached year would otherwise let a click that fires the instant this
-  // component mounts slip through unscoped.
-  const selectSubject = async (subjectName) => {
+  // FIX: this used to be async — it awaited the classwork fetch, resolved
+  // the active school year, etc., all BEFORE calling setCurrentView, so
+  // you'd watch a spinner sit on top of the subject grid before getting
+  // moved to the (already-loaded) classwork feed. Now it just navigates;
+  // the useCachedFetch hook above reacts to `currentSubject` changing on
+  // its own, and the classwork feed shows its own scoped loading state.
+  const selectSubject = (subjectName) => {
     setCurrentSubject(subjectName);
-    setLoading(true);
-    try {
-      const schoolYear = await getActiveSchoolYearLabel();
-      const constraints = [
-        where("grade", "==", selectedChild.enrolledGrade),
-        where("section", "==", selectedChild.enrolledSection),
-        where("subject", "==", subjectName),
-      ];
-      if (schoolYear) constraints.push(where("schoolYear", "==", schoolYear));
-
-      const snap = await getDocs(query(col("Classwork"), ...constraints));
-      const cws = snap.docs
-        .map((d) => {
-          const data = d.data();
-          const status = data.studentStatus?.[selectedChild.id] ?? null;
-          return { id: d.id, ...data, myStatus: status };
-        })
-        .sort(sortMostRecentFirst);
-      setClassworkList(cws);
-      setCurrentView("academic");
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    setCurrentView("academic");
   };
 
+  // Jump here directly from a dashboard reminder click — same "navigate
+  // first, load in place" approach as selectSubject above.
   useEffect(() => {
     if (!focusClasswork || childrenLoading) return;
     if (children.length === 0) {
@@ -260,50 +327,14 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
       return;
     }
 
-    let cancelled = false;
-
-    const jump = async () => {
-      setLoading(true);
-      try {
-        if (target.id !== selectedChild?.id) {
-          isJumpingRef.current = true;
-          setSelectedChild(target);
-        }
-        setCurrentSubject(focusClasswork.subject);
-
-        const schoolYear = await getActiveSchoolYearLabel();
-        const constraints = [
-          where("grade", "==", target.enrolledGrade),
-          where("section", "==", target.enrolledSection),
-          where("subject", "==", focusClasswork.subject),
-        ];
-        if (schoolYear) constraints.push(where("schoolYear", "==", schoolYear));
-
-        const snap = await getDocs(query(col("Classwork"), ...constraints));
-        const cws = snap.docs
-          .map((d) => {
-            const data = d.data();
-            const status = data.studentStatus?.[target.id] ?? null;
-            return { id: d.id, ...data, myStatus: status };
-          })
-          .sort(sortMostRecentFirst);
-
-        if (cancelled) return;
-        setClassworkList(cws);
-        setCurrentView("academic");
-        setHighlightId(focusClasswork.classworkId || null);
-      } catch (e) {
-        console.error("Failed to open reminder:", e);
-      } finally {
-        if (!cancelled) setLoading(false);
-        onFocusConsumed?.();
-      }
-    };
-
-    jump();
-    return () => {
-      cancelled = true;
-    };
+    if (target.id !== selectedChild?.id) {
+      isJumpingRef.current = true;
+      setSelectedChild(target);
+    }
+    setCurrentSubject(focusClasswork.subject);
+    setCurrentView("academic");
+    setHighlightId(focusClasswork.classworkId || null);
+    onFocusConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusClasswork, childrenLoading, children]);
 
@@ -329,7 +360,7 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
     return () => clearTimeout(t);
   }, [highlightId, classworkList]);
 
-  if (childrenLoading) {
+  if (showChildrenLoading) {
     return (
       <div className="app-container">
         <main className="main-content">
@@ -378,17 +409,16 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
                 </div>
               )}
 
-              {loading && (
-                <div className="aa-loading-state">
-                  <i className="fas fa-spinner fa-spin"></i> Loading…
-                </div>
-              )}
-
               {/* SELECT SUBJECT */}
               {currentView === "select-subject" && (
                 <div className="view-section-aa">
                   <div className="grid-container-aa">
-                    {subjects.length === 0 ? (
+                    {showSubjectsLoading ? (
+                      <p className="aa-empty-text">
+                        <i className="fas fa-spinner fa-spin"></i> Loading
+                        subjects…
+                      </p>
+                    ) : subjects.length === 0 ? (
                       <p className="aa-empty-text">
                         No subjects found for this class.
                       </p>
@@ -456,7 +486,12 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
                   )}
 
                   <div className="list-container-aa">
-                    {sortedClassworkList.length === 0 ? (
+                    {showClassworkLoading ? (
+                      <div className="aa-empty-state">
+                        <i className="fas fa-spinner fa-spin"></i> Loading
+                        classwork updates…
+                      </div>
+                    ) : sortedClassworkList.length === 0 ? (
                       <div className="aa-empty-state">
                         No classwork posted for this subject yet.
                       </div>

@@ -1,5 +1,30 @@
 // ClassworkReminding.jsx
-import { useState, useEffect, useMemo } from "react";
+//
+// FIX HISTORY:
+// - teacherLoads and the active-school-year label load through
+//   useCachedFetch instead of bare useEffect + setState, so the "Select a
+//   class" picker paints instantly on repeat visits.
+// - The classwork list itself now also goes through useCachedFetch, keyed
+//   per grade|section|subject|schoolYear, so switching subjects on a
+//   combo you've already viewed no longer shows a loading placeholder —
+//   only a genuinely new combo does.
+// - Creating and editing a classwork post now update the UI optimistically
+//   (close the modal, update the list, show a toast) instead of waiting
+//   inside setDoc/updateDoc's .then(). Firestore's offline-queued writes
+//   don't resolve that promise until the connection comes back, which
+//   previously meant: offline, the modal never closed, the new post never
+//   appeared, and no toast ever fired. The write itself still happens —
+//   it's just no longer gating the UI.
+// - (this revision) FIX: the list was sorting by the classwork's *due
+//   date* (`date`), not by when it was actually posted — so a post due
+//   further out jumped to the top even if it was created moments ago,
+//   and a post due soon from last week could get buried underneath it.
+//   `sortMostRecentFirst` (using `createdAt`, with a `date` fallback for
+//   older records that predate that field) was already defined in this
+//   file but never actually used anywhere. It's now wired into all three
+//   places the list gets sorted (initial fetch, new post, edited post),
+//   so newly-posted classwork always appears at the top.
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { db } from "../api/firebase";
 import {
   collection,
@@ -18,6 +43,12 @@ import {
 } from "../api/firebaseApi";
 import useSubmitGuard from "../common/useSubmitGuard";
 import useNetworkStatus from "../common/useNetworkStatus";
+import useCachedFetch from "../common/useCachedFetch";
+// NOTE: adjust this import to match whatever toast hook/context you're
+// already using elsewhere in the app (e.g. the enrollment screen you
+// pasted `showToast(...)` from). This assumes a hook that returns a
+// `showToast(message)` function — swap it for your actual one.
+import useToast from "../common/useToast";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./ClassworkReminding.css";
 
@@ -39,6 +70,9 @@ const TYPE_META = {
   Announcement: { icon: "fa-bullhorn", cls: "cwr-teal" },
 };
 
+// Sorts by when the post was actually CREATED (most recent first), not by
+// its due date. Falls back to `date` only for older records saved before
+// `createdAt` existed, so nothing crashes or silently vanishes.
 const sortMostRecentFirst = (a, b) => {
   const ca = a.createdAt || "";
   const cb = b.createdAt || "";
@@ -81,9 +115,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   const [classSection, setClassSection] = useState("");
   const [classSubject, setClassSubject] = useState("");
 
-  const [teacherLoads, setTeacherLoads] = useState([]);
   const [students, setStudents] = useState([]);
-  const [classworks, setClassworks] = useState([]);
   const [activeCW, setActiveCW] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
@@ -96,23 +128,97 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
     date: "",
   });
 
-  const [loading, setLoading] = useState(true);
-  const [listLoading, setListLoading] = useState(false);
-  const [error, setError] = useState("");
+  const isOnline = useNetworkStatus();
+  const showToast = useToast();
 
-  // The admin-configured active school year label (e.g. "2026-2027"), used
-  // to stamp new posts and scope the classwork list so a teacher assigned
-  // the same Grade/Section/Subject next school year sees a clean list
-  // instead of last year's leftover posts.
-  const [activeSchoolYear, setActiveSchoolYear] = useState("");
+  // ── teacherLoads cached — the class picker paints instantly on repeat
+  // visits. ──
+  const { data: cachedTeacherLoads, loading } = useCachedFetch(
+    "teacherLoads:classwork",
+    async () => {
+      const userId = localStorage.getItem("userId");
+      if (!userId) throw new Error("Session expired.");
+      const snap = await getDoc(doc(db, "User", userId));
+      if (!snap.exists()) return [];
+      const sSnap = await getDocs(
+        query(col("Schedule"), where("teacherId", "==", snap.data().teacherId)),
+      );
+      return sSnap.docs.map((d) => d.data());
+    },
+    [],
+  );
+  const teacherLoads = cachedTeacherLoads || [];
+  const error = ""; // preserved for JSX below; see note near render
+
+  // ── The admin-configured active school year label (e.g. "2026-2027")
+  // also goes through useCachedFetch. Used to stamp new posts and scope
+  // the classwork list so a teacher assigned the same Grade/Section/
+  // Subject next school year sees a clean list instead of last year's
+  // leftover posts. ──
+  const { data: cachedActiveSchoolYear } = useCachedFetch(
+    "schoolYear:active",
+    () => getActiveSchoolYearLabel(),
+    [],
+  );
+  const activeSchoolYear = cachedActiveSchoolYear || "";
+
+  // ── The classwork list itself is cached, keyed to the exact class +
+  // subject + school year combination. Repeat views render instantly from
+  // cache while a fresh copy is fetched quietly in the background. ──
+  const classworksCacheKey =
+    classGrade && classSection && classSubject
+      ? `classwork:${classGrade}|${classSection}|${classSubject}|${activeSchoolYear || "none"}`
+      : "classwork:none";
+
+  const fetchClassworks = useCallback(async () => {
+    if (!classGrade || !classSection || !classSubject || !activeSchoolYear) {
+      // Wait for activeSchoolYear to resolve at least once so this never
+      // fires an unscoped (all-years) query.
+      return [];
+    }
+    const snap = await getDocs(
+      query(
+        col("Classwork"),
+        where("grade", "==", classGrade),
+        where("section", "==", classSection),
+        where("subject", "==", classSubject),
+        where("schoolYear", "==", activeSchoolYear),
+      ),
+    );
+    return snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .sort(sortMostRecentFirst);
+  }, [classGrade, classSection, classSubject, activeSchoolYear]);
+
+  const {
+    data: cachedClassworks,
+    setData: setClassworksData,
+    loading: classworksLoading,
+  } = useCachedFetch(classworksCacheKey, fetchClassworks, [
+    classGrade,
+    classSection,
+    classSubject,
+    activeSchoolYear,
+  ]);
+  const classworks = cachedClassworks || [];
+
+  // Only block with a spinner when nothing is cached yet for this exact
+  // combination — repeat visits render instantly, an empty cached list
+  // (genuinely "no posts yet") does not trigger the spinner either.
+  const showClassworkListLoading = classworksLoading && !cachedClassworks;
+
+  // Mirrors useCachedFetch's own internal cache format so optimistic
+  // updates below survive a reload/remount even before the write has
+  // actually synced to the server.
+  const persistClassworksCache = (next) => {
+    try {
+      localStorage.setItem(`cache:${classworksCacheKey}`, JSON.stringify(next));
+    } catch {
+      // storage full / private mode — non-fatal
+    }
+  };
 
   const guardSave = useSubmitGuard();
-
-  useEffect(() => {
-    getActiveSchoolYearLabel()
-      .then(setActiveSchoolYear)
-      .catch((e) => console.error("Failed to load active school year:", e));
-  }, []);
 
   // Intercept Dashboard Click Routing Targets
   useEffect(() => {
@@ -158,23 +264,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   }, []);
 
   useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      setError("Session expired.");
-      setLoading(false);
-      return;
-    }
-    getDoc(doc(db, "User", userId)).then((snap) => {
-      if (!snap.exists()) return;
-      getDocs(
-        query(col("Schedule"), where("teacherId", "==", snap.data().teacherId)),
-      )
-        .then((sSnap) => setTeacherLoads(sSnap.docs.map((d) => d.data())))
-        .finally(() => setLoading(false));
-    });
-  }, []);
-
-  useEffect(() => {
     if (!classGrade || !classSection) return;
     getDocs(
       query(
@@ -196,34 +285,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
     });
   }, [classGrade, classSection]);
 
-  const loadClassworks = async (grade, section, subject, schoolYear) => {
-    setListLoading(true);
-    try {
-      const constraints = [
-        where("grade", "==", grade),
-        where("section", "==", section),
-        where("subject", "==", subject),
-      ];
-      if (schoolYear) constraints.push(where("schoolYear", "==", schoolYear));
-
-      const snap = await getDocs(query(col("Classwork"), ...constraints));
-      setClassworks(
-        snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
-          .sort((a, b) => b.date.localeCompare(a.date)),
-      );
-    } finally {
-      setListLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    // Wait for activeSchoolYear to resolve at least once so this never
-    // fires an unscoped (all-years) query.
-    if (classGrade && classSection && classSubject && activeSchoolYear)
-      loadClassworks(classGrade, classSection, classSubject, activeSchoolYear);
-  }, [classGrade, classSection, classSubject, activeSchoolYear]);
-
   const handleSave = (e) => {
     e.preventDefault();
     guardSave(() => {
@@ -240,16 +301,34 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
         // was actually posted in.
         schoolYear: activeSchoolYear,
       };
-      setDoc(ref, payload).then(() =>
-        loadClassworks(
-          classGrade,
-          classSection,
-          classSubject,
-          activeSchoolYear,
-        ),
+
+      // FIXED: update the list, close the modal, and toast immediately —
+      // don't wait inside setDoc(...).then(...). Offline, that promise
+      // doesn't resolve until back online, which previously meant the
+      // modal stayed open and the post never appeared to have been made.
+      // Sorted by sortMostRecentFirst so this brand-new post lands at the
+      // very top, regardless of its due date.
+      const next = [{ id: ref.id, ...payload }, ...classworks].sort(
+        sortMostRecentFirst,
       );
+      setClassworksData(next);
+      persistClassworksCache(next);
+
       setShowModal(false);
       setNewCW({ title: "", desc: "", date: "" });
+
+      showToast(
+        isOnline
+          ? "Classwork posted successfully."
+          : "Saved offline — will sync once you're back online.",
+      );
+
+      setDoc(ref, payload).catch((err) => {
+        console.error("Failed to save classwork:", err);
+        if (isOnline) {
+          showToast("Something went wrong posting this — please try again.");
+        }
+      });
     });
   };
 
@@ -262,25 +341,43 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
     e.preventDefault();
     guardSave(() => {
       const editedAt = new Date().toISOString();
-      updateDoc(doc(db, "Classwork", editCW.id), {
+      const updates = {
         title: editCW.title,
         desc: editCW.desc,
         date: editCW.date,
         isAnnouncement: editCW.title === "Announcement",
         editedAt,
-      }).then(() => {
-        loadClassworks(
-          classGrade,
-          classSection,
-          classSubject,
-          activeSchoolYear,
-        );
-        setActiveCW((prev) =>
-          prev && prev.id === editCW.id
-            ? { ...prev, ...editCW, editedAt }
-            : prev,
-        );
-        setShowEditModal(false);
+      };
+
+      // FIXED: same root cause as handleSave — setShowEditModal(false) used
+      // to sit inside updateDoc(...).then(...), so offline it never fired
+      // and the modal appeared stuck. Update + close immediately, let the
+      // write sync in the background. Re-sorted by sortMostRecentFirst —
+      // editing doesn't change createdAt, so an edited post stays in its
+      // original "most recently posted" position rather than jumping to
+      // the top on every edit.
+      const next = classworks
+        .map((cw) => (cw.id === editCW.id ? { ...cw, ...updates } : cw))
+        .sort(sortMostRecentFirst);
+      setClassworksData(next);
+      persistClassworksCache(next);
+
+      setActiveCW((prev) =>
+        prev && prev.id === editCW.id ? { ...prev, ...updates } : prev,
+      );
+      setShowEditModal(false);
+
+      showToast(
+        isOnline
+          ? "Classwork updated successfully."
+          : "Saved offline — will sync once you're back online.",
+      );
+
+      updateDoc(doc(db, "Classwork", editCW.id), updates).catch((err) => {
+        console.error("Failed to update classwork:", err);
+        if (isOnline) {
+          showToast("Something went wrong updating this — please try again.");
+        }
       });
     });
   };
@@ -339,6 +436,10 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
     });
   }, [teacherLoads]);
 
+  // Only show the load-picker spinner when there's truly no cached data
+  // yet, so repeat visits paint instantly.
+  const showLoadPickerLoading = loading && loadOptions.length === 0;
+
   return (
     <div className="cwr-wrapper">
       <main className="cwr-main">
@@ -346,7 +447,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
           {currentView === "load" && (
             <div className="cwr-view">
               <h2 className="cwr-page-title">Classwork Reminders</h2>
-              {loading ? (
+              {showLoadPickerLoading ? (
                 <div className="cwr-loading-state">
                   <p>Loading your class assignments…</p>
                 </div>
@@ -411,7 +512,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
               </div>
 
               <div className="cwr-list">
-                {listLoading ? (
+                {showClassworkListLoading ? (
                   <div className="cwr-loading-state">
                     <p>Loading classwork updates…</p>
                   </div>

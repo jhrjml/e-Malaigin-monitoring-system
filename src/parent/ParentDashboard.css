@@ -533,7 +533,7 @@
   }
 }
 
-/* ── DYNAMIC HIGHLIGHTED LATEST POST ALERT BANNER ── */
+/* ── HIGHLIGHTED LATEST POST ALERT BANNER ── */
 .pd-latest-post-alert-banner {
   background: var(--white);
   border-radius: 12px;
@@ -547,8 +547,6 @@
   transition: all 0.2s ease-in-out;
   border: 1px solid #eaedf1;
   border-left: 5px solid var(--accent);
-  width: 100%;
-  box-sizing: border-box;
 }
 
 .pd-latest-post-alert-banner:hover {
@@ -619,5 +617,23 @@
   }
   .pd-latest-banner-arrow {
     display: none;
+  }
+
+  .pd-latest-banner-text .pd-latest-banner-dash {
+    display: none;
+  }
+
+  .pd-latest-banner-text {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    line-height: 1.4;
+  }
+  .pd-latest-banner-text span {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }

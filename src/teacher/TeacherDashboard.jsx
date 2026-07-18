@@ -27,6 +27,7 @@ import ConfirmModal from "../common/ConfirmModal";
 import AttendanceMonitoring from "./AttendanceMonitoring";
 import ClassworkReminding from "./ClassworkReminding";
 import StudentMasterlist from "./StudentMasterlist";
+import useCachedFetch from "../common/useCachedFetch";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -94,8 +95,24 @@ function TeacherDashboard() {
     () => titleMap[localStorage.getItem("teacherPage")] || "Overview",
   );
 
-  const [teacherId, setTeacherId] = useState(null);
   const [focusClasswork, setFocusClasswork] = useState(null);
+
+  // ── FIXED: teacherId resolution now goes through useCachedFetch, so on
+  // repeat visits it resolves INSTANTLY from localStorage instead of
+  // waiting on a fresh getDoc() every single time the teacher opens the
+  // app — which was the very first thing blocking the whole dashboard
+  // from painting while offline. ──
+  const { data: cachedTeacherId } = useCachedFetch(
+    "teacher:id",
+    async () => {
+      const userId = localStorage.getItem("userId");
+      if (!userId) return null;
+      const snap = await getDoc(doc(db, "User", userId));
+      return snap.exists() ? snap.data().teacherId || null : null;
+    },
+    [],
+  );
+  const teacherId = cachedTeacherId;
 
   const rawFullName = localStorage.getItem("fullName") || "";
   const teacherFirstName = (() => {
@@ -105,16 +122,6 @@ function TeacherDashboard() {
       : rawFullName.trim();
     return afterComma.split(" ")[0] || "Teacher";
   })();
-
-  useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) return;
-    getDoc(doc(db, "User", userId))
-      .then((snap) => {
-        if (snap.exists()) setTeacherId(snap.data().teacherId || null);
-      })
-      .catch((e) => console.error("Failed to resolve teacherId:", e));
-  }, []);
 
   const toggleSidebar = () => {
     if (window.innerWidth > 768) {
@@ -344,77 +351,61 @@ function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
   }, [schoolYearMonths]);
 
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
-  const [reminders, setReminders] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   // The admin-configured active school year label (e.g. "2026-2027"). Used
   // to scope every Classwork query on this dashboard so a teacher assigned
   // the same Grade/Section/Subject next school year doesn't see last
   // year's leftover posts in the reminders feed or completion chart.
-  const [schoolYear, setSchoolYear] = useState("");
-
-  useEffect(() => {
-    getActiveSchoolYearLabel()
-      .then(setSchoolYear)
-      .catch((e) => console.error("Failed to load active school year:", e));
-  }, []);
+  //
+  // FIXED: this now goes through useCachedFetch too — previously a fresh
+  // network round trip was required before ANY of the Classwork queries
+  // below could even fire (they all `if (!schoolYear) return;`), which
+  // meant the whole dashboard sat blank offline until this one value
+  // resolved.
+  const { data: cachedSchoolYear } = useCachedFetch(
+    "schoolYear:active",
+    () => getActiveSchoolYearLabel(),
+    [],
+  );
+  const schoolYear = cachedSchoolYear || "";
 
   useEffect(() => {
     setSelectedMonth(defaultMonth);
   }, [defaultMonth]);
 
-  // Unified Centralized Reminders Pipeline Fetch
-  useEffect(() => {
-    if (!teacherId) {
-      setLoading(false);
-      return;
-    }
-    // Wait for schoolYear to resolve at least once so this never fires an
-    // unscoped (all-years) query.
-    if (!schoolYear) return;
+  // ── FIXED: reminders now load through useCachedFetch, so on repeat
+  // visits the "Recent Updates & Reminders" panel + latest-post banner
+  // paint instantly from the last-known localStorage snapshot instead of
+  // showing "Loading…" every time the teacher opens the Dashboard tab
+  // while offline. ──
+  const { data: cachedReminders, loading } = useCachedFetch(
+    `teacher:reminders:${teacherId || "none"}:${schoolYear || "none"}`,
+    async () => {
+      if (!teacherId || !schoolYear) return [];
+      const combos = await getTeacherCombos(teacherId);
 
-    let cancelled = false;
-    setLoading(true);
-
-    const load = async () => {
-      try {
-        const combos = await getTeacherCombos(teacherId);
-
-        const classworkLists = await Promise.all(
-          combos.map((c) =>
-            getDocs(
-              query(
-                collection(db, "Classwork"),
-                where("grade", "==", c.grade),
-                where("section", "==", c.section),
-                where("subject", "==", c.subject),
-                where("schoolYear", "==", schoolYear),
-              ),
-            ).then((snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-          ),
-        );
-        const items = classworkLists.flat();
-
-        // Sorted cleanly by real creation time descriptors (createdAt)
-        items.sort((a, b) =>
-          (b.createdAt || "").localeCompare(a.createdAt || ""),
-        );
-
-        if (!cancelled) {
-          setReminders(items);
-          setLoading(false);
-        }
-      } catch (e) {
-        console.error("Failed centralized dashboard sync:", e);
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [teacherId, schoolYear]);
+      const classworkLists = await Promise.all(
+        combos.map((c) =>
+          getDocs(
+            query(
+              collection(db, "Classwork"),
+              where("grade", "==", c.grade),
+              where("section", "==", c.section),
+              where("subject", "==", c.subject),
+              where("schoolYear", "==", schoolYear),
+            ),
+          ).then((snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+        ),
+      );
+      const items = classworkLists.flat();
+      items.sort((a, b) =>
+        (b.createdAt || "").localeCompare(a.createdAt || ""),
+      );
+      return items;
+    },
+    [teacherId, schoolYear],
+  );
+  const reminders = cachedReminders || [];
 
   // Isolate the single absolute most recently created posting entry
   const latestPost = useMemo(() => reminders[0] || null, [reminders]);
@@ -496,6 +487,11 @@ function ReminderPanel({ reminders, loading, onOpenReminder }) {
     }
   };
 
+  // FIXED: only show "Loading…" when there is truly no data yet — on
+  // repeat visits `reminders` is already populated from the cached
+  // snapshot, so this renders the real list immediately.
+  const showLoadingState = loading && reminders.length === 0;
+
   return (
     <div className="th-panel th-reminder-panel">
       <div className="th-panel-header">
@@ -503,7 +499,7 @@ function ReminderPanel({ reminders, loading, onOpenReminder }) {
       </div>
 
       <div className="th-reminder-list">
-        {loading ? (
+        {showLoadingState ? (
           <p className="th-panel-status">Loading…</p>
         ) : reminders.length === 0 ? (
           <p className="th-panel-status">No active records found.</p>
@@ -548,102 +544,88 @@ function ReminderPanel({ reminders, loading, onOpenReminder }) {
 // ATTENDANCE CHART
 // ════════════════════════════════════════════════════════════════════════════
 function AttendanceChart({ teacherId, monthId }) {
-  const [loading, setLoading] = useState(true);
-  const [perClass, setPerClass] = useState([]);
+  // FIXED: swapped the manual useState+useEffect fetch for useCachedFetch,
+  // keyed by teacherId+monthId so switching months still refetches (and
+  // still shows last month's cached bars instantly while the new month's
+  // data streams in behind it).
+  const { data: cachedPerClass, loading } = useCachedFetch(
+    `teacher:attendanceChart:${teacherId || "none"}:${monthId}`,
+    async () => {
+      if (!teacherId) return [];
+      const combos = await getTeacherCombos(teacherId);
 
-  useEffect(() => {
-    setPerClass([]);
+      const gsMap = new Map();
+      const subjectsByGS = {};
+      combos.forEach((c) => {
+        const key = `${c.grade}|||${c.section}`;
+        if (!gsMap.has(key))
+          gsMap.set(key, { grade: c.grade, section: c.section });
+        if (!subjectsByGS[key]) subjectsByGS[key] = new Set();
+        subjectsByGS[key].add(c.subject);
+      });
 
-    if (!teacherId) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
+      const studentsByGS = {};
+      await Promise.all(
+        [...gsMap.entries()].map(async ([key, { grade, section }]) => {
+          const enrollSnap = await getDocs(
+            query(
+              collection(db, "Enrolled"),
+              where("grade", "==", grade),
+              where("section", "==", section),
+              where("status", "==", "Enrolled"),
+            ),
+          );
+          studentsByGS[key] = enrollSnap.docs.map((d) => d.data().studentId);
+        }),
+      );
 
-    const load = async () => {
-      try {
-        const combos = await getTeacherCombos(teacherId);
+      const results = [];
 
-        const gsMap = new Map();
-        const subjectsByGS = {};
-        combos.forEach((c) => {
-          const key = `${c.grade}|||${c.section}`;
-          if (!gsMap.has(key))
-            gsMap.set(key, { grade: c.grade, section: c.section });
-          if (!subjectsByGS[key]) subjectsByGS[key] = new Set();
-          subjectsByGS[key].add(c.subject);
-        });
+      for (const key of Object.keys(studentsByGS)) {
+        const studentIds = studentsByGS[key];
+        const subjects = [...(subjectsByGS[key] || [])];
+        if (!studentIds.length || !subjects.length) continue;
 
-        const studentsByGS = {};
-        await Promise.all(
-          [...gsMap.entries()].map(async ([key, { grade, section }]) => {
-            const enrollSnap = await getDocs(
+        const [grade, section] = key.split("|||");
+
+        for (const subject of subjects) {
+          let present = 0;
+          let absent = 0;
+
+          for (let i = 0; i < studentIds.length; i += 30) {
+            const batch = studentIds.slice(i, i + 30);
+            const attSnap = await getDocs(
               query(
-                collection(db, "Enrolled"),
-                where("grade", "==", grade),
-                where("section", "==", section),
-                where("status", "==", "Enrolled"),
+                collection(db, "Attendance"),
+                where("studentId", "in", batch),
+                where("subject", "==", subject),
               ),
             );
-            studentsByGS[key] = enrollSnap.docs.map((d) => d.data().studentId);
-          }),
-        );
+            attSnap.docs.forEach((d) => {
+              const data = d.data();
+              if (!data.date || !data.date.startsWith(monthId)) return;
+              const status = (data.status || "").toLowerCase();
+              if (status === "present") present++;
+              else if (status === "absent") absent++;
+            });
+          }
 
-        const results = [];
-
-        for (const key of Object.keys(studentsByGS)) {
-          const studentIds = studentsByGS[key];
-          const subjects = [...(subjectsByGS[key] || [])];
-          if (!studentIds.length || !subjects.length) continue;
-
-          const [grade, section] = key.split("|||");
-
-          for (const subject of subjects) {
-            let present = 0;
-            let absent = 0;
-
-            for (let i = 0; i < studentIds.length; i += 30) {
-              const batch = studentIds.slice(i, i + 30);
-              const attSnap = await getDocs(
-                query(
-                  collection(db, "Attendance"),
-                  where("studentId", "in", batch),
-                  where("subject", "==", subject),
-                ),
-              );
-              attSnap.docs.forEach((d) => {
-                const data = d.data();
-                if (!data.date || !data.date.startsWith(monthId)) return;
-                const status = (data.status || "").toLowerCase();
-                if (status === "present") present++;
-                else if (status === "absent") absent++;
-              });
-            }
-
-            if (present + absent > 0) {
-              results.push({
-                label: `Gr.${grade} ${section} - ${subject}`,
-                present,
-                absent,
-              });
-            }
+          if (present + absent > 0) {
+            results.push({
+              label: `Gr.${grade} ${section} - ${subject}`,
+              present,
+              absent,
+            });
           }
         }
-
-        if (!cancelled) setPerClass(results);
-      } catch (e) {
-        console.error("Failed to load attendance stats:", e);
-      } finally {
-        if (!cancelled) setLoading(false);
       }
-    };
 
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [teacherId, monthId]);
+      return results;
+    },
+    [teacherId, monthId],
+  );
+  const perClass = cachedPerClass || [];
+  const showLoadingState = loading && perClass.length === 0;
 
   const chartData = {
     labels: perClass.map((c) => c.label),
@@ -711,7 +693,7 @@ function AttendanceChart({ teacherId, monthId }) {
         <h3>Attendance Overview</h3>
       </div>
 
-      {loading ? (
+      {showLoadingState ? (
         <p className="th-panel-status">Loading…</p>
       ) : perClass.length === 0 ? (
         <p className="th-panel-status">No attendance records for this month.</p>
@@ -749,75 +731,52 @@ function AttendanceChart({ teacherId, monthId }) {
 // CLASSWORK CHART
 // ════════════════════════════════════════════════════════════════════════════
 function ClassworkChart({ teacherId, monthId, schoolYear }) {
-  const [loading, setLoading] = useState(true);
-  const [perClass, setPerClass] = useState([]);
+  // FIXED: same useCachedFetch treatment as AttendanceChart above.
+  const { data: cachedPerClass, loading } = useCachedFetch(
+    `teacher:classworkChart:${teacherId || "none"}:${monthId}:${schoolYear || "none"}`,
+    async () => {
+      if (!teacherId || !schoolYear) return [];
+      const combos = await getTeacherCombos(teacherId);
 
-  useEffect(() => {
-    setPerClass([]);
-
-    if (!teacherId) {
-      setLoading(false);
-      return;
-    }
-    // Wait for schoolYear to resolve at least once so this never fires an
-    // unscoped (all-years) query.
-    if (!schoolYear) return;
-
-    let cancelled = false;
-    setLoading(true);
-
-    const load = async () => {
-      try {
-        const combos = await getTeacherCombos(teacherId);
-
-        const classworkLists = await Promise.all(
-          combos.map((c) =>
-            getDocs(
-              query(
-                collection(db, "Classwork"),
-                where("grade", "==", c.grade),
-                where("section", "==", c.section),
-                where("subject", "==", c.subject),
-                where("schoolYear", "==", schoolYear),
-              ),
-            ).then((snap) =>
-              snap.docs.map((d) => ({
-                ...d.data(),
-                _comboKey: `Gr.${c.grade} ${c.section} - ${c.subject}`,
-              })),
+      const classworkLists = await Promise.all(
+        combos.map((c) =>
+          getDocs(
+            query(
+              collection(db, "Classwork"),
+              where("grade", "==", c.grade),
+              where("section", "==", c.section),
+              where("subject", "==", c.subject),
+              where("schoolYear", "==", schoolYear),
             ),
+          ).then((snap) =>
+            snap.docs.map((d) => ({
+              ...d.data(),
+              _comboKey: `Gr.${c.grade} ${c.section} - ${c.subject}`,
+            })),
           ),
-        );
+        ),
+      );
 
-        const groupMap = {};
-        classworkLists.flat().forEach((data) => {
-          if (data.isAnnouncement) return;
-          if (!data.date || !data.date.startsWith(monthId)) return;
-          const key = data._comboKey;
-          if (!groupMap[key]) groupMap[key] = { submitted: 0, missing: 0 };
-          Object.values(data.studentStatus || {}).forEach((s) => {
-            if (s === "Submitted") groupMap[key].submitted++;
-            else if (s === "Missing") groupMap[key].missing++;
-          });
+      const groupMap = {};
+      classworkLists.flat().forEach((data) => {
+        if (data.isAnnouncement) return;
+        if (!data.date || !data.date.startsWith(monthId)) return;
+        const key = data._comboKey;
+        if (!groupMap[key]) groupMap[key] = { submitted: 0, missing: 0 };
+        Object.values(data.studentStatus || {}).forEach((s) => {
+          if (s === "Submitted") groupMap[key].submitted++;
+          else if (s === "Missing") groupMap[key].missing++;
         });
+      });
 
-        const results = Object.entries(groupMap)
-          .filter(([, v]) => v.submitted + v.missing > 0)
-          .map(([label, v]) => ({ label, ...v }));
-
-        if (!cancelled) setPerClass(results);
-      } catch (e) {
-        console.error("Failed to load classwork stats:", e);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [teacherId, monthId, schoolYear]);
+      return Object.entries(groupMap)
+        .filter(([, v]) => v.submitted + v.missing > 0)
+        .map(([label, v]) => ({ label, ...v }));
+    },
+    [teacherId, monthId, schoolYear],
+  );
+  const perClass = cachedPerClass || [];
+  const showLoadingState = loading && perClass.length === 0;
 
   const chartData = {
     labels: perClass.map((c) => c.label),
@@ -885,7 +844,7 @@ function ClassworkChart({ teacherId, monthId, schoolYear }) {
         <h3>Classwork Completion</h3>
       </div>
 
-      {loading ? (
+      {showLoadingState ? (
         <p className="th-panel-status">Loading…</p>
       ) : perClass.length === 0 ? (
         <p className="th-panel-status">No classwork records for this month.</p>

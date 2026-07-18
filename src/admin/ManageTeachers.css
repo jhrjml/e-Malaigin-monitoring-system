@@ -429,22 +429,6 @@
   box-shadow: 0 6px 14px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
-.btn-cancel {
-  background: #f4f6f8;
-  color: #5c6a79;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 10px;
-  font-size: 0.9rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.btn-cancel:hover:not(:disabled) {
-  background: #e2e6ea;
-  color: #1a1a2e;
-}
-
 /* ── Import Dialog Badges ── */
 .import-badge {
   padding: 6px 14px;

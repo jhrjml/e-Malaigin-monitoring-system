@@ -403,23 +403,6 @@
   align-items: center;
 }
 
-.btn-cancel {
-  background: #f4f6f8;
-  color: #5c6a79;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 12px;
-  font-size: 0.95rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  width: 100%; /* Spans full width for small modals like profile views */
-}
-.btn-cancel:hover:not(:disabled) {
-  background: #e2e6ea;
-  color: #1a1a2e;
-}
-
 /* ── AUTO-ACCOUNT INFO BANNER ─────────────────────────────────────────────── */
 .auto-account-banner {
   display: flex;
@@ -544,9 +527,5 @@
 
   .mu-view-box {
     font-size: 0.9rem;
-  }
-
-  .btn-cancel {
-    padding: 10px 16px;
   }
 }

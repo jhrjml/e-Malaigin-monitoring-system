@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./AttendanceRecord.css";
+import useCachedFetch from "../common/useCachedFetch";
 
 const col = (name) => collection(db, name);
 
@@ -41,11 +42,10 @@ const formatTimeLabel = (timeStr) => {
 };
 
 function AttendanceRecord() {
+  const userId = localStorage.getItem("userId");
+
   // Children state management
-  const [children, setChildren] = useState([]);
   const [selectedChild, setSelectedChild] = useState(null);
-  const [childrenLoading, setChildrenLoading] = useState(true);
-  const [childSchedules, setChildSchedules] = useState([]);
 
   // Selected date tracks 'YYYY-MM-DD'
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -58,130 +58,125 @@ function AttendanceRecord() {
   const [viewYear, setViewYear] = useState(todayObj.getFullYear());
   const [viewMonth, setViewMonth] = useState(todayObj.getMonth());
 
-  const [attendanceLogs, setAttendanceLogs] = useState([]);
-  const [loading, setLoading] = useState(false);
-
   const pad = (n) => String(n).padStart(2, "0");
 
-  // 1. Load children linked to this parent account
+  // ── FIXED: children list is now cached under a SHARED key
+  // ("children:<userId>"), the same one used by ParentDashboard,
+  // ChildProfile, and AcademicActivity — whichever page loads it first
+  // fills the cache for the rest, so this page renders the child roster
+  // instantly on repeat visits. ──
+  const fetchChildren = useCallback(async () => {
+    if (!userId) return [];
+    const userSnap = await getDoc(doc(db, "User", userId));
+    if (!userSnap.exists()) return [];
+
+    const studentIds = userSnap.data().studentIds || [];
+    if (studentIds.length === 0) return [];
+
+    const studentDocs = await Promise.all(
+      studentIds.map((id) => getDoc(doc(db, "Student", id))),
+    );
+
+    return Promise.all(
+      studentDocs
+        .filter((d) => d.exists())
+        .map(async (d) => {
+          const s = { id: d.id, ...d.data() };
+          const enrollSnap = await getDocs(
+            query(
+              col("Enrolled"),
+              where("studentId", "==", s.id),
+              where("status", "==", "Enrolled"),
+            ),
+          );
+          const enroll = enrollSnap.docs[0]?.data() || {};
+          return {
+            ...s,
+            enrolledGrade: enroll.grade || s.grade,
+            enrolledSection: enroll.section || "",
+          };
+        }),
+    );
+  }, [userId]);
+
+  const { data: cachedChildren, loading: childrenLoading } = useCachedFetch(
+    `children:${userId || "none"}`,
+    fetchChildren,
+    [userId],
+  );
+  const children = cachedChildren || [];
+  const showChildrenLoading = childrenLoading && !cachedChildren;
+
   useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      setChildrenLoading(false);
+    if (children.length === 0) {
+      setSelectedChild(null);
       return;
     }
+    setSelectedChild((prev) => {
+      const stillThere = prev && children.find((c) => c.id === prev.id);
+      return stillThere || children[0];
+    });
+  }, [children]);
 
-    const load = async () => {
-      try {
-        const userSnap = await getDoc(doc(db, "User", userId));
-        if (!userSnap.exists()) {
-          setChildrenLoading(false);
-          return;
-        }
+  // ── FIXED: matched class schedules cached per grade+section, instead of
+  // pulling and filtering the entire Schedule collection on every child
+  // switch. ──
+  const fetchChildSchedules = useCallback(async () => {
+    if (!selectedChild) return [];
+    const snap = await getDocs(collection(db, "Schedule"));
+    const allScheds = snap.docs.map((d) => d.data());
 
-        const studentIds = userSnap.data().studentIds || [];
-        if (studentIds.length === 0) {
-          setChildrenLoading(false);
-          return;
-        }
+    // Loosely filter schedule slots to catch mixed casing or string/number
+    // structures
+    return allScheds.filter((s) => {
+      const sGrade = String(s.grade || "").trim();
+      const cGrade = String(selectedChild.enrolledGrade || "").trim();
+      const sSection = String(s.section || "")
+        .trim()
+        .toLowerCase();
+      const cSection = String(selectedChild.enrolledSection || "")
+        .trim()
+        .toLowerCase();
+      return sGrade === cGrade && sSection === cSection;
+    });
+  }, [selectedChild?.enrolledGrade, selectedChild?.enrolledSection]);
 
-        const studentDocs = await Promise.all(
-          studentIds.map((id) => getDoc(doc(db, "Student", id))),
-        );
+  const { data: cachedChildSchedules, loading: schedulesLoading } =
+    useCachedFetch(
+      `rawSchedules:${selectedChild ? `${selectedChild.enrolledGrade}|${selectedChild.enrolledSection}` : "none"}`,
+      fetchChildSchedules,
+      [selectedChild?.enrolledGrade, selectedChild?.enrolledSection],
+    );
+  const childSchedules = cachedChildSchedules || [];
 
-        const enriched = await Promise.all(
-          studentDocs
-            .filter((d) => d.exists())
-            .map(async (d) => {
-              const s = { id: d.id, ...d.data() };
-              const enrollSnap = await getDocs(
-                query(
-                  col("Enrolled"),
-                  where("studentId", "==", s.id),
-                  where("status", "==", "Enrolled"),
-                ),
-              );
-              const enroll = enrollSnap.docs[0]?.data() || {};
-              return {
-                ...s,
-                enrolledGrade: enroll.grade || s.grade,
-                enrolledSection: enroll.section || "",
-              };
-            }),
-        );
+  // ── FIXED: attendance logs cached per child + exact date, so tapping
+  // back to a date you already looked at (or your default "today" on a
+  // repeat visit) shows the table immediately instead of re-querying. ──
+  const fetchDayAttendance = useCallback(async () => {
+    if (!selectedChild || !selectedDate) return [];
+    const snap = await getDocs(
+      query(
+        collection(db, "Attendance"),
+        where("studentId", "==", selectedChild.id),
+        where("date", "==", selectedDate),
+      ),
+    );
+    return snap.docs.map((d) => d.data());
+  }, [selectedChild?.id, selectedDate]);
 
-        setChildren(enriched);
-        setSelectedChild(enriched[0] || null);
-      } catch (e) {
-        console.error("Failed to load children logs:", e);
-      } finally {
-        setChildrenLoading(false);
-      }
-    };
-    load();
-  }, []);
+  const { data: cachedAttendanceLogs, loading: attendanceLoading } =
+    useCachedFetch(
+      `attendanceDay:${selectedChild?.id || "none"}:${selectedDate}`,
+      fetchDayAttendance,
+      [selectedChild?.id, selectedDate],
+    );
+  const attendanceLogs = cachedAttendanceLogs || [];
 
-  // 2. Load schedules and filter locally to handle dynamic cross-collection data types
-  const loadSubjectsAndSchedules = useCallback(async (child) => {
-    if (!child) return;
-    setLoading(true);
-    try {
-      const snap = await getDocs(collection(db, "Schedule"));
-      const allScheds = snap.docs.map((d) => d.data());
-
-      // Loosely filter schedule slots to catch mixed casing or string/number structures
-      const matchedScheds = allScheds.filter((s) => {
-        const sGrade = String(s.grade || "").trim();
-        const cGrade = String(child.enrolledGrade || "").trim();
-        const sSection = String(s.section || "")
-          .trim()
-          .toLowerCase();
-        const cSection = String(child.enrolledSection || "")
-          .trim()
-          .toLowerCase();
-
-        return sGrade === cGrade && sSection === cSection;
-      });
-
-      setChildSchedules(matchedScheds);
-    } catch (e) {
-      console.error("Schedule matching error:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!selectedChild) return;
-    setAttendanceLogs([]);
-    loadSubjectsAndSchedules(selectedChild);
-  }, [selectedChild, loadSubjectsAndSchedules]);
-
-  // 3. Query attendance status entries for the chosen date
-  const loadDayAttendance = useCallback(async (childId, dateStr) => {
-    setLoading(true);
-    try {
-      const snap = await getDocs(
-        query(
-          collection(db, "Attendance"),
-          where("studentId", "==", childId),
-          where("date", "==", dateStr),
-        ),
-      );
-
-      setAttendanceLogs(snap.docs.map((d) => d.data()));
-    } catch (e) {
-      console.error("Failed to fetch day records:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (selectedChild && selectedDate) {
-      loadDayAttendance(selectedChild.id, selectedDate);
-    }
-  }, [selectedChild, selectedDate, loadDayAttendance]);
+  // Only block the table with a spinner when neither piece has anything
+  // cached yet — a background refresh of either no longer blanks the view.
+  const showTableLoading =
+    (schedulesLoading && !cachedChildSchedules) ||
+    (attendanceLoading && !cachedAttendanceLogs);
 
   // Calendar Grid Builder Operations
   const firstOfMonth = new Date(viewYear, viewMonth, 1);
@@ -244,7 +239,7 @@ function AttendanceRecord() {
     );
   }, [childSchedules]);
 
-  if (childrenLoading) {
+  if (showChildrenLoading) {
     return (
       <div className="ar-wrapper">
         <p className="ar-loading-text">
@@ -289,7 +284,7 @@ function AttendanceRecord() {
                 <span className="ar-date-pill-badge">{selectedDate}</span>
               </div>
 
-              {loading ? (
+              {showTableLoading ? (
                 <div className="ar-table-loading-notice">
                   <i className="fas fa-spinner fa-spin"></i> Fetching records...
                 </div>

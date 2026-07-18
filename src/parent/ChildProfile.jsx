@@ -1,6 +1,6 @@
 // ChildProfile.jsx (Firebase version)
 import "../Layout.css";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { db } from "../api/firebase";
 import {
   doc,
@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./ChildProfile.css";
+import useCachedFetch from "../common/useCachedFetch";
 
 const col = (name) => collection(db, name);
 
@@ -52,149 +53,129 @@ async function getSectionAdvisor(grade, section) {
 }
 
 const ChildProfile = () => {
-  const [children, setChildren] = useState([]);
+  const userId = localStorage.getItem("userId");
   const [selected, setSelected] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  const [advisorName, setAdvisorName] = useState("");
-  const [advisorLoading, setAdvisorLoading] = useState(false);
-
-  // Timeline States
-  const [schedule, setSchedule] = useState([]);
-  const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleSortConfig, setScheduleSortConfig] = useState({
     key: "time",
     direction: "asc",
   });
 
-  // 1. Fetch Assigned Children
-  useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
+  // ── FIXED: children list is now cached under a SHARED key
+  // ("children:<userId>"), the same one used by ParentDashboard,
+  // AttendanceRecord, and AcademicActivity — whichever page loads it first
+  // fills the cache for the rest. ──
+  const fetchChildren = useCallback(async () => {
+    if (!userId) return [];
+    const userSnap = await getDoc(doc(db, "User", userId));
+    if (!userSnap.exists()) return [];
 
-    const load = async () => {
-      try {
-        const userSnap = await getDoc(doc(db, "User", userId));
-        if (!userSnap.exists()) {
-          setLoading(false);
-          return;
-        }
+    const studentIds = userSnap.data().studentIds || [];
+    if (studentIds.length === 0) return [];
 
-        const userData = userSnap.data();
-        const studentIds = userData.studentIds || [];
-
-        if (studentIds.length === 0) {
-          setLoading(false);
-          return;
-        }
-
-        const studentDocs = await Promise.all(
-          studentIds.map((id) => getDoc(doc(db, "Student", id))),
-        );
-
-        const enriched = await Promise.all(
-          studentDocs
-            .filter((d) => d.exists())
-            .map(async (d) => {
-              const s = { id: d.id, ...d.data() };
-
-              const enrollSnap = await getDocs(
-                query(
-                  col("Enrolled"),
-                  where("studentId", "==", s.id),
-                  where("status", "==", "Enrolled"),
-                ),
-              );
-              const enrollment = enrollSnap.docs[0]?.data() || {};
-
-              return {
-                ...s,
-                enrolledGrade: enrollment.grade || s.grade || "—",
-                enrolledSection: enrollment.section || "—",
-              };
-            }),
-        );
-
-        setChildren(enriched);
-        setSelected(enriched[0] || null);
-      } catch (e) {
-        console.error("Failed to load child profile:", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, []);
-
-  // 2. Resolve Adviser & Class Schedule whenever selected child changes
-  useEffect(() => {
-    if (!selected) {
-      setAdvisorName("");
-      setSchedule([]);
-      return;
-    }
-
-    let active = true;
-
-    // Fetch Adviser
-    setAdvisorLoading(true);
-    getSectionAdvisor(selected.enrolledGrade, selected.enrolledSection).then(
-      (name) => {
-        if (active) {
-          setAdvisorName(name || "");
-          setAdvisorLoading(false);
-        }
-      },
+    const studentDocs = await Promise.all(
+      studentIds.map((id) => getDoc(doc(db, "Student", id))),
     );
 
-    // Fetch Academic Timeline Schedule
-    const fetchSchedule = async () => {
-      setScheduleLoading(true);
-      try {
-        const q = query(
-          col("Schedule"),
-          where("section", "==", selected.enrolledSection),
-        );
-        const snap = await getDocs(q);
+    return Promise.all(
+      studentDocs
+        .filter((d) => d.exists())
+        .map(async (d) => {
+          const s = { id: d.id, ...d.data() };
+          const enrollSnap = await getDocs(
+            query(
+              col("Enrolled"),
+              where("studentId", "==", s.id),
+              where("status", "==", "Enrolled"),
+            ),
+          );
+          const enrollment = enrollSnap.docs[0]?.data() || {};
+          return {
+            ...s,
+            enrolledGrade: enrollment.grade || s.grade,
+            enrolledSection: enrollment.section || "",
+          };
+        }),
+    );
+  }, [userId]);
 
-        const rawSchedData = snap.docs
-          .map((d) => d.data())
-          .filter((d) => String(d.grade) === String(selected.enrolledGrade));
+  const { data: cachedChildren, loading: childrenLoading } = useCachedFetch(
+    `children:${userId || "none"}`,
+    fetchChildren,
+    [userId],
+  );
+  const children = cachedChildren || [];
+  const showChildrenLoading = childrenLoading && !cachedChildren;
 
-        const enrichedSchedule = await Promise.all(
-          rawSchedData.map(async (s) => {
-            let teacherName = "TBA";
-            if (s.teacherId) {
-              try {
-                const tSnap = await getDoc(doc(db, "Teacher", s.teacherId));
-                if (tSnap.exists()) {
-                  const t = tSnap.data();
-                  teacherName = `${t.lname}, ${t.fname}`;
-                }
-              } catch (err) {}
+  useEffect(() => {
+    if (children.length === 0) {
+      setSelected(null);
+      return;
+    }
+    setSelected((prev) => {
+      const stillThere = prev && children.find((c) => c.id === prev.id);
+      return stillThere || children[0];
+    });
+  }, [children]);
+
+  // ── FIXED: adviser lookup cached per grade+section. ──
+  const fetchAdvisor = useCallback(async () => {
+    if (!selected) return "";
+    const name = await getSectionAdvisor(
+      selected.enrolledGrade,
+      selected.enrolledSection,
+    );
+    return name || "";
+  }, [selected?.enrolledGrade, selected?.enrolledSection]);
+
+  const { data: cachedAdvisorName, loading: advisorLoading } = useCachedFetch(
+    `adviser:${selected ? `${selected.enrolledGrade}|${selected.enrolledSection}` : "none"}`,
+    fetchAdvisor,
+    [selected?.enrolledGrade, selected?.enrolledSection],
+  );
+  // NOTE: an empty string is a legitimate cached result ("no adviser
+  // found"), so distinguish "never fetched" (null) from "" specifically —
+  // don't just do `!cachedAdvisorName`.
+  const advisorName = cachedAdvisorName || "";
+  const showAdvisorLoading = advisorLoading && cachedAdvisorName === null;
+
+  // ── FIXED: class schedule cached per grade+section. ──
+  const fetchSchedule = useCallback(async () => {
+    if (!selected) return [];
+    const q = query(
+      col("Schedule"),
+      where("section", "==", selected.enrolledSection),
+    );
+    const snap = await getDocs(q);
+
+    const rawSchedData = snap.docs
+      .map((d) => d.data())
+      .filter((d) => String(d.grade) === String(selected.enrolledGrade));
+
+    return Promise.all(
+      rawSchedData.map(async (s) => {
+        let teacherName = "TBA";
+        if (s.teacherId) {
+          try {
+            const tSnap = await getDoc(doc(db, "Teacher", s.teacherId));
+            if (tSnap.exists()) {
+              const t = tSnap.data();
+              teacherName = `${t.lname}, ${t.fname}`;
             }
-            return { ...s, teacherName };
-          }),
-        );
+          } catch (err) {}
+        }
+        return { ...s, teacherName };
+      }),
+    );
+  }, [selected?.enrolledGrade, selected?.enrolledSection]);
 
-        if (active) setSchedule(enrichedSchedule);
-      } catch (err) {
-        console.error("Failed to load class schedule:", err);
-      } finally {
-        if (active) setScheduleLoading(false);
-      }
-    };
-
-    fetchSchedule();
-
-    return () => {
-      active = false;
-    };
-  }, [selected]);
+  const { data: cachedSchedule, loading: scheduleLoading } = useCachedFetch(
+    `classSchedule:${selected ? `${selected.enrolledGrade}|${selected.enrolledSection}` : "none"}`,
+    fetchSchedule,
+    [selected?.enrolledGrade, selected?.enrolledSection],
+  );
+  const schedule = cachedSchedule || [];
+  const showScheduleLoading = scheduleLoading && !cachedSchedule;
 
   const formatDob = (dob) => {
     if (!dob) return "—";
@@ -242,7 +223,7 @@ const ChildProfile = () => {
     return 0;
   });
 
-  if (loading) {
+  if (showChildrenLoading) {
     return (
       <div className="app-container">
         <main className="main-content">
@@ -329,12 +310,12 @@ const ChildProfile = () => {
                     <div className="cp-pill-group">
                       <span className="cp-grade-pill">
                         <i className="fas fa-award"></i> Grade{" "}
-                        {selected.enrolledGrade} — Section{" "}
-                        {selected.enrolledSection}
+                        {selected.enrolledGrade || "—"} — Section{" "}
+                        {selected.enrolledSection || "—"}
                       </span>
                       <span className="cp-adviser-pill">
                         <i className="fas fa-chalkboard-teacher"></i>{" "}
-                        {advisorLoading
+                        {showAdvisorLoading
                           ? "Loading adviser…"
                           : `Adviser: ${advisorName || "—"}`}
                       </span>
@@ -416,7 +397,7 @@ const ChildProfile = () => {
                   <i className="fas fa-calendar-alt"></i> School Year Timeline
                 </h3>
 
-                {scheduleLoading ? (
+                {showScheduleLoading ? (
                   <div
                     className="cp-loading-status"
                     style={{ padding: "15px" }}

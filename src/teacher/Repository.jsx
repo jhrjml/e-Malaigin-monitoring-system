@@ -1,4 +1,9 @@
 // Repository.jsx  (Firebase version)
+//
+// FIX (this revision): teacherLoads now loads through useCachedFetch
+// instead of a bare useEffect + setState call, so the "Select Grade -
+// Section - Subject" picker paints instantly on repeat visits from the
+// last-known localStorage snapshot.
 import { useState, useEffect } from "react";
 import { db } from "../api/firebase";
 import {
@@ -11,6 +16,7 @@ import {
 } from "firebase/firestore";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import useCachedFetch from "../common/useCachedFetch";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./Repository.css";
 
@@ -32,45 +38,39 @@ function Repository() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [availableMonths, setAvailableMonths] = useState([]);
-  const [teacherLoads, setTeacherLoads] = useState([]);
+
+  // ── FIXED: teacherLoads now cached instead of a bare useEffect fetch.
+  // localStorage "userId" = User document ID; Schedule stores
+  // "teacherId" = Teacher document ID, so we still resolve User →
+  // teacherId first, then query Schedule — just wrapped in
+  // useCachedFetch now for the instant-paint benefit on repeat visits. ──
+  const { data: cachedTeacherLoads, loading } = useCachedFetch(
+    "teacherLoads:repository",
+    async () => {
+      const userId = localStorage.getItem("userId");
+      if (!userId) return [];
+
+      const userSnap = await getDoc(doc(db, "User", userId));
+      if (!userSnap.exists()) return [];
+
+      const teacherDocId = userSnap.data().teacherId;
+      if (!teacherDocId) return [];
+
+      const snap = await getDocs(
+        query(col("Schedule"), where("teacherId", "==", teacherDocId)),
+      );
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    },
+    [],
+  );
+  const teacherLoads = cachedTeacherLoads || [];
 
   // Matrix data for the "list" view: rows = students, columns = days
   const [monthStudents, setMonthStudents] = useState([]);
   const [monthDays, setMonthDays] = useState([]);
   const [monthMatrix, setMonthMatrix] = useState({});
 
-  const [loading, setLoading] = useState(false);
   const [navLoading, setNavLoading] = useState(false);
-
-  // ── load this teacher's assigned schedules ────────────────────────────
-  // localStorage "userId" = User document ID.
-  // Schedule stores "teacherId" = Teacher document ID.
-  // Must resolve User → teacherId first, then query Schedule.
-  useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) return;
-
-    setLoading(true);
-    const load = async () => {
-      try {
-        const userSnap = await getDoc(doc(db, "User", userId));
-        if (!userSnap.exists()) return;
-
-        const teacherDocId = userSnap.data().teacherId;
-        if (!teacherDocId) return;
-
-        const snap = await getDocs(
-          query(col("Schedule"), where("teacherId", "==", teacherDocId)),
-        );
-        setTeacherLoads(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      } catch (e) {
-        console.error("Failed to load schedules:", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
 
   // ── derived navigation options ────────────────────────────────────────
   // One card per unique Grade + Section + Subject combination, so the
@@ -94,6 +94,10 @@ function Repository() {
     if (a.section !== b.section) return a.section.localeCompare(b.section);
     return a.subject.localeCompare(b.subject);
   });
+
+  // FIXED: only show the load-picker spinner when there's truly no
+  // cached data yet, so repeat visits paint instantly.
+  const showLoadPickerLoading = loading && loadOptions.length === 0;
 
   // ── handlers ─────────────────────────────────────────────────────────
   const selectLoad = async (load) => {
@@ -280,12 +284,12 @@ function Repository() {
                   Select Grade - Section - Subject
                 </h2>
               </div>
-              {loading && (
+              {showLoadPickerLoading && (
                 <div className="rep-loading-state">
                   <p>Loading your class assignments…</p>
                 </div>
               )}
-              {loadOptions.length === 0 && !loading ? (
+              {loadOptions.length === 0 && !showLoadPickerLoading ? (
                 <p
                   style={{
                     padding: "20px",

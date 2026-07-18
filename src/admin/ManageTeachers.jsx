@@ -13,6 +13,7 @@ import Toast from "../common/Toast";
 import { useToast } from "../common/useToast.js";
 import useSubmitGuard from "../common/useSubmitGuard";
 import useNetworkStatus from "../common/useNetworkStatus";
+import useCachedFetch from "../common/useCachedFetch";
 import "./ManageTeachers.css";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 
@@ -76,8 +77,6 @@ function ManageTeachers() {
   const [modalOpen, setModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editId, setEditId] = useState(null);
-  const [teachers, setTeachers] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [formError, setFormError] = useState("");
 
@@ -138,11 +137,19 @@ function ManageTeachers() {
     contact: "",
     email: "",
   };
-  const [form = form, setForm] = useState(emptyForm);
+  // FIX: this was `const [form = form, setForm] = useState(emptyForm);`
+  // — a default-value destructure referencing itself, which is invalid.
+  const [form, setForm] = useState(emptyForm);
 
-  useEffect(() => {
-    fetchTeachers();
-  }, []);
+  // Cached teacher list — renders last-known data instantly (even before
+  // Firestore's offline cache resolves), same pattern as ManageStudents.
+  const {
+    data: cachedTeachers,
+    setData: setTeachers,
+    loading: teachersLoading,
+    refresh: refreshTeachers,
+  } = useCachedFetch("teachers:all", () => getTeachers(), []);
+  const teachers = cachedTeachers || [];
 
   useEffect(() => {
     const handler = (e) => {
@@ -152,19 +159,6 @@ function ManageTeachers() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
-
-  const fetchTeachers = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getTeachers();
-      setTeachers(data);
-    } catch {
-      setError("Could not load teachers.");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const generateEmpId = (teacherList) => {
     const year = new Date().getFullYear();
@@ -258,7 +252,9 @@ function ManageTeachers() {
 
     if (wasEditing) {
       setTeachers((prev) =>
-        prev.map((t) => (t.id === editingId ? { ...t, ...payload } : t)),
+        (prev || []).map((t) =>
+          t.id === editingId ? { ...t, ...payload } : t,
+        ),
       );
     }
 
@@ -267,9 +263,9 @@ function ManageTeachers() {
       : addTeacher(payload);
 
     savePromise
-      .then(() => fetchTeachers())
+      .then(() => refreshTeachers())
       .catch((err) => {
-        if (wasEditing) fetchTeachers();
+        if (wasEditing) refreshTeachers();
         showToast(
           `Failed to save ${form.fname} ${form.lname}: ${err.message}`,
           true,
@@ -317,14 +313,14 @@ function ManageTeachers() {
       confirmColor: "danger",
       onConfirm: () => {
         closeConfirm();
-        setTeachers((prev) => prev.filter((x) => x.id !== t.id));
+        setTeachers((prev) => (prev || []).filter((x) => x.id !== t.id));
         showToast(
           isOnline
             ? `${t.fname} ${t.lname} has been archived.`
             : `${t.fname} ${t.lname} archived offline — will sync when back online.`,
         );
         archiveTeacher(t.id)
-          .then(() => fetchTeachers())
+          .then(() => refreshTeachers())
           .catch((err) => {
             showToast(err.message || "Failed to archive teacher.", true);
           });
@@ -583,7 +579,7 @@ function ManageTeachers() {
     });
 
     setTeachers((prev) => [
-      ...prev,
+      ...(prev || []),
       ...tempRows.map((row) => ({
         id: row._tempId,
         empId: row.empId,
@@ -621,7 +617,7 @@ function ManageTeachers() {
           );
         }
       });
-      fetchTeachers();
+      refreshTeachers();
       if (anyFailed) {
         setImportErrors(failMsgs);
         showToast(
@@ -716,6 +712,9 @@ function ManageTeachers() {
     const valB = String(b[scheduleSortConfig.key] || "").toLowerCase();
     return valA.localeCompare(valB, undefined, { numeric: true }) * dir;
   });
+
+  const validCount = importRows.filter((r) => r.errs.length === 0).length;
+  const invalidCount = importRows.filter((r) => r.errs.length > 0).length;
 
   return (
     <>
@@ -853,7 +852,7 @@ function ManageTeachers() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {teachersLoading && teachers.length === 0 ? (
                   <tr>
                     <td
                       colSpan="5"
@@ -1521,9 +1520,6 @@ function ManageTeachers() {
             </div>
 
             <div className="modal-footer-mt">
-              <button className="btn-cancel" onClick={closeImportModal}>
-                {importFinished ? "Close" : "Cancel"}
-              </button>
               {!importFinished && importRows.length > 0 && validCount > 0 && (
                 <button
                   className="btn-save"

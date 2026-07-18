@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { db } from "../api/firebase";
 import {
   collection,
@@ -8,6 +8,7 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore";
+import useCachedFetch from "../common/useCachedFetch";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./StudentMasterlist.css";
 
@@ -15,17 +16,13 @@ const col = (name) => collection(db, name);
 
 function StudentMasterlist({ teacherId }) {
   const [resolvedTeacherId, setResolvedTeacherId] = useState(null);
-  const [teacherClasses, setTeacherClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState(null);
-  const [currentClassAdviser, setCurrentClassAdviser] = useState("Loading...");
 
-  const [students, setStudents] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState("name");
   const [sortOrder, setSortOrder] = useState("asc");
 
   const [loading, setLoading] = useState(true);
-  const [tableLoading, setTableLoading] = useState(false);
   const [error, setError] = useState("");
 
   const [showModal, setShowModal] = useState(false);
@@ -60,86 +57,175 @@ function StudentMasterlist({ teacherId }) {
       .finally(() => setLoading(false));
   }, [teacherId]);
 
-  // 2. Fetch Unique Classes Handled by Teacher (Including their assigned Advisory class)
-  useEffect(() => {
-    if (!resolvedTeacherId) return;
+  // 2. Fetch Unique Classes Handled by Teacher (Including their assigned
+  // Advisory class). Cached via useCachedFetch, keyed per-teacher, so this
+  // renders last-known classes instantly on repeat visits instead of
+  // blanking out while Firestore's offline cache resolves.
+  const fetchTeacherClasses = useCallback(async () => {
+    if (!resolvedTeacherId) return [];
 
-    const fetchTeacherClasses = async () => {
-      try {
-        let advisoryText = "";
-        try {
-          // Fetch the current teacher's own profile to see if they are an adviser
-          const tSnap = await getDoc(doc(db, "Teacher", resolvedTeacherId));
-          if (tSnap.exists()) {
-            advisoryText = tSnap.data().advisory || "";
-          }
-        } catch (err) {
-          console.error("Error fetching teacher profile", err);
-        }
-
-        const uniqueClassesMap = new Map();
-
-        // Register their Advisory class forcefully if it exists so they can always view it
-        if (advisoryText) {
-          const match = advisoryText.match(
-            /Grade\s+(\d+)\s*-\s*(?:Section\s+)?(.+)/i,
-          );
-          if (match) {
-            const gNum = parseInt(match[1], 10);
-            const sStr = match[2].trim();
-            uniqueClassesMap.set(`${gNum}|${sStr}`, {
-              grade: gNum,
-              section: sStr,
-              isAdvisory: true,
-            });
-          }
-        }
-
-        // Fetch their assigned schedule classes
-        const schedSnap = await getDocs(
-          query(col("Schedule"), where("teacherId", "==", resolvedTeacherId)),
-        );
-
-        schedSnap.docs.forEach((d) => {
-          const data = d.data();
-          if (data.grade && data.section) {
-            const gradeNum = parseInt(data.grade, 10);
-            let sStr = data.section.trim();
-            if (sStr.toLowerCase().startsWith("section ")) {
-              sStr = sStr.substring(8).trim();
-            }
-            const key = `${gradeNum}|${sStr}`;
-            // Add if not already there (advisory check preserves priority)
-            if (!uniqueClassesMap.has(key)) {
-              uniqueClassesMap.set(key, {
-                grade: gradeNum,
-                section: sStr,
-                isAdvisory: false,
-              });
-            }
-          }
-        });
-
-        const formattedClasses = [...uniqueClassesMap.values()].sort((a, b) => {
-          if (a.grade !== b.grade) return a.grade - b.grade;
-          return a.section.localeCompare(b.section);
-        });
-
-        setTeacherClasses(formattedClasses);
-      } catch (err) {
-        setError("Failed to fetch assigned class configurations.");
+    let advisoryText = "";
+    try {
+      const tSnap = await getDoc(doc(db, "Teacher", resolvedTeacherId));
+      if (tSnap.exists()) {
+        advisoryText = tSnap.data().advisory || "";
       }
-    };
+    } catch (err) {
+      console.error("Error fetching teacher profile", err);
+    }
 
-    fetchTeacherClasses();
+    const uniqueClassesMap = new Map();
+
+    if (advisoryText) {
+      const match = advisoryText.match(
+        /Grade\s+(\d+)\s*-\s*(?:Section\s+)?(.+)/i,
+      );
+      if (match) {
+        const gNum = parseInt(match[1], 10);
+        const sStr = match[2].trim();
+        uniqueClassesMap.set(`${gNum}|${sStr}`, {
+          grade: gNum,
+          section: sStr,
+          isAdvisory: true,
+        });
+      }
+    }
+
+    const schedSnap = await getDocs(
+      query(col("Schedule"), where("teacherId", "==", resolvedTeacherId)),
+    );
+
+    schedSnap.docs.forEach((d) => {
+      const data = d.data();
+      if (data.grade && data.section) {
+        const gradeNum = parseInt(data.grade, 10);
+        let sStr = data.section.trim();
+        if (sStr.toLowerCase().startsWith("section ")) {
+          sStr = sStr.substring(8).trim();
+        }
+        const key = `${gradeNum}|${sStr}`;
+        if (!uniqueClassesMap.has(key)) {
+          uniqueClassesMap.set(key, {
+            grade: gradeNum,
+            section: sStr,
+            isAdvisory: false,
+          });
+        }
+      }
+    });
+
+    return [...uniqueClassesMap.values()].sort((a, b) => {
+      if (a.grade !== b.grade) return a.grade - b.grade;
+      return a.section.localeCompare(b.section);
+    });
   }, [resolvedTeacherId]);
 
-  // Handle Dropdown Filter Change
-  const handleClassFilterChange = async (e) => {
+  const { data: cachedTeacherClasses, loading: classesLoading } =
+    useCachedFetch(
+      `teacherClasses:${resolvedTeacherId || "none"}`,
+      fetchTeacherClasses,
+      [resolvedTeacherId],
+    );
+  const teacherClasses = cachedTeacherClasses || [];
+
+  // 3. Fetch the roster + adviser for the selected class.
+  // THIS is the piece that was missing a cache: previously this ran as a
+  // plain async call inside the dropdown's onChange handler, so every
+  // class switch (even to a class you'd already viewed, even offline)
+  // blocked the table behind a fresh network round-trip. Routing it
+  // through useCachedFetch, keyed by grade|section, means:
+  //   - first-ever view of a class: brief loader (nothing cached yet)
+  //   - repeat view, online or offline: cached roster renders instantly,
+  //     then quietly refreshes in the background if a connection exists
+  const fetchRoster = useCallback(async () => {
+    if (!selectedClass) return { students: [], adviser: null };
+    const { grade, section } = selectedClass;
+
+    const enrollSnap = await getDocs(
+      query(
+        col("Enrolled"),
+        where("grade", "==", grade),
+        where("section", "==", section),
+        where("status", "==", "Enrolled"),
+      ),
+    );
+
+    const enrollments = enrollSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    const studentProfiles = await Promise.all(
+      enrollments.map(async (enrollment) => {
+        try {
+          const studentSnap = await getDoc(
+            doc(db, "Student", enrollment.studentId),
+          );
+          if (studentSnap.exists()) {
+            return {
+              ...studentSnap.data(),
+              id: studentSnap.id,
+              section: enrollment.section,
+              enrollId: enrollment.id,
+            };
+          }
+          return null;
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    const students = studentProfiles.filter((p) => p !== null);
+
+    // Fetch the Adviser assigned to this selected class
+    const advQuery1 = `Grade ${grade} - Section ${section}`;
+    const advQuery2 = `Grade ${grade} - ${section}`;
+    const teachersRef = col("Teacher");
+
+    let adviser = "No Adviser Assigned";
+    try {
+      const snap1 = await getDocs(
+        query(teachersRef, where("advisory", "==", advQuery1)),
+      );
+      if (!snap1.empty) {
+        const t = snap1.docs[0].data();
+        adviser = `${t.fname} ${t.lname}`;
+      } else {
+        const snap2 = await getDocs(
+          query(teachersRef, where("advisory", "==", advQuery2)),
+        );
+        if (!snap2.empty) {
+          const t = snap2.docs[0].data();
+          adviser = `${t.fname} ${t.lname}`;
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching adviser:", err);
+      adviser = "Unknown";
+    }
+
+    return { students, adviser };
+  }, [selectedClass]);
+
+  const {
+    data: rosterData,
+    loading: rosterLoading,
+    error: rosterError,
+  } = useCachedFetch(
+    `roster:${selectedClass ? `${selectedClass.grade}|${selectedClass.section}` : "none"}`,
+    fetchRoster,
+    [selectedClass],
+  );
+
+  const students = rosterData?.students || [];
+  const currentClassAdviser = !selectedClass
+    ? "Loading..."
+    : (rosterData?.adviser ?? (rosterLoading ? "Searching..." : "Unknown"));
+
+  // Handle Dropdown Filter Change — just updates selectedClass; the
+  // useCachedFetch hook above reacts to that change on its own.
+  const handleClassFilterChange = (e) => {
     const val = e.target.value;
     if (!val) {
       setSelectedClass(null);
-      setStudents([]);
       setSearchQuery("");
       return;
     }
@@ -148,76 +234,7 @@ function StudentMasterlist({ teacherId }) {
     const gradeNum = parseInt(gradeStr, 10);
 
     setSelectedClass({ grade: gradeNum, section: sectionStr });
-    setTableLoading(true);
     setSearchQuery("");
-    setCurrentClassAdviser("Searching...");
-
-    try {
-      // Fetch students for selected class
-      const enrollSnap = await getDocs(
-        query(
-          col("Enrolled"),
-          where("grade", "==", gradeNum),
-          where("section", "==", sectionStr),
-          where("status", "==", "Enrolled"),
-        ),
-      );
-
-      const enrollments = enrollSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-
-      const studentProfiles = await Promise.all(
-        enrollments.map(async (enrollment) => {
-          try {
-            const studentSnap = await getDoc(
-              doc(db, "Student", enrollment.studentId),
-            );
-            if (studentSnap.exists()) {
-              return {
-                ...studentSnap.data(),
-                id: studentSnap.id,
-                section: enrollment.section,
-                enrollId: enrollment.id,
-              };
-            }
-            return null;
-          } catch {
-            return null;
-          }
-        }),
-      );
-
-      setStudents(studentProfiles.filter((p) => p !== null));
-
-      // Fetch the Adviser assigned to this selected class
-      const advQuery1 = `Grade ${gradeNum} - Section ${sectionStr}`;
-      const advQuery2 = `Grade ${gradeNum} - ${sectionStr}`;
-
-      const teachersRef = col("Teacher");
-      const q1 = query(teachersRef, where("advisory", "==", advQuery1));
-      const snap1 = await getDocs(q1);
-
-      if (!snap1.empty) {
-        const t = snap1.docs[0].data();
-        setCurrentClassAdviser(`${t.fname} ${t.lname}`);
-      } else {
-        const q2 = query(teachersRef, where("advisory", "==", advQuery2));
-        const snap2 = await getDocs(q2);
-        if (!snap2.empty) {
-          const t = snap2.docs[0].data();
-          setCurrentClassAdviser(`${t.fname} ${t.lname}`);
-        } else {
-          setCurrentClassAdviser("No Adviser Assigned");
-        }
-      }
-    } catch (err) {
-      console.error("Error fetching roster details:", err);
-      setCurrentClassAdviser("Unknown");
-    } finally {
-      setTableLoading(false);
-    }
   };
 
   // Toggle Column Headers Sorting Parameters
@@ -268,6 +285,12 @@ function StudentMasterlist({ teacherId }) {
   const getStudentDisplayName = (s) => {
     return `${s.lastName || ""}, ${s.firstName || ""}${s.middleName ? ` ${s.middleName.charAt(0).toUpperCase()}.` : ""}`;
   };
+
+  // Only block the table with a full loading placeholder when there is
+  // truly nothing cached to show yet. If cached data exists (even stale,
+  // even offline), show it immediately and let it refresh quietly.
+  const showRosterLoadingPlaceholder =
+    !!selectedClass && rosterLoading && !rosterData;
 
   if (loading) {
     return (
@@ -326,15 +349,25 @@ function StudentMasterlist({ teacherId }) {
               onChange={handleClassFilterChange}
             >
               <option value="">Choose Class</option>
-              {teacherClasses.map((c) => (
-                <option
-                  key={`${c.grade}|${c.section}`}
-                  value={`${c.grade}|${c.section}`}
-                >
-                  Grade {c.grade} - {c.section}{" "}
-                  {c.isAdvisory ? "(Your Advisory Class)" : ""}
+              {classesLoading && teacherClasses.length === 0 ? (
+                <option value="" disabled>
+                  Loading classes…
                 </option>
-              ))}
+              ) : teacherClasses.length === 0 ? (
+                <option value="" disabled>
+                  No classes assigned yet
+                </option>
+              ) : (
+                teacherClasses.map((c) => (
+                  <option
+                    key={`${c.grade}|${c.section}`}
+                    value={`${c.grade}|${c.section}`}
+                  >
+                    Grade {c.grade} - {c.section}{" "}
+                    {c.isAdvisory ? "(Your Advisory Class)" : ""}
+                  </option>
+                ))
+              )}
             </select>
           </div>
         </div>
@@ -362,9 +395,24 @@ function StudentMasterlist({ teacherId }) {
                   <strong>Class Adviser:</strong> {currentClassAdviser}
                 </span>
               </div>
+              {/* Subtle, non-blocking indicator that a background refresh
+                  is happening while cached data is already on screen */}
+              {rosterLoading && rosterData && (
+                <div className="sml-class-info-item sml-refresh-indicator">
+                  <i className="fas fa-sync fa-spin"></i>
+                  <span>Refreshing…</span>
+                </div>
+              )}
             </div>
 
-            {tableLoading ? (
+            {rosterError && rosterData && (
+              <div className="sml-alert-banner">
+                <i className="fas fa-exclamation-triangle"></i> Showing
+                last-saved roster — couldn't refresh from the server.
+              </div>
+            )}
+
+            {showRosterLoadingPlaceholder ? (
               <div className="sml-table-loading-placeholder">
                 <i className="fas fa-spinner fa-spin"></i> Loading roster
                 records...
@@ -536,7 +584,6 @@ function StudentMasterlist({ teacherId }) {
                   </div>
                 </div>
 
-                {/* Explicitly displayed Gender Field without hiding the column structure */}
                 <div className="sml-field-group">
                   <label className="sml-field-label">Gender</label>
                   <div className="sml-view-box">
@@ -567,15 +614,6 @@ function StudentMasterlist({ teacherId }) {
                 </div>
               </div>
             </div>
-
-            {/* <div className="sml-modal-footer">
-              <button
-                className="sml-btn-close-full"
-                onClick={() => setShowModal(false)}
-              >
-                Close
-              </button>
-            </div> */}
           </div>
         </div>
       )}

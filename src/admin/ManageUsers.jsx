@@ -16,13 +16,6 @@ function ManageUsers() {
   const [viewPassVisible, setViewPassVisible] = useState(false);
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  // Starts true (instead of false) because the very first thing this
-  // component does on mount is fetch data (see the mount effect below).
-  // If this started false, there'd be a brief window — while
-  // runAccountMaintenanceTasks() is still awaiting, before fetchUsers()
-  // gets a chance to flip this to true — where `users` is still [] and
-  // `loading` is still false, so the list would incorrectly flash
-  // "No Teacher/Parent accounts found" before the real data arrives.
   const [loading, setLoading] = useState(true);
   const [linkedStudents, setLinkedStudents] = useState([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
@@ -31,16 +24,19 @@ function ManageUsers() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortOrder, setSortOrder] = useState("asc"); // 'asc' = A-Z, 'desc' = Z-A
 
-  // ── On mount: run maintenance tasks then load users ────────────────────
+  // ── On mount: paint the list immediately, reconcile in the background ──
+  // FIX: this used to `await runAccountMaintenanceTasks()` BEFORE
+  // fetchUsers(), and that maintenance function runs dozens of sequential
+  // getDoc() calls (one per parent, one per linked student) in for-loops —
+  // offline, those can take a very long time or effectively hang, blocking
+  // the list behind them the entire time. Now fetchUsers() paints the list
+  // right away, and maintenance runs quietly afterward, then silently
+  // refreshes the list once it's done.
   useEffect(() => {
-    (async () => {
-      // Explicitly keep the loading flag on for this whole sequence —
-      // maintenance tasks run first, then the actual user fetch — so the
-      // list view never has a gap where it thinks loading finished early.
-      setLoading(true);
-      await runAccountMaintenanceTasks();
-      fetchUsers();
-    })();
+    fetchUsers(); // paints the list immediately
+    runAccountMaintenanceTasks()
+      .then(fetchUsers)
+      .catch(() => {}); // reconciles quietly after
   }, []);
 
   // ── INTERCEPT SIDEBAR NAVIGATION CLICKS TO RESET DESTINATION CONTEXT ──
