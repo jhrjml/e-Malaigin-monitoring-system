@@ -40,6 +40,7 @@ function Repository() {
   const [monthMatrix, setMonthMatrix] = useState({});
 
   const [loading, setLoading] = useState(false);
+  const [navLoading, setNavLoading] = useState(false);
 
   // ── load this teacher's assigned schedules ────────────────────────────
   // localStorage "userId" = User document ID.
@@ -100,7 +101,7 @@ function Repository() {
     setRepoSection(load.section);
     setRepoSubject(load.subject);
     setSearchQuery("");
-    setLoading(true);
+    setNavLoading(true);
     try {
       const snap = await getDocs(
         query(
@@ -127,13 +128,13 @@ function Repository() {
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      setNavLoading(false);
     }
   };
 
   const selectMonth = async (monthId) => {
     setRepoMonth(monthId);
-    setLoading(true);
+    setNavLoading(true);
     try {
       const snap = await getDocs(
         query(
@@ -177,7 +178,7 @@ function Repository() {
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      setNavLoading(false);
     }
   };
 
@@ -272,10 +273,6 @@ function Repository() {
     <div className="teacher-dashboard">
       <main className="main-content">
         <div className="page-container">
-          {loading && (
-            <p style={{ padding: "10px", color: "#a65f81" }}>Loading…</p>
-          )}
-
           {currentView === "load" && (
             <div className="view-section active">
               <div className="toolbar-rep">
@@ -283,6 +280,11 @@ function Repository() {
                   Select Grade - Section - Subject
                 </h2>
               </div>
+              {loading && (
+                <div className="rep-loading-state">
+                  <p>Loading your class assignments…</p>
+                </div>
+              )}
               {loadOptions.length === 0 && !loading ? (
                 <p
                   style={{

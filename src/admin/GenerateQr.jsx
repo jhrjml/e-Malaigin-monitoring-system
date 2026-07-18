@@ -25,6 +25,7 @@ const GenerateQR = () => {
     name: "",
     lrn: "",
     grade: "",
+    gender: "",
     birthdate: "",
     address: "",
     guardianName: "",
@@ -66,6 +67,7 @@ const GenerateQR = () => {
       name: fullName,
       lrn: selectedStudent.lrn,
       grade: selectedStudent.grade,
+      gender: selectedStudent.gender || "—",
       birthdate: selectedStudent.birthdate || selectedStudent.dob || "—",
       address: selectedStudent.address || "—",
       guardianName: selectedStudent.guardian || "—",
@@ -287,6 +289,10 @@ const GenerateQR = () => {
                         <div className="id-info-row">
                           <label>LRN</label>
                           <span>{displayData.lrn}</span>
+                        </div>
+                        <div className="id-info-row">
+                          <label>Gender</label>
+                          <span>{displayData.gender}</span>
                         </div>
                       </div>
                     </div>

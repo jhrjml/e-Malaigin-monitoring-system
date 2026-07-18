@@ -97,9 +97,22 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   });
 
   const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // The admin-configured active school year label (e.g. "2026-2027"), used
+  // to stamp new posts and scope the classwork list so a teacher assigned
+  // the same Grade/Section/Subject next school year sees a clean list
+  // instead of last year's leftover posts.
+  const [activeSchoolYear, setActiveSchoolYear] = useState("");
+
   const guardSave = useSubmitGuard();
+
+  useEffect(() => {
+    getActiveSchoolYearLabel()
+      .then(setActiveSchoolYear)
+      .catch((e) => console.error("Failed to load active school year:", e));
+  }, []);
 
   // Intercept Dashboard Click Routing Targets
   useEffect(() => {
@@ -183,26 +196,33 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
     });
   }, [classGrade, classSection]);
 
-  const loadClassworks = async (grade, section, subject) => {
-    const snap = await getDocs(
-      query(
-        col("Classwork"),
+  const loadClassworks = async (grade, section, subject, schoolYear) => {
+    setListLoading(true);
+    try {
+      const constraints = [
         where("grade", "==", grade),
         where("section", "==", section),
         where("subject", "==", subject),
-      ),
-    );
-    setClassworks(
-      snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => b.date.localeCompare(a.date)),
-    );
+      ];
+      if (schoolYear) constraints.push(where("schoolYear", "==", schoolYear));
+
+      const snap = await getDocs(query(col("Classwork"), ...constraints));
+      setClassworks(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => b.date.localeCompare(a.date)),
+      );
+    } finally {
+      setListLoading(false);
+    }
   };
 
   useEffect(() => {
-    if (classGrade && classSection && classSubject)
-      loadClassworks(classGrade, classSection, classSubject);
-  }, [classGrade, classSection, classSubject]);
+    // Wait for activeSchoolYear to resolve at least once so this never
+    // fires an unscoped (all-years) query.
+    if (classGrade && classSection && classSubject && activeSchoolYear)
+      loadClassworks(classGrade, classSection, classSubject, activeSchoolYear);
+  }, [classGrade, classSection, classSubject, activeSchoolYear]);
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -216,9 +236,17 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
         isAnnouncement: newCW.title === "Announcement",
         studentStatus: {},
         createdAt: new Date().toISOString(),
+        // Stamped so this post only ever shows up under the school year it
+        // was actually posted in.
+        schoolYear: activeSchoolYear,
       };
       setDoc(ref, payload).then(() =>
-        loadClassworks(classGrade, classSection, classSubject),
+        loadClassworks(
+          classGrade,
+          classSection,
+          classSubject,
+          activeSchoolYear,
+        ),
       );
       setShowModal(false);
       setNewCW({ title: "", desc: "", date: "" });
@@ -233,13 +261,25 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
   const handleUpdateCW = (e) => {
     e.preventDefault();
     guardSave(() => {
+      const editedAt = new Date().toISOString();
       updateDoc(doc(db, "Classwork", editCW.id), {
         title: editCW.title,
         desc: editCW.desc,
         date: editCW.date,
         isAnnouncement: editCW.title === "Announcement",
+        editedAt,
       }).then(() => {
-        loadClassworks(classGrade, classSection, classSubject);
+        loadClassworks(
+          classGrade,
+          classSection,
+          classSubject,
+          activeSchoolYear,
+        );
+        setActiveCW((prev) =>
+          prev && prev.id === editCW.id
+            ? { ...prev, ...editCW, editedAt }
+            : prev,
+        );
         setShowEditModal(false);
       });
     });
@@ -306,49 +346,60 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
           {currentView === "load" && (
             <div className="cwr-view">
               <h2 className="cwr-page-title">Classwork Reminders</h2>
-              <div className="cwr-grid">
-                {loadOptions.map((l, i) => (
-                  <div
-                    key={i}
-                    className="cwr-card"
-                    onClick={() => {
-                      setClassGrade(l.grade);
-                      setClassSection(l.section);
-                      setClassSubject(l.subject);
-                      setCurrentView("list");
-                    }}
-                  >
-                    <div className="cwr-icon-box">
-                      <i className="fas fa-book-open"></i>
+              {loading ? (
+                <div className="cwr-loading-state">
+                  <p>Loading your class assignments…</p>
+                </div>
+              ) : (
+                <div className="cwr-grid">
+                  {loadOptions.map((l, i) => (
+                    <div
+                      key={i}
+                      className="cwr-card"
+                      onClick={() => {
+                        setClassGrade(l.grade);
+                        setClassSection(l.section);
+                        setClassSubject(l.subject);
+                        setCurrentView("list");
+                      }}
+                    >
+                      <div className="cwr-icon-box">
+                        <i className="fas fa-book-open"></i>
+                      </div>
+                      <h3>
+                        Grade {l.grade} - {l.section}
+                      </h3>
+                      <p className="cwr-card-sub">{l.subject}</p>
+                      {l.start && l.end && (
+                        <p className="cwr-card-time">
+                          <i className="far fa-clock"></i> {l.start} – {l.end}
+                        </p>
+                      )}
                     </div>
-                    <h3>
-                      Grade {l.grade} - {l.section}
-                    </h3>
-                    <p className="cwr-card-sub">{l.subject}</p>
-                    {l.start && l.end && (
-                      <p className="cwr-card-time">
-                        <i className="far fa-clock"></i> {l.start} – {l.end}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {currentView === "list" && (
             <div className="cwr-view">
-              <div className="cwr-toolbar">
-                <button
-                  className="btn-back-cwr"
-                  onClick={() => setCurrentView("load")}
-                >
-                  <i className="fas fa-arrow-left"></i>
-                </button>
-                <div className="cwr-title-block">
-                  <h3>{classSubject} — Classwork &amp; Reminders</h3>
-                  <small>
-                    Grade {classGrade} – Section {classSection}
+              <div className="cwr-toolbar cwr-toolbar--stacked">
+                <div className="cwr-toolbar-left">
+                  <div className="cwr-toolbar-row1">
+                    <button
+                      className="btn-back-cwr"
+                      onClick={() => setCurrentView("load")}
+                    >
+                      <i className="fas fa-arrow-left"></i>
+                    </button>
+                    <h3 className="cwr-toolbar-title">
+                      Classwork &amp; Reminders
+                    </h3>
+                  </div>
+                  <small className="cwr-toolbar-subtitle">
+                    {classSubject}: Grade {classGrade} – {classSection}
+                    {activeSchoolYear ? ` | S.Y. ${activeSchoolYear}` : ""}
                   </small>
                 </div>
                 <button
@@ -360,7 +411,11 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
               </div>
 
               <div className="cwr-list">
-                {classworks.length === 0 ? (
+                {listLoading ? (
+                  <div className="cwr-loading-state">
+                    <p>Loading classwork updates…</p>
+                  </div>
+                ) : classworks.length === 0 ? (
                   <div className="cwr-empty-list">
                     <i className="fas fa-folder-open"></i>
                     <p>
@@ -381,6 +436,7 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                       icon: "fa-tasks",
                       cls: "cwr-blue",
                     };
+                    const editedLabel = formatEditedLabel(cw.editedAt);
 
                     return (
                       <div
@@ -395,6 +451,11 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                             <span className={`cwr-type-badge ${meta.cls}`}>
                               {cw.title}
                             </span>
+                            {editedLabel && (
+                              <span className="cwr-edited-label">
+                                <i className="fas fa-history"></i> {editedLabel}
+                              </span>
+                            )}
                             <span className="cwr-item-date">
                               <i className="far fa-calendar-alt"></i> {cw.date}
                             </span>
@@ -491,27 +552,30 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
 
           {currentView === "grading" && (
             <div className="cwr-view">
-              <div className="cwr-toolbar">
-                <button
-                  className="btn-back-cwr"
-                  onClick={() => setCurrentView("list")}
-                >
-                  <i className="fas fa-arrow-left"></i>
-                </button>
-                <div className="cwr-title-block">
-                  <h3>{activeCW?.title}</h3>
-                  <small>
-                    {activeCW?.desc} • Due: {activeCW?.date} | Grade{" "}
-                    {classGrade} – {classSection}
-                  </small>
+              <div className="cwr-toolbar cwr-grading-toolbar">
+                <div className="cwr-grading-title-row">
+                  <button
+                    className="btn-back-cwr"
+                    onClick={() => setCurrentView("list")}
+                  >
+                    <i className="fas fa-arrow-left"></i>
+                  </button>
+                  <h3 className="cwr-grading-title">{activeCW?.title}</h3>
+                  <button
+                    className="cwr-btn-edit-link cwr-btn-edit-link--inline"
+                    onClick={() => handleOpenEditModal(activeCW)}
+                  >
+                    <i className="fas fa-pencil-alt"></i>{" "}
+                    <span className="cwr-edit-link-text">Edit</span>
+                  </button>
                 </div>
-                <button
-                  className="cwr-btn-edit-link cwr-btn-edit-link--inline"
-                  onClick={() => handleOpenEditModal(activeCW)}
-                >
-                  <i className="fas fa-pencil-alt"></i>{" "}
-                  <span className="cwr-edit-link-text">Edit</span>
-                </button>
+                <div className="cwr-grading-meta">
+                  <span className="cwr-grading-due">
+                    <i className="far fa-calendar-alt"></i> Due:{" "}
+                    {activeCW?.date} | Grade {classGrade} – {classSection}
+                  </span>
+                  <p className="cwr-grading-desc">{activeCW?.desc}</p>
+                </div>
               </div>
 
               <div className="cwr-grading-hint">
@@ -658,7 +722,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                 </div>
               </div>
               <div className="cwr-modal-footer">
-                {/* <button type="button" className="cwr-btn-cancel" onClick={() => setShowModal(false)}>Cancel</button> */}
                 <button type="submit" className="cwr-btn-save">
                   Post Template
                 </button>
@@ -728,7 +791,6 @@ function ClassworkReminding({ focusClasswork, onFocusConsumed }) {
                 </div>
               </div>
               <div className="cwr-modal-footer">
-                {/* <button type="button" className="cwr-btn-cancel" onClick={() => setShowEditModal(false)}>Cancel</button> */}
                 <button type="submit" className="cwr-btn-save">
                   Update Post
                 </button>

@@ -37,7 +37,7 @@
   }
 }
 
-.grade-card {
+.grade-card-ms {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -55,13 +55,13 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
-.grade-card:hover {
+.grade-card-ms:hover {
   transform: translateY(-4px);
   box-shadow: 0 12px 25px rgba(0, 0, 0, 0.08);
   border-color: var(--accent);
 }
 
-.grade-card h3 {
+.grade-card-ms h3 {
   margin: 0;
   font-size: 1.25rem;
   color: #1a1a2e;
@@ -105,22 +105,22 @@
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 .grade-1 {
-  background: linear-gradient(135deg, #ff6b6b, #ee5d5d);
+  background: linear-gradient(135deg, #e74c3c);
 }
 .grade-2 {
-  background: linear-gradient(135deg, #ff9f43, #ee9234);
+  background: linear-gradient(135deg, #e67e22);
 }
 .grade-3 {
-  background: linear-gradient(135deg, #faca2e, #e6b924);
+  background: linear-gradient(135deg, #f39c12);
 }
 .grade-4 {
-  background: linear-gradient(135deg, #1dd1a1, #10ac84);
+  background: linear-gradient(135deg, #1abc9c);
 }
 .grade-5 {
-  background: linear-gradient(135deg, #48dbfb, #0abde3);
+  background: linear-gradient(135deg, #0abde3);
 }
 .grade-6 {
-  background: linear-gradient(135deg, #5f27cd, #341f97);
+  background: linear-gradient(135deg, #9b59b6);
 }
 
 .btn-add-ms {
@@ -555,6 +555,11 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.action-buttons-ms {
+  display: flex;
+  justify-content: center;
 }
 
 @media (max-width: 600px) {

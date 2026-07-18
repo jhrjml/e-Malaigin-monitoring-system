@@ -80,12 +80,58 @@
   flex-wrap: wrap;
 }
 
+/* ── Toolbar: left column holds the back-button+title row stacked on top
+   of the subtitle; the actions block sits beside it. This keeps the back
+   button and title glued together on one line at every width instead of
+   wrapping apart (which is what caused the misalignment on mobile). ── */
+.am-toolbar--stacked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.am-toolbar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.am-toolbar-row1 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
+.am-toolbar-title {
+  margin: 0;
+  color: black;
+  font-size: 1.1rem;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.am-toolbar-subtitle {
+  margin-left: calc(var(--btn-back-width, 40px) + 12px);
+  color: var(--am-gray);
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Back button */
 .btn-back-am {
   background: transparent;
   color: rgb(0, 0, 0);
   border: none;
-  padding: 8px 20px;
+  padding: 8px 5px;
   border-radius: 5px;
   cursor: pointer;
   display: flex;
@@ -97,7 +143,7 @@
 
 @media (max-width: 600px) {
   .btn-back-am {
-    padding: 8px 12px;
+    padding: 8px 8px;
     gap: 8px;
     font-size: 1.25rem;
   }
@@ -281,7 +327,7 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 14px 16px;
-  text-align: left;
+  text-align: center;
   border-bottom: 1px solid #e9ecef;
 }
 .am-table td {
@@ -505,5 +551,28 @@
     margin-left: 0;
     margin-top: 10px;
     justify-content: flex-end;
+  }
+
+  /* Keep the back button + title glued on one row, and let the subtitle
+     wrap normally underneath — this is the actual fix for the previous
+     misalignment on phone view. */
+  .am-toolbar--stacked {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .am-toolbar-left {
+    flex-basis: auto;
+    width: 100%;
+  }
+  .am-toolbar-row1 {
+    flex-wrap: nowrap;
+  }
+  .am-toolbar-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .am-toolbar-subtitle {
+    white-space: normal;
   }
 }

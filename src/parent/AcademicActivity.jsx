@@ -9,6 +9,7 @@ import {
   where,
   getDocs,
 } from "firebase/firestore";
+import { getActiveSchoolYearLabel } from "../api/firebaseApi";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./AcademicActivity.css";
 
@@ -213,18 +214,23 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
     setSelectedChild(child);
   };
 
+  // Classwork/announcement is scoped to the current school year — resolved
+  // fresh on each subject open rather than cached in state, since a stale
+  // cached year would otherwise let a click that fires the instant this
+  // component mounts slip through unscoped.
   const selectSubject = async (subjectName) => {
     setCurrentSubject(subjectName);
     setLoading(true);
     try {
-      const snap = await getDocs(
-        query(
-          col("Classwork"),
-          where("grade", "==", selectedChild.enrolledGrade),
-          where("section", "==", selectedChild.enrolledSection),
-          where("subject", "==", subjectName),
-        ),
-      );
+      const schoolYear = await getActiveSchoolYearLabel();
+      const constraints = [
+        where("grade", "==", selectedChild.enrolledGrade),
+        where("section", "==", selectedChild.enrolledSection),
+        where("subject", "==", subjectName),
+      ];
+      if (schoolYear) constraints.push(where("schoolYear", "==", schoolYear));
+
+      const snap = await getDocs(query(col("Classwork"), ...constraints));
       const cws = snap.docs
         .map((d) => {
           const data = d.data();
@@ -265,14 +271,15 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
         }
         setCurrentSubject(focusClasswork.subject);
 
-        const snap = await getDocs(
-          query(
-            col("Classwork"),
-            where("grade", "==", target.enrolledGrade),
-            where("section", "==", target.enrolledSection),
-            where("subject", "==", focusClasswork.subject),
-          ),
-        );
+        const schoolYear = await getActiveSchoolYearLabel();
+        const constraints = [
+          where("grade", "==", target.enrolledGrade),
+          where("section", "==", target.enrolledSection),
+          where("subject", "==", focusClasswork.subject),
+        ];
+        if (schoolYear) constraints.push(where("schoolYear", "==", schoolYear));
+
+        const snap = await getDocs(query(col("Classwork"), ...constraints));
         const cws = snap.docs
           .map((d) => {
             const data = d.data();
@@ -297,6 +304,7 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusClasswork, childrenLoading, children]);
 
   const sortedClassworkList = useMemo(() => {
@@ -326,7 +334,10 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
       <div className="app-container">
         <main className="main-content">
           <div className="page-container">
-            <p className="aa-loading-text">Loading…</p>
+            <div className="aa-loading-state">
+              <i className="fas fa-spinner fa-spin"></i> Loading academic
+              activity…
+            </div>
           </div>
         </main>
       </div>
@@ -367,7 +378,11 @@ function AcademicActivity({ focusClasswork, onFocusConsumed } = {}) {
                 </div>
               )}
 
-              {loading && <p className="aa-loading-text">Loading…</p>}
+              {loading && (
+                <div className="aa-loading-state">
+                  <i className="fas fa-spinner fa-spin"></i> Loading…
+                </div>
+              )}
 
               {/* SELECT SUBJECT */}
               {currentView === "select-subject" && (

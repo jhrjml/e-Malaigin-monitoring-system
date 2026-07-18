@@ -190,10 +190,6 @@
   transition: color 0.15s ease;
 }
 
-.btn-back-rep:hover {
-  color: var(--accent);
-}
-
 @media (max-width: 600px) {
   .btn-back-rep {
     padding: 8px 12px;
@@ -417,4 +413,15 @@
   gap: 5px;
   margin-top: 8px;
   font-weight: 600;
+}
+
+.rep-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  color: var(--accent, #a65f81);
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
 }

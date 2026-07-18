@@ -206,7 +206,7 @@
 }
 
 /* ACTION BUTTONS (Icon Style) */
-.action-buttons {
+.action-buttons-mu {
   display: flex;
   justify-content: center;
   gap: 8px;

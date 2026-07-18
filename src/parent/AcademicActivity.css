@@ -349,6 +349,21 @@
   font-size: 0.7rem;
 }
 
+.aa-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 40px;
+  font-size: large;
+  color: var(--ar-accent);
+  font-weight: 500;
+}
+.aa-loading-state i {
+  color: #a65f81;
+  font-size: large;
+}
+
 @media (max-width: 768px) {
   .grid-container-aa {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

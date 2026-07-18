@@ -408,6 +408,7 @@
 .sml-modal-close:hover {
   background: #e74c3c;
   color: white;
+  transform: rotate(90deg);
 }
 
 .sml-modal-body {

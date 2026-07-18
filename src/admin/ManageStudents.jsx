@@ -9,6 +9,7 @@ import {
   updateStudent,
   archiveStudent,
   markQrGenerated,
+  getGeneratedQrLrns,
 } from "../api/firebaseApi";
 import ConfirmModal from "../common/ConfirmModal";
 import Toast from "../common/Toast";
@@ -81,10 +82,16 @@ function ManageStudents() {
     address: "",
   });
 
+  const [generatedLrns, setGeneratedLrns] = useState(new Set());
+
   useEffect(() => {
     getStudents()
       .then(setStudents)
       .catch((err) => console.error("Error fetching students:", err));
+
+    getGeneratedQrLrns()
+      .then((lrns) => setGeneratedLrns(new Set(lrns.map(String))))
+      .catch((err) => console.error("Error fetching generated QR list:", err));
   }, []);
 
   useEffect(() => {
@@ -174,6 +181,9 @@ function ManageStudents() {
         pdf.save(`${safeName}_Grade${idTargetStudent.grade}_ID.pdf`);
 
         await markQrGenerated(idTargetStudent.lrn);
+        setGeneratedLrns((prev) =>
+          new Set(prev).add(String(idTargetStudent.lrn)),
+        );
         showToast("Student ID PDF generated and saved successfully!");
       } catch (err) {
         console.error("ID print failure:", err);
@@ -689,7 +699,7 @@ function ManageStudents() {
                 {[1, 2, 3, 4, 5, 6].map((grade) => (
                   <div
                     key={grade}
-                    className="grade-card"
+                    className="grade-card-ms"
                     onClick={() => openGrade(grade)}
                   >
                     <div className={`icon-circle grade-${grade}`}>{grade}</div>
@@ -775,8 +785,15 @@ function ManageStudents() {
                             <button
                               className="btn-download-id-cell"
                               onClick={() => setIdTargetStudent(s)}
-                              title="Download Student ID Card"
-                              disabled={downloadingId}
+                              title={
+                                generatedLrns.has(String(s.lrn))
+                                  ? "Download Student ID Card"
+                                  : "Generate this student's ID in Generate ID first"
+                              }
+                              disabled={
+                                downloadingId ||
+                                !generatedLrns.has(String(s.lrn))
+                              }
                             >
                               <i
                                 className={
@@ -947,34 +964,42 @@ function ManageStudents() {
                       <td>{s.age}</td>
                       <td>{s.contact}</td>
                       <td>
-                        <button
-                          className="btn-download-id-cell"
-                          onClick={() => setIdTargetStudent(s)}
-                          title="Download Student ID Card"
-                          disabled={downloadingId}
-                        >
-                          <i
-                            className={
-                              downloadingId && idTargetStudent?.id === s.id
-                                ? "fas fa-spinner fa-spin"
-                                : "fas fa-id-card"
+                        <div className="action-buttons-ms">
+                          <button
+                            className="btn-download-id-cell"
+                            onClick={() => setIdTargetStudent(s)}
+                            title={
+                              generatedLrns.has(String(s.lrn))
+                                ? "Download Student ID Card"
+                                : "Generate this student's ID in Generate ID first"
                             }
-                          ></i>
-                        </button>
-                        <button
-                          className="btn-edit-student"
-                          onClick={() => handleEdit(s)}
-                          title="Edit Student"
-                        >
-                          <i className="fas fa-edit"></i>
-                        </button>
-                        <button
-                          className="btn-archive-student"
-                          onClick={() => handleArchive(s)}
-                          title="Archive student"
-                        >
-                          <i className="fas fa-archive"></i>
-                        </button>
+                            disabled={
+                              downloadingId || !generatedLrns.has(String(s.lrn))
+                            }
+                          >
+                            <i
+                              className={
+                                downloadingId && idTargetStudent?.id === s.id
+                                  ? "fas fa-spinner fa-spin"
+                                  : "fas fa-id-card"
+                              }
+                            ></i>
+                          </button>
+                          <button
+                            className="btn-edit-student"
+                            onClick={() => handleEdit(s)}
+                            title="Edit Student"
+                          >
+                            <i className="fas fa-edit"></i>
+                          </button>
+                          <button
+                            className="btn-archive-student"
+                            onClick={() => handleArchive(s)}
+                            title="Archive student"
+                          >
+                            <i className="fas fa-archive"></i>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -1086,14 +1111,7 @@ function ManageStudents() {
               </div>
             </div>
 
-            <div className="modal-footer-ms">
-              {/* <button
-                className="btn-cancel"
-                onClick={() => setViewModalOpen(false)}
-              >
-                Close
-              </button> */}
-            </div>
+            <div className="modal-footer-ms"></div>
           </div>
         </div>
       )}
@@ -1316,15 +1334,6 @@ function ManageStudents() {
             </div>
 
             <div className="modal-footer-ms">
-              {/* <button
-                className="btn-cancel"
-                onClick={() => {
-                  setModalOpen(false);
-                  setError("");
-                }}
-              >
-                Cancel
-              </button> */}
               <button className="btn-save" type="submit" form="studentForm">
                 {editingStudent ? "Update Profile" : "Save Profile"}
               </button>
@@ -1533,6 +1542,10 @@ function ManageStudents() {
                 <div className="id-info-row">
                   <label>LRN</label>
                   <span>{idTargetStudent.lrn}</span>
+                </div>
+                <div className="id-info-row">
+                  <label>Gender</label>
+                  <span>{idTargetStudent.gender}</span>
                 </div>
               </div>
             </div>

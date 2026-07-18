@@ -111,12 +111,14 @@
   flex-direction: column;
   align-items: center;
   gap: 24px;
+  width: 100%;
 }
 
 .id-side-block {
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 100%;
 }
 
 .side-label {
@@ -127,9 +129,26 @@
   margin-bottom: 8px;
 }
 
-/* The ID card is sized to 4.5in x 2.75in at exactly 100px per inch, so the
-   on-screen preview stays in the same proportion as the printed PDF and the
-   2x2in photo guide box below renders at its true physical size. */
+/* .id-card-stage is a "viewport" sized to the current preview scale
+   (width/height set inline from JS: CARD_WIDTH_PX/HEIGHT_PX * previewScale).
+   It exists purely to collapse the empty space a CSS transform leaves
+   behind, so the shrunk card doesn't leave a big blank gap below/right of
+   it. The .id-card itself never changes its own real size — it's just
+   visually scaled down inside this box. */
+.id-card-stage {
+  position: relative;
+  overflow: visible;
+}
+
+/* The ID card is ALWAYS rendered at its true fixed 4.5in x 2.75in size
+   (450px x 275px at 100px per inch), on every screen size — this exact
+   size is what html-to-image captures for the printed PDF, so it must
+   never be resized by layout/media queries. On small screens, the card is
+   instead visually shrunk via an inline CSS "transform: scale()" set from
+   JS (see previewScale in GenerateQr.jsx), which uniformly scales every
+   element inside it together — preserving its true print proportions
+   exactly, just smaller on screen — instead of letting individual pieces
+   (fonts, logo, photo box) resize independently and drift out of ratio. */
 .id-card {
   width: 450px;
   height: 275px;
@@ -140,6 +159,7 @@
   border: 1px solid #ddd;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .id-card-topbar {
@@ -238,7 +258,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -331,6 +351,14 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* NOTE: .id-card itself is intentionally NOT touched by this breakpoint
+   anymore. It stays fixed at 450x275 on every screen size — see the
+   comment on .id-card above. Scaling for small screens is handled by the
+   inline "transform: scale()" applied from GenerateQr.jsx (previewScale),
+   not by CSS here. This keeps the card's true print proportions intact at
+   any screen width instead of letting fonts/logo/photo-box resize
+   independently and drift out of ratio with each other. */
 @media (max-width: 480px) {
   .card {
     padding: 18px;
@@ -343,64 +371,5 @@
   .preview-card {
     padding: 18px 16px;
     box-sizing: border-box;
-  }
-
-  .id-sides-wrapper {
-    width: 100%;
-  }
-
-  .id-side-block {
-    width: 100%;
-  }
-
-  .id-card {
-    width: 100% !important;
-    max-width: 450px;
-    height: auto !important;
-    aspect-ratio: unset; /* CHANGED — let height come from actual content */
-    box-sizing: border-box;
-    overflow: visible; /* ADDED — safety net so nothing clips even if tight */
-  }
-
-  .id-card-body-front,
-  .id-card-body-back {
-    padding: 8px 10px;
-    gap: 10px;
-  }
-
-  .id-card-topbar {
-    min-height: 36px;
-    padding: 4px 10px;
-  }
-
-  .id-card-logo {
-    height: 26px;
-    width: 26px;
-  }
-
-  .id-card-school {
-    font-size: 0.85rem;
-  }
-
-  .id-photo-box {
-    width: 35%;
-    height: auto;
-    aspect-ratio: 1 / 1;
-  }
-
-  .id-info-right {
-    gap: 6px;
-  }
-
-  .id-info-row label {
-    font-size: 0.55rem;
-  }
-
-  .id-info-row span {
-    font-size: 0.75rem;
-  }
-
-  .id-qr-right {
-    width: 100px;
   }
 }

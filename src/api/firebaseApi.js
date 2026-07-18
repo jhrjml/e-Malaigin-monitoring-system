@@ -25,12 +25,17 @@ const col = (name) => collection(db, name);
 const snap = (docSnap) => ({ id: docSnap.id, ...docSnap.data() });
 const snapAll = (qs) => qs.docs.map(snap);
 
-const toMin = (t) => {
+// CHANGED: exported so other files (e.g. ManageClasses.jsx) can reuse the exact
+// same time-overlap logic used here on the backend, instead of re-implementing
+// it (and getting it wrong — e.g. checking for an exact start/end match instead
+// of a true overlap).
+export const toMin = (t) => {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 };
-const overlaps = (aS, aE, bS, bE) =>
+export const overlaps = (aS, aE, bS, bE) =>
   toMin(aS) < toMin(bE) && toMin(bS) < toMin(aE);
+
 const normName = (s) => (s || "").trim().toLowerCase();
 
 // 90 days in milliseconds
@@ -385,6 +390,30 @@ export async function updateStudent(id, data) {
       throw new Error("A student with this LRN already exists.");
   }
   await updateDoc(doc(db, "Student", id), data);
+
+  // Keep the linked Parent account's displayed guardianName in sync whenever
+  // this student's guardian field is edited. Matched by studentIds
+  // membership (not by name), since the account is already linked to this
+  // specific student — this just corrects the display name on that same
+  // account, it does not reassign the student to a different parent record.
+  if (data.guardian !== undefined) {
+    const newGuardian = (data.guardian || "").trim();
+    if (newGuardian) {
+      const parentSnap = await getDocs(
+        query(col("User"), where("role", "==", "Parent")),
+      );
+      const linkedParentDoc = parentSnap.docs.find((d) =>
+        (d.data().studentIds || []).includes(id),
+      );
+      if (
+        linkedParentDoc &&
+        (linkedParentDoc.data().guardianName || "").trim() !== newGuardian
+      ) {
+        await updateDoc(linkedParentDoc.ref, { guardianName: newGuardian });
+      }
+    }
+  }
+
   return snap(await getDoc(doc(db, "Student", id)));
 }
 
@@ -595,6 +624,28 @@ export async function updateTeacher(id, data) {
   }
 
   await updateDoc(doc(db, "Teacher", id), data);
+
+  // Keep the linked Teacher account's displayed fullName in sync whenever
+  // any of the name fields are edited.
+  if (data.fname || data.mname !== undefined || data.lname) {
+    const updated = snap(await getDoc(doc(db, "Teacher", id)));
+    const newFullName = `${updated.lname}, ${updated.fname}${updated.mname ? " " + updated.mname : ""}`;
+
+    const userSnap = await getDocs(
+      query(
+        col("User"),
+        where("role", "==", "Teacher"),
+        where("teacherId", "==", id),
+      ),
+    );
+    if (!userSnap.empty) {
+      const userDoc = userSnap.docs[0];
+      if ((userDoc.data().fullName || "") !== newFullName) {
+        await updateDoc(userDoc.ref, { fullName: newFullName });
+      }
+    }
+  }
+
   return snap(await getDoc(doc(db, "Teacher", id)));
 }
 
@@ -1043,9 +1094,6 @@ export async function savePushSubscription(parentId, subscriptionJSON) {
   });
   return { id: safeId, parentId };
 }
-
-// ADD this function to src/api/firebaseApi.js, right after savePushSubscription
-// in the "PUSH NOTIFICATIONS" section.
 
 /**
  * deletePushSubscription(endpoint)
@@ -1641,4 +1689,17 @@ export async function getGradeSectionDistribution() {
   return Object.values(buckets)
     .map((b) => ({ ...b, label: `Grade ${b.grade} - ${b.section}` }))
     .sort((a, b) => a.grade - b.grade || a.section.localeCompare(b.section));
+}
+
+/**
+ * getGeneratedQrLrns()
+ * Returns every LRN that already has a GeneratedQR record — i.e. students
+ * whose ID card has actually been generated. Used by ManageStudents to
+ * disable the "Download ID" button for students who haven't generated one
+ * yet (mirrors what getStudentsQrAvailable() already excludes, just as a
+ * flat lookup set instead of filtered student objects).
+ */
+export async function getGeneratedQrLrns() {
+  const snap_ = await getDocs(col("GeneratedQR"));
+  return snap_.docs.map((d) => d.data().lrn);
 }
