@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import ManageStudents from "./ManageStudents";
 import ManageTeachers from "./ManageTeachers";
@@ -23,6 +23,7 @@ import "./Archive.css";
 import "../Layout.css";
 import ProfileModal from "../common/ProfileModal";
 import ConfirmModal from "../common/ConfirmModal"; // Already imported!
+import useCachedFetch from "../common/useCachedFetch";
 
 const titleMap = {
   dashboard: "Overview",
@@ -73,17 +74,21 @@ function AdminHomepage() {
     () => titleMap[localStorage.getItem("adminPage")] || "Overview",
   );
 
-  const [dashboardStats, setDashboardStats] = useState({
-    studentCount: 0,
-    teacherCount: 0,
-  });
-  const [enrollmentStats, setEnrollmentStats] = useState([]);
-  const [distributionData, setDistributionData] = useState([]);
-  const [dashboardLoading, setDashboardLoading] = useState(false);
-
-  const loadDashboardData = useCallback(async () => {
-    setDashboardLoading(true);
-    try {
+  // ── FIXED: dashboard data now goes through useCachedFetch instead of a
+  // plain useState + manual loadDashboardData(). This means the dashboard
+  // (stat cards + both charts) paints INSTANTLY from the last-known
+  // localStorage snapshot on every repeat visit, instead of showing
+  // "Loading…" every single time the admin navigates to the Dashboard tab
+  // while offline. The underlying fetch logic (stats, enrollment stats,
+  // per-grade/section live-enrollment compilation) is unchanged — it's
+  // only the state/caching wrapper around it that changed. ──
+  const {
+    data: cachedDashboard,
+    loading: dashboardLoading,
+    refresh: loadDashboardData,
+  } = useCachedFetch(
+    "dashboard:all",
+    async () => {
       const [stats, enrollment] = await Promise.all([
         getDashboardStats(),
         getEnrollmentDropoutStats(),
@@ -127,23 +132,32 @@ function AdminHomepage() {
         return item;
       });
 
-      setDashboardStats({
-        studentCount: stats.studentCount,
-        teacherCount: stats.teacherCount,
-      });
-      setEnrollmentStats(patchedEnrollment);
-      setDistributionData(compiledMetrics);
-    } catch (e) {
-      console.error("Failed to load dashboard data:", e);
-    } finally {
-      setDashboardLoading(false);
-    }
-  }, []);
+      return {
+        stats: {
+          studentCount: stats.studentCount,
+          teacherCount: stats.teacherCount,
+        },
+        enrollmentStats: patchedEnrollment,
+        distributionData: compiledMetrics,
+      };
+    },
+    [],
+  );
 
+  const dashboardStats = cachedDashboard?.stats || {
+    studentCount: 0,
+    teacherCount: 0,
+  };
+  const enrollmentStats = cachedDashboard?.enrollmentStats || [];
+  const distributionData = cachedDashboard?.distributionData || [];
+
+  // Re-fetch whenever the admin navigates back to the Dashboard tab (still
+  // cheap/instant on repeat visits thanks to useCachedFetch's localStorage
+  // snapshot — this just keeps the numbers fresh in the background).
   useEffect(() => {
-    if (activePage !== "dashboard") return;
-    loadDashboardData();
-  }, [activePage, loadDashboardData]);
+    if (activePage === "dashboard") loadDashboardData().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePage]);
 
   const toggleSidebar = () => {
     if (window.innerWidth > 768) {
@@ -417,7 +431,12 @@ function StudentDistributionChart({ chartData, loading }) {
     return peak < 4 ? 4 : Math.ceil(peak / 4) * 4;
   }, [chartData]);
 
-  if (loading) {
+  // FIXED: only show the loading placeholder when there is truly no data
+  // yet (first-ever load on this device). On every repeat visit,
+  // `chartData` is already populated from useCachedFetch's localStorage
+  // snapshot, so the chart renders immediately instead of flashing
+  // "Loading student statistics…" on every navigation while offline.
+  if (loading && (!chartData || chartData.length === 0)) {
     return (
       <div className="enrollment-chart-card">
         <div className="enrollment-chart-empty">
@@ -961,7 +980,12 @@ function EnrollmentDropoutChart({ data, loading, onDataFixed }) {
         </div>
       )}
 
-      {loading ? (
+      {/* FIXED: only show the loading placeholder when there is truly no
+          data yet — same reasoning as StudentDistributionChart above. On
+          repeat visits `data` is already populated from the cached
+          snapshot, so this renders the real chart immediately instead of
+          "Loading…" every time. */}
+      {loading && (!data || data.length === 0) ? (
         <div className="enrollment-chart-empty">Loading…</div>
       ) : data.length === 0 ? (
         <div className="enrollment-chart-empty">

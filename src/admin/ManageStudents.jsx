@@ -16,6 +16,8 @@ import Toast from "../common/Toast";
 import { useToast } from "../common/useToast.js";
 import useSubmitGuard from "../common/useSubmitGuard";
 import useNetworkStatus from "../common/useNetworkStatus";
+import useCachedFetch from "../common/useCachedFetch";
+import useOfflineImage from "../common/useOfflineImage";
 import "./ManageStudents.css";
 import "./GenerateQr.css";
 import "../Layout.css";
@@ -26,7 +28,6 @@ function ManageStudents() {
   const [selectedGrade, setSelectedGrade] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
-  const [students, setStudents] = useState([]);
   const [editingStudent, setEditingStudent] = useState(null);
   const [error, setError] = useState("");
 
@@ -57,6 +58,24 @@ function ManageStudents() {
   const [importDone, setImportDone] = useState({ success: 0, failed: 0 });
   const [importFinished, setImportFinished] = useState(false);
 
+  // Single source of truth for the student list — cached in localStorage
+  // so this renders last-known data instantly, even before Firestore's
+  // offline cache has resolved. This is the ONLY students state in this
+  // component (there used to be a duplicate `useState([])` + `useEffect`
+  // fetch left over from before this hook was wired in — that was a
+  // hard duplicate-declaration bug on top of causing the double-fetch /
+  // "flash empty" symptom).
+  const {
+    data: cachedStudents,
+    setData: setStudents,
+    loading: studentsLoading,
+  } = useCachedFetch("students:all", () => getStudents(), []);
+  const students = cachedStudents || [];
+
+  // Cache the school logo as a data URI so ID-card rendering (via
+  // html-to-image) never depends on the network being up.
+  const logoSrc = useOfflineImage("/logo.jpg");
+
   const [confirm, setConfirm] = useState({
     open: false,
     title: "",
@@ -85,10 +104,6 @@ function ManageStudents() {
   const [generatedLrns, setGeneratedLrns] = useState(new Set());
 
   useEffect(() => {
-    getStudents()
-      .then(setStudents)
-      .catch((err) => console.error("Error fetching students:", err));
-
     getGeneratedQrLrns()
       .then((lrns) => setGeneratedLrns(new Set(lrns.map(String))))
       .catch((err) => console.error("Error fetching generated QR list:", err));
@@ -276,10 +291,10 @@ function ManageStudents() {
       .then((result) => {
         if (wasEditing) {
           setStudents((prev) =>
-            prev.map((s) => (s.id === wasEditing.id ? result : s)),
+            (prev || []).map((s) => (s.id === wasEditing.id ? result : s)),
           );
         } else {
-          setStudents((prev) => [...prev, result]);
+          setStudents((prev) => [...(prev || []), result]);
         }
       })
       .catch((err) => {
@@ -309,7 +324,7 @@ function ManageStudents() {
       confirmColor: "danger",
       onConfirm: () => {
         closeConfirm();
-        setStudents((prev) => prev.filter((s) => s.id !== student.id));
+        setStudents((prev) => (prev || []).filter((s) => s.id !== student.id));
         showToast(
           isOnline
             ? `${student.firstName} ${student.lastName} has been archived.`
@@ -522,7 +537,7 @@ function ManageStudents() {
     });
 
     setStudents((prev) => [
-      ...prev,
+      ...(prev || []),
       ...tempRows.map((row) => ({
         id: row._tempId,
         lrn: row.lrn,
@@ -553,7 +568,7 @@ function ManageStudents() {
     Promise.allSettled(pending).then((settled) => {
       const failMsgs = [];
       setStudents((prev) => {
-        let next = [...prev];
+        let next = [...(prev || [])];
         settled.forEach((s) => {
           const outcome = s.value;
           if (!outcome) return;
@@ -741,7 +756,16 @@ function ManageStudents() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortedGlobalStudents.length === 0 ? (
+                    {studentsLoading && students.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan="7"
+                          style={{ textAlign: "center", padding: "20px" }}
+                        >
+                          Loading students…
+                        </td>
+                      </tr>
+                    ) : sortedGlobalStudents.length === 0 ? (
                       <tr>
                         <td
                           colSpan="7"
@@ -935,7 +959,16 @@ function ManageStudents() {
                 </tr>
               </thead>
               <tbody>
-                {sortedGradeStudents.length === 0 ? (
+                {studentsLoading && students.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan="6"
+                      style={{ textAlign: "center", padding: "20px" }}
+                    >
+                      Loading students…
+                    </td>
+                  </tr>
+                ) : sortedGradeStudents.length === 0 ? (
                   <tr>
                     <td
                       colSpan="6"
@@ -1486,9 +1519,6 @@ function ManageStudents() {
             </div>
 
             <div className="modal-footer-ms">
-              <button className="btn-cancel" onClick={closeImportModal}>
-                {importFinished ? "Close" : "Cancel"}
-              </button>
               {!importFinished && importRows.length > 0 && validCount > 0 && (
                 <button
                   className="btn-save"
@@ -1518,7 +1548,7 @@ function ManageStudents() {
           {/* FRONT */}
           <div id="student-action-id-front" className="id-card">
             <div className="id-card-topbar">
-              <img src="/logo.jpg" alt="School Logo" className="id-card-logo" />
+              <img src={logoSrc} alt="School Logo" className="id-card-logo" />
               <div className="id-card-titles">
                 <span className="id-card-school">MALAIG ELEMENTARY SCHOOL</span>
               </div>
@@ -1554,7 +1584,7 @@ function ManageStudents() {
           {/* BACK */}
           <div id="student-action-id-back" className="id-card">
             <div className="id-card-topbar small">
-              <img src="/logo.jpg" alt="School Logo" className="id-card-logo" />
+              <img src={logoSrc} alt="School Logo" className="id-card-logo" />
               <span className="id-card-school">MALAIG ELEMENTARY SCHOOL</span>
             </div>
             <div className="id-card-body-back">

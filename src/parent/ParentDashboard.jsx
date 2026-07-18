@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./ParentDashboard.css";
 import ChildProfile from "./ChildProfile";
@@ -27,6 +33,7 @@ import {
 import { Bar } from "react-chartjs-2";
 import usePushNotifications from "../common/usePushNotifications";
 import { unsubscribeFromPush } from "../common/pushSubscribe";
+import useCachedFetch from "../common/useCachedFetch";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -281,8 +288,7 @@ const ParentDashboard = () => {
 };
 
 function DashboardOverview({ onOpenReminder }) {
-  const [kids, setKids] = useState([]);
-  const [kidsLoading, setKidsLoading] = useState(true);
+  const userId = localStorage.getItem("userId");
   const [selectedKid, setSelectedKid] = useState(null);
 
   const schoolYearMonths = useMemo(() => getSchoolYearMonths(), []);
@@ -294,201 +300,176 @@ function DashboardOverview({ onOpenReminder }) {
   }, [schoolYearMonths]);
 
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
-  const [reminders, setReminders] = useState([]);
-  const [remindersBusy, setRemindersBusy] = useState(true);
-
   useEffect(() => {
     setSelectedMonth(defaultMonth);
   }, [defaultMonth]);
 
-  const [schoolYear, setSchoolYear] = useState("");
-  useEffect(() => {
-    getActiveSchoolYearLabel()
-      .then(setSchoolYear)
-      .catch((e) => console.error("Failed to load active school year:", e));
-  }, []);
+  // ── FIXED: children list is now cached under a SHARED key
+  // ("children:<userId>"), the same key used by ChildProfile,
+  // AttendanceRecord, and AcademicActivity. Whichever page loads it first
+  // populates the cache for all the others — so switching tabs renders the
+  // roster instantly instead of each page re-fetching it from scratch. ──
+  const fetchChildren = useCallback(async () => {
+    if (!userId) return [];
+    const userSnap = await getDoc(doc(db, "User", userId));
+    if (!userSnap.exists()) return [];
 
+    const studentIds = userSnap.data().studentIds || [];
+    if (studentIds.length === 0) return [];
+
+    const studentDocs = await Promise.all(
+      studentIds.map((id) => getDoc(doc(db, "Student", id))),
+    );
+
+    return Promise.all(
+      studentDocs
+        .filter((d) => d.exists())
+        .map(async (d) => {
+          const s = { id: d.id, ...d.data() };
+          const enrollSnap = await getDocs(
+            query(
+              collection(db, "Enrolled"),
+              where("studentId", "==", s.id),
+              where("status", "==", "Enrolled"),
+            ),
+          );
+          const enroll = enrollSnap.docs[0]?.data() || {};
+          return {
+            ...s,
+            enrolledGrade: enroll.grade || s.grade,
+            enrolledSection: enroll.section || "",
+          };
+        }),
+    );
+  }, [userId]);
+
+  const { data: cachedKids, loading: kidsLoading } = useCachedFetch(
+    `children:${userId || "none"}`,
+    fetchChildren,
+    [userId],
+  );
+  const kids = cachedKids || [];
+  const showKidsLoading = kidsLoading && !cachedKids;
+
+  // Keep the selection in sync as the cached list loads/refreshes,
+  // preferring to preserve the current pick if it still exists.
   useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      setKidsLoading(false);
+    if (kids.length === 0) {
+      setSelectedKid(null);
       return;
     }
+    setSelectedKid((prev) => {
+      const stillThere = prev && kids.find((k) => k.id === prev.id);
+      return stillThere || kids[0];
+    });
+  }, [kids]);
 
-    let cancelled = false;
+  // ── Active school year — cached, shared with the other pages. ──
+  const { data: cachedSchoolYear } = useCachedFetch(
+    "schoolYear:active",
+    () => getActiveSchoolYearLabel(),
+    [],
+  );
+  const schoolYear = cachedSchoolYear || "";
 
-    const load = async () => {
-      try {
-        const userSnap = await getDoc(doc(db, "User", userId));
-        if (!userSnap.exists()) {
-          if (!cancelled) setKidsLoading(false);
-          return;
-        }
+  // ── FIXED: reminders now cached per user + school year. Because `kids`
+  // and `schoolYear` above already resolve synchronously from their own
+  // caches before this fetch runs, this reliably has what it needs on a
+  // repeat visit without an extra round trip. ──
+  const fetchReminders = useCallback(async () => {
+    if (!kids.length || !schoolYear) return [];
 
-        const studentIds = userSnap.data().studentIds || [];
-        if (studentIds.length === 0) {
-          if (!cancelled) setKidsLoading(false);
-          return;
-        }
-
-        const studentDocs = await Promise.all(
-          studentIds.map((id) => getDoc(doc(db, "Student", id))),
-        );
-
-        const enriched = await Promise.all(
-          studentDocs
-            .filter((d) => d.exists())
-            .map(async (d) => {
-              const s = { id: d.id, ...d.data() };
-              const enrollSnap = await getDocs(
-                query(
-                  collection(db, "Enrolled"),
-                  where("studentId", "==", s.id),
-                  where("status", "==", "Enrolled"),
-                ),
-              );
-              const enroll = enrollSnap.docs[0]?.data() || {};
-              return {
-                ...s,
-                enrolledGrade: enroll.grade || s.grade,
-                enrolledSection: enroll.section || "",
-              };
-            }),
-        );
-
-        if (cancelled) return;
-        setKids(enriched);
-        setSelectedKid(enriched[0] || null);
-      } catch (e) {
-        console.error("Failed to load children:", e);
-      } finally {
-        if (!cancelled) setKidsLoading(false);
+    const toISO = (raw) => {
+      if (!raw) return null;
+      if (typeof raw?.toDate === "function") {
+        const d = raw.toDate();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       }
+      const s = String(raw).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      const parsed = new Date(s);
+      if (!isNaN(parsed)) {
+        return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+      }
+      return null;
     };
 
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    const perChild = await Promise.all(
+      kids.map(async (kid) => {
+        if (!kid.enrolledGrade || !kid.enrolledSection) return [];
 
-  // Central Reminders Pipeline Hook
-  useEffect(() => {
-    if (kidsLoading) return;
-    if (!kids || kids.length === 0) {
-      setReminders([]);
-      setRemindersBusy(false);
-      return;
-    }
-    if (!schoolYear) return;
-
-    let cancelled = false;
-    setRemindersBusy(true);
-
-    const loadReminders = async () => {
-      try {
-        const toISO = (raw) => {
-          if (!raw) return null;
-          if (typeof raw?.toDate === "function") {
-            const d = raw.toDate();
-            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-          }
-          const s = String(raw).trim();
-          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-          const parsed = new Date(s);
-          if (!isNaN(parsed)) {
-            return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
-          }
-          return null;
-        };
-
-        const perChild = await Promise.all(
-          kids.map(async (kid) => {
-            if (!kid.enrolledGrade || !kid.enrolledSection) return [];
-
-            const snap = await getDocs(
-              query(
-                collection(db, "Classwork"),
-                where("grade", "==", kid.enrolledGrade),
-                where("section", "==", kid.enrolledSection),
-                // Scoped to the active school year so a child re-enrolled
-                // in the same Grade/Section next year doesn't see last
-                // year's leftover classwork/announcements resurface here.
-                where("schoolYear", "==", schoolYear),
-              ),
-            );
-
-            return snap.docs.map((d) => {
-              const data = d.data();
-              return {
-                id: d.id,
-                ...data,
-                date: toISO(data.date),
-                studentId: kid.id,
-                studentName: `${kid.firstName} ${kid.lastName}`,
-              };
-            });
-          }),
+        const snap = await getDocs(
+          query(
+            collection(db, "Classwork"),
+            where("grade", "==", kid.enrolledGrade),
+            where("section", "==", kid.enrolledSection),
+            // Scoped to the active school year so a child re-enrolled in
+            // the same Grade/Section next year doesn't see last year's
+            // leftover classwork/announcements resurface here.
+            where("schoolYear", "==", schoolYear),
+          ),
         );
 
-        const items = perChild.flat().filter((it) => {
-          const markedStatus = it.studentStatus?.[it.studentId];
-          const isMarked =
-            markedStatus === "Submitted" || markedStatus === "Missed";
-
-          // If the teacher has explicitly graded it, hide it from the "active reminders" list
-          if (isMarked) return false;
-
-          return true;
+        return snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            ...data,
+            date: toISO(data.date),
+            studentId: kid.id,
+            studentName: `${kid.firstName} ${kid.lastName}`,
+          };
         });
+      }),
+    );
 
-        // Sorted chronologically descending by its creation timestamp
-        items.sort((a, b) =>
-          (b.createdAt || "").localeCompare(a.createdAt || ""),
-        );
+    const items = perChild.flat().filter((it) => {
+      const markedStatus = it.studentStatus?.[it.studentId];
+      const isMarked =
+        markedStatus === "Submitted" || markedStatus === "Missed";
+      // If the teacher has explicitly graded it, hide it from the "active
+      // reminders" list
+      return !isMarked;
+    });
 
-        if (!cancelled) {
-          setReminders(items);
-          setRemindersBusy(false);
-        }
-      } catch (e) {
-        console.error("Failed to sync centralized updates:", e);
-        if (!cancelled) setRemindersBusy(false);
-      }
-    };
+    // Sorted chronologically descending by its creation timestamp
+    items.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    return items;
+  }, [kids, schoolYear]);
 
-    loadReminders();
-    return () => {
-      cancelled = true;
-    };
-  }, [kids, kidsLoading, schoolYear]);
+  const { data: cachedReminders, loading: remindersLoading } = useCachedFetch(
+    `reminders:${userId || "none"}:${schoolYear || "none"}`,
+    fetchReminders,
+    [kids, schoolYear],
+  );
+  const reminders = cachedReminders || [];
+  const showRemindersLoading = remindersLoading && !cachedReminders;
 
   // Isolate the single absolute most recently created posting entry for the top banner
   const latestPost = useMemo(() => reminders[0] || null, [reminders]);
 
   return (
     <div className="pd-dashboard-flow-wrapper" style={{ width: "100%" }}>
-      {/* Dynamic Floating Latest Post Alert Banner */}
-      {!kidsLoading && !remindersBusy && latestPost && (
+      {/* Dynamic Floating Latest Post Alert Banner — shows as soon as
+          there's cached data, doesn't wait on a fresh fetch */}
+      {latestPost && (
         <div
           className="pd-latest-post-alert-banner"
-          onClick={() =>
-            onOpenReminder({
-              studentId: latestPost.studentId,
-              subject: latestPost.subject,
-              classworkId: latestPost.id,
-            })
-          }
+          onClick={() => onOpenReminder(latestPost)}
         >
           <div className="pd-latest-banner-badge">LATEST POST</div>
           <div className="pd-latest-banner-body">
-            <i className="fas fa-list-ul pd-latest-banner-icon"></i>
+            <i
+              className={`fas ${latestPost.isAnnouncement ? "fa-bullhorn" : "fa-tasks"} pd-latest-banner-icon`}
+            ></i>
             <div className="pd-latest-banner-text">
               <strong>
                 Grade {latestPost.grade} - {latestPost.section} (
                 {latestPost.subject})
               </strong>
-              : {latestPost.title} — <span>{latestPost.desc}</span>
+              : {latestPost.title}
+              <span className="pd-latest-banner-dash"> — </span>
+              <span>{latestPost.desc}</span>
             </div>
           </div>
           <i className="fas fa-chevron-right pd-latest-banner-arrow"></i>
@@ -498,7 +479,7 @@ function DashboardOverview({ onOpenReminder }) {
       <div className="pd-overview-grid">
         <ParentReminderPanel
           reminders={reminders}
-          loading={kidsLoading || remindersBusy}
+          loading={showRemindersLoading}
           onOpenReminder={onOpenReminder}
         />
 
@@ -531,7 +512,7 @@ function DashboardOverview({ onOpenReminder }) {
             </select>
           </div>
 
-          {kidsLoading ? (
+          {showKidsLoading ? (
             <div className="pd-panel">
               <p className="pd-panel-status">Loading…</p>
             </div>
@@ -628,57 +609,38 @@ function ParentReminderPanel({ reminders, loading, onOpenReminder }) {
 }
 
 function ParentAttendanceChart({ child, monthId }) {
-  const [loading, setLoading] = useState(true);
-  const [perSubject, setPerSubject] = useState([]);
+  // ── FIXED: cached per child + month, so re-visiting a month you've
+  // already viewed shows the chart instantly. ──
+  const fetchAttendance = useCallback(async () => {
+    if (!child) return [];
+    const snap = await getDocs(
+      query(collection(db, "Attendance"), where("studentId", "==", child.id)),
+    );
 
-  useEffect(() => {
-    setPerSubject([]);
+    const map = new Map();
+    snap.docs.forEach((d) => {
+      const data = d.data();
+      if (!data.date || !data.date.startsWith(monthId)) return;
+      const status = (data.status || "").toLowerCase();
+      if (!map.has(data.subject))
+        map.set(data.subject, { present: 0, absent: 0 });
+      const entry = map.get(data.subject);
+      if (status === "present") entry.present++;
+      else if (status === "absent") entry.absent++;
+    });
 
-    if (!child) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-
-    const load = async () => {
-      try {
-        const snap = await getDocs(
-          query(
-            collection(db, "Attendance"),
-            where("studentId", "==", child.id),
-          ),
-        );
-
-        const map = new Map();
-        snap.docs.forEach((d) => {
-          const data = d.data();
-          if (!data.date || !data.date.startsWith(monthId)) return;
-          const status = (data.status || "").toLowerCase();
-          if (!map.has(data.subject))
-            map.set(data.subject, { present: 0, absent: 0 });
-          const entry = map.get(data.subject);
-          if (status === "present") entry.present++;
-          else if (status === "absent") entry.absent++;
-        });
-
-        const results = [...map.entries()]
-          .filter(([, v]) => v.present + v.absent > 0)
-          .map(([subject, v]) => ({ subject, ...v }));
-
-        if (!cancelled) setPerSubject(results);
-      } catch (e) {
-        console.error("Failed to load attendance chart:", e);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
+    return [...map.entries()]
+      .filter(([, v]) => v.present + v.absent > 0)
+      .map(([subject, v]) => ({ subject, ...v }));
   }, [child?.id, monthId]);
+
+  const { data: cachedPerSubject, loading } = useCachedFetch(
+    `attendanceChart:${child?.id || "none"}:${monthId}`,
+    fetchAttendance,
+    [child?.id, monthId],
+  );
+  const perSubject = cachedPerSubject || [];
+  const showLoading = loading && !cachedPerSubject;
 
   const chartData = {
     labels: perSubject.map((c) => c.subject),
@@ -741,7 +703,7 @@ function ParentAttendanceChart({ child, monthId }) {
         <h3>Attendance by Subject</h3>
       </div>
 
-      {loading ? (
+      {showLoading ? (
         <p className="pd-panel-status">Loading…</p>
       ) : perSubject.length === 0 ? (
         <p className="pd-panel-status">No attendance records for this month.</p>
@@ -776,65 +738,37 @@ function ParentAttendanceChart({ child, monthId }) {
 }
 
 function ParentClassworkChart({ child, monthId, schoolYear }) {
-  const [loading, setLoading] = useState(true);
-  const [perSubject, setPerSubject] = useState([]);
+  // ── FIXED: cached per child + month + school year. ──
+  const fetchClasswork = useCallback(async () => {
+    if (!child?.enrolledGrade || !child?.enrolledSection || !schoolYear)
+      return [];
 
-  useEffect(() => {
-    setPerSubject([]);
+    const snap = await getDocs(
+      query(
+        collection(db, "Classwork"),
+        where("grade", "==", child.enrolledGrade),
+        where("section", "==", child.enrolledSection),
+        where("schoolYear", "==", schoolYear),
+      ),
+    );
 
-    if (!child?.enrolledGrade || !child?.enrolledSection) {
-      setLoading(false);
-      return;
-    }
-    if (!schoolYear) return;
+    const map = new Map();
+    snap.docs.forEach((d) => {
+      const data = d.data();
+      if (data.isAnnouncement) return;
+      if (!data.date || !data.date.startsWith(monthId)) return;
 
-    let cancelled = false;
-    setLoading(true);
+      const status = data.studentStatus?.[child.id];
+      if (status !== "Submitted" && status !== "Missed") return;
 
-    const load = async () => {
-      try {
-        const snap = await getDocs(
-          query(
-            collection(db, "Classwork"),
-            where("grade", "==", child.enrolledGrade),
-            where("section", "==", child.enrolledSection),
-            where("schoolYear", "==", schoolYear),
-          ),
-        );
+      if (!map.has(data.subject))
+        map.set(data.subject, { submitted: 0, missing: 0 });
+      const entry = map.get(data.subject);
+      if (status === "Submitted") entry.submitted++;
+      else entry.missing++;
+    });
 
-        const map = new Map();
-        snap.docs.forEach((d) => {
-          const data = d.data();
-          if (data.isAnnouncement) return;
-          if (!data.date || !data.date.startsWith(monthId)) return;
-
-          const status = data.studentStatus?.[child.id];
-          if (status !== "Submitted" && status !== "Missed") return;
-
-          if (!map.has(data.subject))
-            map.set(data.subject, { submitted: 0, missing: 0 });
-          const entry = map.get(data.subject);
-          if (status === "Submitted") entry.submitted++;
-          else entry.missing++;
-        });
-
-        const results = [...map.entries()].map(([subject, v]) => ({
-          subject,
-          ...v,
-        }));
-
-        if (!cancelled) setPerSubject(results);
-      } catch (e) {
-        console.error("Failed to load classwork chart:", e);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
+    return [...map.entries()].map(([subject, v]) => ({ subject, ...v }));
   }, [
     child?.id,
     child?.enrolledGrade,
@@ -842,6 +776,20 @@ function ParentClassworkChart({ child, monthId, schoolYear }) {
     monthId,
     schoolYear,
   ]);
+
+  const { data: cachedPerSubject, loading } = useCachedFetch(
+    `classworkChart:${child?.id || "none"}:${monthId}:${schoolYear || "none"}`,
+    fetchClasswork,
+    [
+      child?.id,
+      child?.enrolledGrade,
+      child?.enrolledSection,
+      monthId,
+      schoolYear,
+    ],
+  );
+  const perSubject = cachedPerSubject || [];
+  const showLoading = loading && !cachedPerSubject;
 
   const chartData = {
     labels: perSubject.map((c) => c.subject),
@@ -904,7 +852,7 @@ function ParentClassworkChart({ child, monthId, schoolYear }) {
         <h3>Classwork Completion</h3>
       </div>
 
-      {loading ? (
+      {showLoading ? (
         <p className="pd-panel-status">Loading…</p>
       ) : perSubject.length === 0 ? (
         <p className="pd-panel-status">No classwork records for this month.</p>

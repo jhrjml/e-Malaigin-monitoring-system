@@ -1066,11 +1066,7 @@
 
 .eb-bar-enrolled {
   background: #0abde3;
-  border: 2px solid #0abde3;
-  padding: 15px;
 }
 .eb-bar-dropped {
   background: #e74c3c;
-  border: 2px solid #e74c3c;
-  padding: 15px;
 }

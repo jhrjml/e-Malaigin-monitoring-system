@@ -250,18 +250,24 @@ const ManageClasses = () => {
     }
   };
 
-  const openEnrollModal = async () => {
+  // ManageClasses.jsx
+  const openEnrollModal = () => {
     setFormError("");
     setSelectedStudentId("");
-    setLoading(true);
-    try {
-      setEligibleStudents(await getEligibleStudents(currentGrade));
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-    setShowStudentModal(true);
+    setEligibleStudents([]);
+    setShowStudentModal(true); // open immediately, like the schedule modal
+
+    const loadEligible = async () => {
+      setLoading(true);
+      try {
+        setEligibleStudents(await getEligibleStudents(currentGrade));
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadEligible();
   };
 
   const enroll = (e) => {
@@ -1266,7 +1272,22 @@ const ManageClasses = () => {
               <form className="mc-grid" onSubmit={enroll} id="enrollForm">
                 <div className="mc-field-group mc-grid-span-2">
                   <label className="mc-field-label">Select Student</label>
-                  {eligibleStudents.length === 0 ? (
+                  {/*
+                    FIX: this used to check `eligibleStudents.length === 0`
+                    twice (once for "loading" and once for "empty"), so the
+                    empty-state branch was unreachable and the modal could
+                    never distinguish "still fetching" from "genuinely no
+                    eligible students". Now it checks the actual `loading`
+                    flag first.
+                  */}
+                  {loading ? (
+                    <div
+                      className="mc-view-box"
+                      style={{ color: "#95a5a6", textAlign: "center" }}
+                    >
+                      Loading eligible students…
+                    </div>
+                  ) : eligibleStudents.length === 0 ? (
                     <div
                       className="mc-view-box"
                       style={{ color: "#95a5a6", textAlign: "center" }}
@@ -1298,7 +1319,7 @@ const ManageClasses = () => {
                 type="submit"
                 className="btn-save"
                 form="enrollForm"
-                disabled={eligibleStudents.length === 0}
+                disabled={loading || eligibleStudents.length === 0}
               >
                 Enroll Student
               </button>
@@ -1612,10 +1633,6 @@ const ManageClasses = () => {
             </div>
 
             <div className="modal-footer-mc">
-              {/*<button className="btn-cancel" onClick={closeStudentImportModal}>
-                {studentImportFinished ? "Close" : "Cancel"}
-              </button>*/}
-
               {!studentImportFinished &&
                 studentImportRows.length > 0 &&
                 studentValidCount > 0 && (

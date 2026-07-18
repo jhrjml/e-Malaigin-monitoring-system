@@ -5,6 +5,12 @@
 // used in ClassworkReminding.jsx.
 // PUSH NOTIFICATIONS — handleQRResult() now queues a notification to the
 // scanned student's parent right after attendance is recorded.
+//
+// FIX (this revision): teacherLoads + holidays now load through
+// useCachedFetch instead of a bare useEffect + setState. This means the
+// "Select a class" picker screen paints INSTANTLY on repeat visits from
+// the last-known localStorage snapshot, instead of showing nothing/a
+// loading state every time this page is opened while offline.
 import { useState, useEffect, useRef, useCallback } from "react";
 import { db } from "../api/firebase";
 import {
@@ -18,6 +24,7 @@ import {
 } from "firebase/firestore";
 import { BrowserQRCodeReader } from "@zxing/browser";
 import { queueNotification, getParentIdsForStudents } from "../api/firebaseApi";
+import useCachedFetch from "../common/useCachedFetch";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./AttendanceMonitoring.css";
 
@@ -65,9 +72,54 @@ function AttendanceMonitoring() {
   const [classSection, setClassSection] = useState("");
   const [classSubject, setClassSubject] = useState("");
 
-  const [teacherLoads, setTeacherLoads] = useState([]);
+  // ── FIXED: teacherLoads + holidays folded into a single cached fetch.
+  // Both were previously loaded in the same effect, so combining them into
+  // one useCachedFetch call keeps that "load together" behavior while
+  // adding the localStorage snapshot / instant-paint benefit. ──
+  const {
+    data: cachedLoadData,
+    loading,
+    error: loadError,
+  } = useCachedFetch(
+    "teacherLoads:attendance",
+    async () => {
+      const userId = localStorage.getItem("userId");
+      if (!userId) throw new Error("Session expired. Please log in again.");
+
+      const userSnap = await getDoc(doc(db, "User", userId));
+      if (!userSnap.exists()) throw new Error("User account not found.");
+      const teacherDocId = userSnap.data().teacherId;
+      if (!teacherDocId)
+        throw new Error("No teacher profile linked to this account.");
+
+      const schedSnap = await getDocs(
+        query(col("Schedule"), where("teacherId", "==", teacherDocId)),
+      );
+      const teacherLoads = schedSnap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+      }));
+
+      let holidays = [];
+      const sySnap = await getDocs(
+        query(col("SchoolYear"), where("isActive", "==", true)),
+      );
+      if (!sySnap.empty) {
+        const sy = sySnap.docs[0].data();
+        holidays = (sy.holidays || []).map((h) => h.date);
+      }
+
+      return { teacherLoads, holidays };
+    },
+    [],
+  );
+  const teacherLoads = cachedLoadData?.teacherLoads || [];
+  const holidays = cachedLoadData?.holidays || [];
+  const error = loadError
+    ? loadError.message || "Failed to load class assignments."
+    : "";
+
   const [students, setStudents] = useState([]);
-  const [holidays, setHolidays] = useState([]);
 
   // attendanceRecords: { studentId: { time, status } }
   // Populated from Firestore when a class is opened, then updated live on scan.
@@ -86,9 +138,7 @@ function AttendanceMonitoring() {
   const [scanMessage, setScanMessage] = useState("");
   const [scanStatus, setScanStatus] = useState("");
 
-  const [loading, setLoading] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
-  const [error, setError] = useState("");
 
   const videoRef = useRef(null);
   const readerRef = useRef(null);
@@ -100,52 +150,6 @@ function AttendanceMonitoring() {
   const resetTimerRef = useRef(null);
 
   const today = new Date().toISOString().split("T")[0];
-
-  // ── 1. Load teacher's schedules + holidays ────────────────────────────────
-  useEffect(() => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      setError("Session expired. Please log in again.");
-      setLoading(false);
-      return;
-    }
-
-    const load = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const userSnap = await getDoc(doc(db, "User", userId));
-        if (!userSnap.exists()) {
-          setError("User account not found.");
-          return;
-        }
-        const teacherDocId = userSnap.data().teacherId;
-        if (!teacherDocId) {
-          setError("No teacher profile linked to this account.");
-          return;
-        }
-
-        const schedSnap = await getDocs(
-          query(col("Schedule"), where("teacherId", "==", teacherDocId)),
-        );
-        setTeacherLoads(schedSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
-
-        const sySnap = await getDocs(
-          query(col("SchoolYear"), where("isActive", "==", true)),
-        );
-        if (!sySnap.empty) {
-          const sy = sySnap.docs[0].data();
-          setHolidays((sy.holidays || []).map((h) => h.date));
-        }
-      } catch (e) {
-        console.error(e);
-        setError("Failed to load class assignments.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
 
   // ── 2. Load enrolled students when grade+section changes ─────────────────
   useEffect(() => {
@@ -551,7 +555,9 @@ function AttendanceMonitoring() {
   const canScan = !todayBlocked && !scheduleEnded && timeWindow === "open";
 
   // ── Loading state ─────────────────────────────────────────────────────────
-  if (loading) {
+  // FIXED: only show the full-page loading state when there is truly no
+  // cached load data yet (first-ever load on this device).
+  if (loading && teacherLoads.length === 0 && !loadError) {
     return (
       <div className="am-wrapper">
         <main className="am-main">
