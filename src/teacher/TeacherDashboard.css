@@ -406,4 +406,22 @@
   .th-latest-banner-arrow {
     display: none;
   }
+
+  .th-latest-banner-text .th-latest-banner-dash {
+    display: none;
+  }
+
+  .th-latest-banner-text {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    line-height: 1.4;
+  }
+  .th-latest-banner-text span {
+    display: block;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }

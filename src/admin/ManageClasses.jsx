@@ -22,6 +22,7 @@ import {
   updateSchedule,
   getStudents,
   clearSectionSchedules,
+  overlaps,
 } from "../api/firebaseApi";
 import ConfirmModal from "../common/ConfirmModal";
 import Toast from "../common/Toast";
@@ -66,10 +67,34 @@ async function loadSectionStudents(enrolledDocs) {
   return details.filter((s) => s.enrollStatus === "Enrolled");
 }
 
+// Grade levels 1–6, split into two independent columns (odd-indexed →
+// left, even-indexed → right) so each column's height is driven only by
+// its own cards. This avoids the CSS Grid "equal row height" behavior,
+// where expanding one card's section-drawer would stretch its neighboring
+// cell in the same grid row and leave a big empty gap beside it.
+const GRADE_LEVELS = [1, 2, 3, 4, 5, 6];
+const LEFT_COLUMN_GRADES = GRADE_LEVELS.filter((_, i) => i % 2 === 0); // 1, 3, 5
+const RIGHT_COLUMN_GRADES = GRADE_LEVELS.filter((_, i) => i % 2 === 1); // 2, 4, 6
+
 const ManageClasses = () => {
   const [currentView, setCurrentView] = useState("view-grade");
   const [currentGrade, setCurrentGrade] = useState(null);
   const [currentSection, setCurrentSection] = useState("");
+
+  // Tracks whether we're on a narrow (mobile) viewport, matching the
+  // 600px breakpoint used elsewhere in this file's CSS. On mobile the
+  // grade list renders as a single true-order column (1,2,3,4,5,6)
+  // instead of two independent columns, since stacking two columns
+  // would show 1,3,5 then 2,4,6 — out of order.
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth <= 600 : false,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 600px)");
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   const [eligibleStudents, setEligibleStudents] = useState([]);
   const [sectionStudents, setSectionStudents] = useState([]);
@@ -517,12 +542,17 @@ const ManageClasses = () => {
   );
 
   const teacherConflictMap = {};
-  allSchedules.forEach((s) => {
-    if (s.id === editSchedId) return;
-    if (s.start === schedForm.startTime && s.end === schedForm.endTime) {
-      teacherConflictMap[s.teacherId] = { grade: s.grade, section: s.section };
-    }
-  });
+  if (schedForm.startTime && schedForm.endTime) {
+    allSchedules.forEach((s) => {
+      if (s.id === editSchedId) return;
+      if (overlaps(schedForm.startTime, schedForm.endTime, s.start, s.end)) {
+        teacherConflictMap[s.teacherId] = {
+          grade: s.grade,
+          section: s.section,
+        };
+      }
+    });
+  }
 
   const saveSchedule = (e) => {
     e.preventDefault();
@@ -609,6 +639,15 @@ const ManageClasses = () => {
     });
     setFormError("");
     setShowScheduleModal(true);
+
+    const checkConflicts = async () => {
+      try {
+        setAllSchedules(await getSchedules());
+      } catch (e) {
+        console.error("Failed to refresh schedules for conflict check:", e);
+      }
+    };
+    checkConflicts();
   };
 
   const openEditScheduleModal = (sched) => {
@@ -725,6 +764,47 @@ const ManageClasses = () => {
     return 0;
   });
 
+  // Renders a single grade card + its section-expansion drawer (used by
+  // both the left and right accordion columns below).
+  const renderGradeCard = (num) => (
+    <div key={num} className="grade-item-container">
+      <div
+        className={`class-card grade-card-mc ${currentGrade === num ? "active-bar" : ""}`}
+        onClick={() => handleSelectGrade(num)}
+      >
+        <div className={`icon-circle bg-${num}`}>{num}</div>
+        <h3>Grade Level {num}</h3>
+        <div className="grade-right">
+          <span>View Sections</span>
+          <i
+            className={`fas fa-chevron-${currentGrade === num ? "up" : "down"}`}
+          />
+        </div>
+      </div>
+      {currentGrade === num && (
+        <div className="section-expansion">
+          <div className="section-expansion-title">
+            Grade Level {num} — Select a Section
+          </div>
+          <div className="section-expansion-grid">
+            {["A", "B"].map((sec) => (
+              <div
+                key={sec}
+                className="section-card"
+                onClick={() => handleSelectSection(sec)}
+              >
+                <div className="icon-box-mc">
+                  <i className="fas fa-users" />
+                </div>
+                <h3>Section {sec}</h3>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <main className="main-content">
       <Toast toast={toast} />
@@ -741,7 +821,6 @@ const ManageClasses = () => {
         onCancel={closeConfirm}
       />
 
-      {loading && <div className="loading-banner">Loading…</div>}
       {error && <div className="error-banner">⚠ {error}</div>}
 
       <div className="page-container">
@@ -751,41 +830,27 @@ const ManageClasses = () => {
             <div className="toolbar-mc">
               <h2 className="section-title-mc">Manage Grade Levels</h2>
             </div>
-            <div className="grade-accordion-list">
-              {[1, 2, 3, 4, 5, 6].map((num) => (
-                <div key={num} className="grade-item-container">
-                  <div
-                    className={`class-card grade-card ${currentGrade === num ? "active-bar" : ""}`}
-                    onClick={() => handleSelectGrade(num)}
-                  >
-                    <div className={`icon-circle bg-${num}`}>{num}</div>
-                    <h3>Grade Level {num}</h3>
-                    <div className="grade-right">
-                      <span>View Sections</span>
-                      <i
-                        className={`fas fa-chevron-${currentGrade === num ? "up" : "down"}`}
-                      />
-                    </div>
-                  </div>
-                  {currentGrade === num && (
-                    <div className="section-expansion">
-                      {["A", "B"].map((sec) => (
-                        <div
-                          key={sec}
-                          className="section-card"
-                          onClick={() => handleSelectSection(sec)}
-                        >
-                          <div className="icon-box-mc">
-                            <i className="fas fa-users" />
-                          </div>
-                          <h3>Section {sec}</h3>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+
+            {/* Two independent columns on desktop (so expanding a card's
+                section-drawer only grows that card's own column — it
+                never stretches or leaves empty space in the neighboring
+                column's cards). On mobile, a single true-order column
+                (1,2,3,4,5,6) instead, since stacking two columns would
+                otherwise show 1,3,5 then 2,4,6 out of sequence. */}
+            {isMobile ? (
+              <div className="grade-accordion-mobile">
+                {GRADE_LEVELS.map(renderGradeCard)}
+              </div>
+            ) : (
+              <div className="grade-accordion-columns">
+                <div className="grade-accordion-column">
+                  {LEFT_COLUMN_GRADES.map(renderGradeCard)}
                 </div>
-              ))}
-            </div>
+                <div className="grade-accordion-column">
+                  {RIGHT_COLUMN_GRADES.map(renderGradeCard)}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -840,9 +905,12 @@ const ManageClasses = () => {
                 <i className="fas fa-arrow-left" />
               </button>
 
-              <h3>
-                Grade {currentGrade} – Section {currentSection} Masterlist
-              </h3>
+              <div className="mc-header-titles">
+                <h3 className="mc-header-title">Masterlist</h3>
+                <p className="mc-header-subtitle">
+                  Grade {currentGrade} – Section {currentSection}
+                </p>
+              </div>
 
               <input
                 ref={studentFileRef}
@@ -874,47 +942,13 @@ const ManageClasses = () => {
 
                 {selectedIds.size > 0 && (
                   <>
-                    <span
-                      className="selected-count-badge"
-                      style={{
-                        background: "#ddeeff",
-                        color: "#2c6fad",
-                        padding: "6px 14px",
-                        borderRadius: "20px",
-                        fontWeight: "700",
-                        fontSize: "0.85rem",
-                      }}
-                    >
+                    <span className="selected-count-badge">
                       {selectedIds.size} selected
                     </span>
-                    <button
-                      className="btn-bulk-drop"
-                      onClick={bulkDrop}
-                      style={{
-                        background: "#f1c40f",
-                        color: "black",
-                        border: "none",
-                        padding: "8px 16px",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        fontWeight: "600",
-                      }}
-                    >
+                    <button className="btn-bulk-drop" onClick={bulkDrop}>
                       <i className="fas fa-user-minus"></i> Drop
                     </button>
-                    <button
-                      className="btn-bulk-promote"
-                      onClick={bulkPromote}
-                      style={{
-                        background: "#a55f81",
-                        color: "white",
-                        border: "none",
-                        padding: "8px 16px",
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        fontWeight: "600",
-                      }}
-                    >
+                    <button className="btn-bulk-promote" onClick={bulkPromote}>
                       <i className="fas fa-arrow-up"></i>{" "}
                       {currentGrade === 6 ? "Graduate" : "Promote"}
                     </button>
@@ -998,7 +1032,16 @@ const ManageClasses = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedSectionStudents.length > 0 ? (
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan="3"
+                        style={{ textAlign: "center", padding: "20px" }}
+                      >
+                        Loading students…
+                      </td>
+                    </tr>
+                  ) : sortedSectionStudents.length > 0 ? (
                     sortedSectionStudents.map((student) => (
                       <tr
                         key={student.enrollId}
@@ -1057,11 +1100,17 @@ const ManageClasses = () => {
               >
                 <i className="fas fa-arrow-left" />
               </button>
-              <h3>Class Schedule</h3>
-
-              <button className="btn-add-mc" onClick={openAddScheduleModal}>
-                <i className="fas fa-plus"></i> Add Schedule
-              </button>
+              <div className="mc-header-titles">
+                <h3 className="mc-header-title">Class Schedule</h3>
+                <p className="mc-header-subtitle">
+                  Grade {currentGrade} – Section {currentSection}
+                </p>
+              </div>
+              <div className="mc-toolbar-actions">
+                <button className="btn-add-mc" onClick={openAddScheduleModal}>
+                  <i className="fas fa-plus"></i> Add Schedule
+                </button>
+              </div>
             </div>
 
             <div className="day-badge">
@@ -1105,7 +1154,20 @@ const ManageClasses = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedSchedules.length > 0 ? (
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan="4"
+                        style={{
+                          textAlign: "center",
+                          padding: "30px",
+                          color: "#888",
+                        }}
+                      >
+                        Loading schedule…
+                      </td>
+                    </tr>
+                  ) : sortedSchedules.length > 0 ? (
                     sortedSchedules.map((sched) => (
                       <tr key={sched.id}>
                         <td>
@@ -1232,13 +1294,6 @@ const ManageClasses = () => {
               </form>
             </div>
             <div className="modal-footer-mc">
-              <button
-                type="button"
-                className="btn-cancel"
-                onClick={() => setShowStudentModal(false)}
-              >
-                Cancel
-              </button>
               <button
                 type="submit"
                 className="btn-save"
@@ -1390,13 +1445,6 @@ const ManageClasses = () => {
               </form>
             </div>
             <div className="modal-footer-mc">
-              <button
-                type="button"
-                className="btn-cancel"
-                onClick={() => setShowScheduleModal(false)}
-              >
-                Cancel
-              </button>
               <button type="submit" className="btn-save" form="scheduleForm">
                 Save
               </button>
@@ -1564,9 +1612,10 @@ const ManageClasses = () => {
             </div>
 
             <div className="modal-footer-mc">
-              <button className="btn-cancel" onClick={closeStudentImportModal}>
+              {/*<button className="btn-cancel" onClick={closeStudentImportModal}>
                 {studentImportFinished ? "Close" : "Cancel"}
-              </button>
+              </button>*/}
+
               {!studentImportFinished &&
                 studentImportRows.length > 0 &&
                 studentValidCount > 0 && (

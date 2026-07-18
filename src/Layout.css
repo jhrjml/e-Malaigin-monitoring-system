@@ -26,7 +26,7 @@ body {
 /* --- SIDEBAR --- */
 .app-container .sidebar {
   width: 250px;
-  background: #1a252f;
+  background: #a65f81;
   color: var(--white);
   display: flex;
   flex-direction: column;
@@ -68,18 +68,17 @@ body {
 .menu li {
   padding: 12px 20px;
   cursor: pointer;
-  color: #bdc3c7;
   border-radius: 8px;
   margin-bottom: 5px;
   transition: all 0.2s ease-in-out;
   display: flex;
   align-items: center;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .menu li:hover,
 .menu li.active {
-  background: var(--accent);
+  background: rgba(255, 255, 255, 0.2);
   color: var(--white);
 }
 
@@ -108,7 +107,6 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: var(--shadow-sm);
   border-bottom: 1px solid #eee;
   position: relative;
   z-index: 200;
@@ -195,14 +193,14 @@ header .user-profile i {
   font-size: 22px; /* Slightly smaller to prevent text wrapping on narrow sidebars */
   font-weight: bolder;
   letter-spacing: -0.5px;
-  color: var(--lp-primary);
+  color: #ffffff;
   line-height: 1.1;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .brand-subtitle {
   font-size: 0.7rem;
-  color: var(--gray);
+  color: #ffffff;
   font-weight: 400;
   letter-spacing: 2px;
   display: block;

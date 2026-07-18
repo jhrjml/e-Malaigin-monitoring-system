@@ -1,4 +1,8 @@
 // AttendanceMonitoring.jsx
+// FIX: on mobile, the back button + title now stay grouped in their own
+// row (am-toolbar-row1) instead of being flex siblings of am-actions, so
+// they no longer wrap apart from each other — mirrors the pattern already
+// used in ClassworkReminding.jsx.
 // PUSH NOTIFICATIONS — handleQRResult() now queues a notification to the
 // scanned student's parent right after attendance is recorded.
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -609,30 +613,35 @@ function AttendanceMonitoring() {
           {/* ── ATTENDANCE SHEET ── */}
           {currentView === "attendance" && (
             <div className="am-view">
-              <div className="am-toolbar">
-                <button
-                  className="btn-back-am"
-                  onClick={() => {
-                    clearTimeout(autoCloseTimerRef.current);
-                    clearInterval(timeWindowTimerRef.current);
-                    clearTimeout(resetTimerRef.current);
-                    closeScanner();
-                    setCurrentView("load");
-                  }}
-                >
-                  <i className="fas fa-arrow-left"></i>
-                </button>
+              <div className="am-toolbar am-toolbar--stacked">
+                <div className="am-toolbar-left">
+                  <div className="am-toolbar-row1">
+                    <button
+                      className="btn-back-am"
+                      onClick={() => {
+                        clearTimeout(autoCloseTimerRef.current);
+                        clearInterval(timeWindowTimerRef.current);
+                        clearTimeout(resetTimerRef.current);
+                        closeScanner();
+                        setCurrentView("load");
+                      }}
+                    >
+                      <i className="fas fa-arrow-left"></i>
+                    </button>
 
-                <div className="am-title-block">
-                  <h3>{classSubject} Attendance</h3>
-                  <small>
+                    <h3 className="am-toolbar-title">
+                      {classSubject} Attendance
+                    </h3>
+                  </div>
+
+                  <small className="am-toolbar-subtitle">
                     {new Date().toLocaleDateString("en-US", {
                       weekday: "long",
                       year: "numeric",
                       month: "long",
                       day: "numeric",
                     })}
-                    {" | "}Grade {classGrade} – {classSection}
+                    {" | "}G{classGrade} – {classSection}
                     {currentSchedule?.start &&
                       currentSchedule?.end &&
                       ` | ${currentSchedule.start} – ${currentSchedule.end}`}

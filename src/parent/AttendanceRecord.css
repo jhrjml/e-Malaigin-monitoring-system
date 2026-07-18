@@ -38,7 +38,7 @@
 .ar-empty-text {
   text-align: center;
   padding: 40px;
-  color: var(--ar-gray);
+  color: var(--ar-accent);
   font-weight: 500;
 }
 

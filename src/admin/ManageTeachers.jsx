@@ -1024,15 +1024,6 @@ function ManageTeachers() {
                 </div>
               </div>
             </div>
-
-            {/* <div className="modal-footer-mt">
-              <button
-                className="btn-cancel"
-                onClick={() => setViewProfileOpen(false)}
-              >
-                Close
-              </button>
-            </div> */}
           </div>
         </div>
       )}
@@ -1226,13 +1217,6 @@ function ManageTeachers() {
             </div>
 
             <div className="modal-footer-mt">
-              {/* <button
-                type="button"
-                className="btn-cancel"
-                onClick={closeModal}
-              >
-                Cancel
-              </button> */}
               <button type="submit" className="btn-save" form="teacherForm">
                 {isEditing ? "Update Profile" : "Save Profile"}
               </button>
@@ -1366,14 +1350,7 @@ function ManageTeachers() {
               )}
             </div>
 
-            <div className="modal-footer-mt">
-              {/* <button
-                className="btn-cancel"
-                onClick={() => setViewModalOpen(false)}
-              >
-                Close
-              </button> */}
-            </div>
+            <div className="modal-footer-mt"></div>
           </div>
         </div>
       )}

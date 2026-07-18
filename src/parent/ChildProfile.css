@@ -241,7 +241,7 @@
 .cp-table th,
 .cp-table td {
   padding: 14px 20px;
-  text-align: left;
+  text-align: center;
   border-bottom: 1px solid #f0f2f5;
   vertical-align: middle;
 }

@@ -2,12 +2,12 @@
 :root {
   --cwr-primary: #3f3f97;
   --cwr-accent: #a65f81; /* Unified Pink/Purple Accent */
-  --cwr-success: #2ecc71;
-  --cwr-danger: #e74c3c;
+  --cwr-success: #2ecc71; /*Present*/
+  --cwr-danger: #e74c3c; /*Absent*/
   --cwr-warning: #f39c12;
   --cwr-purple: #9b59b6; /* Kept for specific category badges */
-  --cwr-teal: #1abc9c;
-  --cwr-orange: #e67e22;
+  --cwr-teal: #1abc9c; /*Submmited*/
+  --cwr-orange: #e67e22; /*Missing*/
   --cwr-gray: #95a5a6;
   --cwr-light: #f8f9fa;
   --cwr-white: #ffffff;
@@ -54,6 +54,7 @@
   font-size: 1.5rem;
   font-weight: 700;
   margin: 0;
+  margin-bottom: 10px;
 }
 .cwr-title-block h3 {
   margin: 0;
@@ -73,12 +74,13 @@
   background: transparent;
   color: rgb(0, 0, 0);
   border: none;
-  padding: 8px 16px 8px 0;
+  padding: 8px 8px 8px 0;
   cursor: pointer;
   display: flex;
   align-items: center;
   font-size: 1.4rem;
   font-weight: bold;
+  flex-shrink: 0;
 }
 
 .cwr-btn-add {
@@ -96,6 +98,8 @@
   gap: 8px;
   box-shadow: 0 4px 10px color-mix(in srgb, var(--cwr-accent) 30%, transparent);
   transition: all 0.2s ease;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .cwr-btn-add:hover {
   background: #8f4d6d;
@@ -222,7 +226,7 @@
 .cwr-item-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 8px;
 }
 .cwr-type-badge {
@@ -234,10 +238,22 @@
   letter-spacing: 0.4px;
   text-transform: uppercase;
 }
+.cwr-edited-label {
+  font-size: 0.78rem;
+  color: var(--cwr-gray);
+  font-weight: 600;
+  font-style: italic;
+  white-space: nowrap;
+}
+.cwr-edited-label i {
+  margin-right: 4px;
+}
 .cwr-item-date {
   font-size: 0.85rem;
   color: var(--cwr-gray);
   font-weight: 600;
+  margin-left: auto;
+  white-space: nowrap;
 }
 .cwr-item-date i {
   margin-right: 4px;
@@ -317,6 +333,55 @@
 }
 
 /* Informational Hint Bar */
+.cwr-grading-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+.cwr-grading-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cwr-grading-title-row .btn-back-cwr {
+  padding: 4px 4px 4px 0;
+  flex-shrink: 0;
+}
+.cwr-grading-title {
+  margin: 0;
+  color: black;
+  font-size: 1.3rem;
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+}
+.cwr-grading-title-row .cwr-btn-edit-link--inline {
+  flex-shrink: 0;
+}
+.cwr-grading-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 34px;
+}
+.cwr-grading-due {
+  color: var(--cwr-gray);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.cwr-grading-due i {
+  margin-right: 4px;
+}
+.cwr-grading-desc {
+  margin: 0;
+  color: #333;
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
 .cwr-grading-hint {
   background: color-mix(in srgb, var(--cwr-accent) 5%, transparent);
   border: 1px solid color-mix(in srgb, var(--cwr-accent) 15%, transparent);
@@ -383,7 +448,7 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 16px 20px;
-  text-align: left;
+  text-align: center;
   border-bottom: 2px solid #eaedf1;
 }
 .cwr-table th:last-child {
@@ -705,6 +770,60 @@
   background: rgba(231, 76, 60, 0.06);
 }
 
+.cwr-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  color: var(--accent, #a65f81);
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ── Toolbar: left column holds the title row + subtitle stacked on top
+   of each other; the Add Post button sits beside it, vertically centered
+   across both rows. At narrow widths this switches to a clean stacked
+   layout (button on its own row) instead of wrapping mid-line. ── */
+.cwr-toolbar--stacked {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cwr-toolbar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 260px;
+}
+
+.cwr-toolbar-row1 {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: nowrap;
+}
+
+.cwr-toolbar-title {
+  margin: 0;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cwr-toolbar-subtitle {
+  margin-left: calc(var(--btn-back-width, 40px) + 14px);
+  color: var(--gray, #95a5a6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 600px) {
   .cwr-main {
     padding: 14px;
@@ -712,18 +831,110 @@
   .cwr-toolbar {
     flex-wrap: wrap;
   }
+
+  /* ── Card layout: icon + type badge share the top line,
+     details/desc below, stats below that, buttons at the bottom ── */
   .cwr-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 14px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "icon badge badge"
+      "edited edited date"
+      "desc desc desc"
+      "stats stats stats"
+      "actions actions actions";
+    column-gap: 10px;
+    row-gap: 6px;
+    padding: 16px;
   }
+
+  /* Flatten the nested wrappers so their children become direct grid items */
+  .cwr-item-body,
+  .cwr-item-top {
+    display: contents;
+  }
+
+  .cwr-item-icon {
+    grid-area: icon;
+    width: 34px;
+    height: 34px;
+    font-size: 0.95rem;
+    align-self: center;
+  }
+  .cwr-type-badge {
+    grid-area: badge;
+    justify-self: start;
+    align-self: center;
+    font-size: 0.68rem;
+    padding: 2px 10px;
+  }
+  /* Edited-label + date now share their own row, below the type badge */
+  .cwr-edited-label {
+    grid-area: edited;
+    justify-self: start;
+    align-self: center;
+    font-size: 0.7rem;
+  }
+  .cwr-item-date {
+    grid-area: date;
+    justify-self: end;
+    align-self: center;
+    margin-left: 0;
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+  .cwr-item-desc {
+    grid-area: desc;
+    margin: 0;
+    font-size: 0.95rem !important;
+  }
+  .cwr-item-stats,
+  .cwr-ann-note {
+    grid-area: stats;
+    margin-top: 0;
+    font-size: 0.78rem;
+  }
+
+  /* Buttons row at the bottom, View/Grade on the left, Edit on the right */
   .cwr-item-actions {
-    width: 100%;
+    grid-area: actions;
     flex-direction: row;
-    justify-content: space-between;
+    justify-content: flex-end;
+    align-items: center;
+    width: 100%;
+    margin-top: 4px;
   }
+  .cwr-btn-view {
+    padding: 8px 22px;
+    font-size: 0.85rem;
+    width: auto;
+  }
+
   .cwr-td-actions {
     flex-direction: column;
     gap: 4px;
+  }
+
+  .cwr-toolbar--stacked {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cwr-toolbar-left {
+    flex-basis: auto;
+    width: 100%;
+  }
+  .cwr-toolbar-row1 {
+    flex-wrap: nowrap;
+  }
+  .cwr-toolbar-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cwr-toolbar-subtitle {
+    white-space: normal;
+  }
+  .cwr-toolbar--stacked .cwr-btn-add {
+    justify-content: center;
   }
 }

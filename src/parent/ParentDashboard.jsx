@@ -411,6 +411,10 @@ function DashboardOverview({ onOpenReminder }) {
                 collection(db, "Classwork"),
                 where("grade", "==", kid.enrolledGrade),
                 where("section", "==", kid.enrolledSection),
+                // Scoped to the active school year so a child re-enrolled
+                // in the same Grade/Section next year doesn't see last
+                // year's leftover classwork/announcements resurface here.
+                where("schoolYear", "==", schoolYear),
               ),
             );
 
@@ -682,7 +686,7 @@ function ParentAttendanceChart({ child, monthId }) {
       {
         label: "Present",
         data: perSubject.map((c) => c.present),
-        backgroundColor: "#1D9E75",
+        backgroundColor: "#2ecc71",
         borderRadius: 4,
         barPercentage: 0.6,
         categoryPercentage: 0.7,
@@ -690,7 +694,7 @@ function ParentAttendanceChart({ child, monthId }) {
       {
         label: "Absent",
         data: perSubject.map((c) => c.absent),
-        backgroundColor: "#E24B4A",
+        backgroundColor: "#e74c3c",
         borderRadius: 4,
         barPercentage: 0.6,
         categoryPercentage: 0.7,
@@ -747,7 +751,7 @@ function ParentAttendanceChart({ child, monthId }) {
             <span className="pd-chart-legend-item">
               <span
                 className="pd-chart-legend-dot"
-                style={{ background: "#1D9E75" }}
+                style={{ background: "#2ecc71" }}
               />
               Present
             </span>
@@ -845,7 +849,7 @@ function ParentClassworkChart({ child, monthId, schoolYear }) {
       {
         label: "Submitted",
         data: perSubject.map((c) => c.submitted),
-        backgroundColor: "#378ADD",
+        backgroundColor: "#1abc9c",
         borderRadius: 4,
         barPercentage: 0.6,
         categoryPercentage: 0.7,
@@ -853,7 +857,7 @@ function ParentClassworkChart({ child, monthId, schoolYear }) {
       {
         label: "Missed",
         data: perSubject.map((c) => c.missing),
-        backgroundColor: "#BA7517",
+        backgroundColor: "#e67e22",
         borderRadius: 4,
         barPercentage: 0.6,
         categoryPercentage: 0.7,
@@ -910,14 +914,14 @@ function ParentClassworkChart({ child, monthId, schoolYear }) {
             <span className="pd-chart-legend-item">
               <span
                 className="pd-chart-legend-dot"
-                style={{ background: "#378ADD" }}
+                style={{ background: "#1abc9c" }}
               />
               Submitted
             </span>
             <span className="pd-chart-legend-item">
               <span
                 className="pd-chart-legend-dot"
-                style={{ background: "#BA7517" }}
+                style={{ background: "#e67e22" }}
               />
               Missed
             </span>

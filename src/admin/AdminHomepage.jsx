@@ -17,23 +17,12 @@ import {
   backfillEnrollmentTimestamps,
   getEnrolled,
 } from "../api/firebaseApi";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Tooltip,
-  Legend,
-} from "chart.js";
-import { Bar } from "react-chartjs-2";
 import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./AdminHomepage.css";
 import "./Archive.css";
 import "../Layout.css";
 import ProfileModal from "../common/ProfileModal";
 import ConfirmModal from "../common/ConfirmModal"; // Already imported!
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
 const titleMap = {
   dashboard: "Overview",
@@ -60,65 +49,6 @@ const MONTH_NAMES = [
   "December",
 ];
 const WEEKDAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
-
-const STACK_COLORS = [
-  { bg: "#186FAF", text: "#ffffff" },
-  { bg: "#A8C8EA", text: "#1a3a55" },
-  { bg: "#378ADD", text: "#ffffff" },
-  { bg: "#E24B4A", text: "#ffffff" },
-  { bg: "#f1c40f", text: "#5c4a00" },
-  { bg: "#2ecc71", text: "#0d3d21" },
-  { bg: "#9b59b6", text: "#ffffff" },
-  { bg: "#e67e22", text: "#ffffff" },
-];
-
-const stackValueLabelsPlugin = {
-  id: "stackValueLabels",
-  afterDatasetsDraw(chart) {
-    const { ctx, data } = chart;
-
-    data.datasets.forEach((dataset, dsIndex) => {
-      const meta = chart.getDatasetMeta(dsIndex);
-      meta.data.forEach((bar, i) => {
-        const value = dataset.data[i];
-        if (!value) return;
-        const height = Math.abs(bar.base - bar.y);
-        if (height < 14) return;
-        ctx.save();
-        ctx.fillStyle = dataset.textColor || "#fff";
-        ctx.font = "600 12px sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(String(value), bar.x, (bar.y + bar.base) / 2);
-        ctx.restore();
-      });
-    });
-
-    for (let i = 0; i < data.labels.length; i++) {
-      let topY = Infinity;
-      let anchorX = null;
-      let total = 0;
-      data.datasets.forEach((dataset, dsIndex) => {
-        const meta = chart.getDatasetMeta(dsIndex);
-        const bar = meta.data[i];
-        const value = dataset.data[i];
-        if (!bar || !value) return;
-        total += value;
-        if (bar.y < topY) {
-          topY = bar.y;
-          anchorX = bar.x;
-        }
-      });
-      if (anchorX === null) continue;
-      ctx.save();
-      ctx.fillStyle = "#4a4a4a";
-      ctx.font = "600 12px sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText(`Total: ${total}`, anchorX, topY - 12);
-      ctx.restore();
-    }
-  },
-};
 
 function formatHolidayDate(dateStr) {
   const d = new Date(`${dateStr}T00:00:00`);
@@ -198,7 +128,7 @@ function AdminHomepage() {
       });
 
       setDashboardStats({
-        studentCount: totalLiveEnrolled,
+        studentCount: stats.studentCount,
         teacherCount: stats.teacherCount,
       });
       setEnrollmentStats(patchedEnrollment);
@@ -955,14 +885,6 @@ function MiniCalendar() {
 
               <div className="sy-form-actions">
                 <button
-                  type="button"
-                  className="btn-cancel"
-                  onClick={() => setShowAddYear(false)}
-                  disabled={savingYear}
-                >
-                  Cancel
-                </button>
-                <button
                   type="submit"
                   className="btn-confirm"
                   disabled={savingYear}
@@ -979,7 +901,9 @@ function MiniCalendar() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ENROLLMENT / DROPOUT CHART
+// ENROLLMENT / DROPOUT CHART  (pure CSS bars — same approach as the
+// Student Population chart above, so both charts can be restyled/recolored
+// through CSS classes instead of a Chart.js canvas config.)
 // ════════════════════════════════════════════════════════════════════════════
 
 function EnrollmentDropoutChart({ data, loading, onDataFixed }) {
@@ -1001,63 +925,14 @@ function EnrollmentDropoutChart({ data, loading, onDataFixed }) {
     }
   };
 
-  const chartData = {
-    labels: data.map((d) => d.year),
-    datasets: [
-      {
-        label: "Enrolled",
-        data: data.map((d) => d.enrolled),
-        backgroundColor: "#378ADD",
-        borderRadius: 4,
-        barPercentage: 0.65,
-        categoryPercentage: 0.8,
-      },
-      {
-        label: "Dropped",
-        data: data.map((d) => d.dropped),
-        backgroundColor: "#E24B4A",
-        borderRadius: 4,
-        barPercentage: 0.65,
-        categoryPercentage: 0.8,
-      },
-    ],
-  };
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: (ctx) => {
-            const ds = ctx.chart.data.datasets;
-            const i = ctx.dataIndex;
-            const tot = ds[0].data[i] + ds[1].data[i];
-            const pct = tot === 0 ? 0 : Math.round((ctx.raw / tot) * 100);
-            return ` ${ctx.dataset.label}: ${ctx.raw} (${pct}%)`;
-          },
-        },
-      },
-    },
-    scales: {
-      x: {
-        grid: { display: false },
-        border: { display: false },
-        ticks: {
-          font: { size: 11 },
-          color: "#888",
-          maxRotation: 30,
-          autoSkip: false,
-        },
-      },
-      y: {
-        border: { display: false },
-        grid: { color: "rgba(0,0,0,0.06)" },
-        ticks: { font: { size: 11 }, color: "#888" },
-      },
-    },
-  };
+  const maxCount = useMemo(() => {
+    if (!data || data.length === 0) return 4;
+    const peak = Math.max(
+      ...data.map((d) => Math.max(d.enrolled || 0, d.dropped || 0)),
+      1,
+    );
+    return peak < 4 ? 4 : Math.ceil(peak / 4) * 4;
+  }, [data]);
 
   return (
     <div className="enrollment-chart-card">
@@ -1067,18 +942,10 @@ function EnrollmentDropoutChart({ data, loading, onDataFixed }) {
         </div>
         <div className="enrollment-chart-legend">
           <span className="legend-item">
-            <span
-              className="legend-swatch"
-              style={{ background: "#378ADD" }}
-            ></span>{" "}
-            Enrolled
+            <span className="legend-swatch eb-swatch-enrolled"></span> Enrolled
           </span>
           <span className="legend-item">
-            <span
-              className="legend-swatch"
-              style={{ background: "#E24B4A" }}
-            ></span>{" "}
-            Dropped
+            <span className="legend-swatch eb-swatch-dropped"></span> Dropped
           </span>
         </div>
       </div>
@@ -1102,11 +969,60 @@ function EnrollmentDropoutChart({ data, loading, onDataFixed }) {
           enrolled or dropped from a section.
         </div>
       ) : (
-        <>
-          <div className="enrollment-chart-canvas-wrap">
-            <Bar data={chartData} options={chartOptions} />
+        <div className="clustered-chart-outer-wrapper">
+          <div className="clustered-chart-main-row">
+            <div className="chart-y-axis">
+              <span>{maxCount}</span>
+              <span>{Math.round(maxCount * 0.75)}</span>
+              <span>{Math.round(maxCount * 0.5)}</span>
+              <span>{Math.round(maxCount * 0.25)}</span>
+              <span>0</span>
+            </div>
+
+            <div className="clustered-chart-canvas-area eb-canvas-area">
+              {data.map((d) => (
+                <div key={d.year} className="eb-bars-column-wrapper">
+                  <div className="eb-bars-group">
+                    <div
+                      className="eb-chart-bar eb-bar-enrolled"
+                      style={{
+                        height: `${((d.enrolled || 0) / maxCount) * 100}%`,
+                      }}
+                      title={`${d.year} - Enrolled: ${d.enrolled || 0}`}
+                    >
+                      {d.enrolled > 0 && (
+                        <span className="bar-value-bubble">
+                          Enrolled: {d.enrolled}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      className="eb-chart-bar eb-bar-dropped"
+                      style={{
+                        height: `${((d.dropped || 0) / maxCount) * 100}%`,
+                      }}
+                      title={`${d.year} - Dropped: ${d.dropped || 0}`}
+                    >
+                      {d.dropped > 0 && (
+                        <span className="bar-value-bubble">
+                          Dropped: {d.dropped}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </>
+
+          <div className="clustered-chart-x-axis-row eb-axis-row">
+            {data.map((d) => (
+              <div key={d.year} className="eb-axis-label">
+                {d.year}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

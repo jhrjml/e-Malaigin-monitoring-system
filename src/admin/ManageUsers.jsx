@@ -16,7 +16,14 @@ function ManageUsers() {
   const [viewPassVisible, setViewPassVisible] = useState(false);
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [loading, setLoading] = useState(false);
+  // Starts true (instead of false) because the very first thing this
+  // component does on mount is fetch data (see the mount effect below).
+  // If this started false, there'd be a brief window — while
+  // runAccountMaintenanceTasks() is still awaiting, before fetchUsers()
+  // gets a chance to flip this to true — where `users` is still [] and
+  // `loading` is still false, so the list would incorrectly flash
+  // "No Teacher/Parent accounts found" before the real data arrives.
+  const [loading, setLoading] = useState(true);
   const [linkedStudents, setLinkedStudents] = useState([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
 
@@ -27,6 +34,10 @@ function ManageUsers() {
   // ── On mount: run maintenance tasks then load users ────────────────────
   useEffect(() => {
     (async () => {
+      // Explicitly keep the loading flag on for this whole sequence —
+      // maintenance tasks run first, then the actual user fetch — so the
+      // list view never has a gap where it thinks loading finished early.
+      setLoading(true);
       await runAccountMaintenanceTasks();
       fetchUsers();
     })();
@@ -187,7 +198,7 @@ function ManageUsers() {
                   <div className="card-info">
                     <h3>Teacher Accounts</h3>
                     <span className="count-badge">
-                      {teacherUsers.length} Users
+                      {loading ? "…" : `${teacherUsers.length} Users`}
                     </span>
                   </div>
                   <div className="card-action">View List</div>
@@ -203,7 +214,7 @@ function ManageUsers() {
                   <div className="card-info">
                     <h3>Parent Accounts</h3>
                     <span className="count-badge">
-                      {parentUsers.length} Users
+                      {loading ? "…" : `${parentUsers.length} Users`}
                     </span>
                   </div>
                   <div className="card-action">View List</div>
@@ -248,102 +259,109 @@ function ManageUsers() {
                 </div>
               </div>
 
-              {loading ? (
-                <p style={{ textAlign: "center", padding: "20px" }}>
-                  Loading...
-                </p>
-              ) : (
-                <div className="table-container">
-                  <table className="data-table-mu">
-                    <thead>
+              <div className="table-container">
+                <table className="data-table-mu">
+                  <thead>
+                    <tr>
+                      <th
+                        onClick={handleSortToggle}
+                        className="sortable-table-header"
+                        style={{ cursor: "pointer", userSelect: "none" }}
+                      >
+                        Full Name
+                        <i
+                          className={`fas ${sortOrder === "asc" ? "fa-sort-up mu-header-sorted" : "fa-sort-down mu-header-sorted"}`}
+                        ></i>
+                        <span className="mt-sort-hint-label"></span>
+                      </th>
+                      <th>Username</th>
+                      <th>Status</th>
+                      <th style={{ textAlign: "center" }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
                       <tr>
-                        <th
-                          onClick={handleSortToggle}
-                          className="sortable-table-header"
-                          style={{ cursor: "pointer", userSelect: "none" }}
+                        <td
+                          colSpan="4"
+                          style={{ textAlign: "center", padding: "20px" }}
                         >
-                          Full Name
                           <i
-                            className={`fas ${sortOrder === "asc" ? "fa-sort-up mu-header-sorted" : "fa-sort-down mu-header-sorted"}`}
+                            className="fas fa-spinner fa-spin"
+                            style={{ marginRight: "8px" }}
                           ></i>
-                          <span className="mt-sort-hint-label"></span>
-                        </th>
-                        <th>Username</th>
-                        <th>Status</th>
-                        <th style={{ textAlign: "center" }}>Action</th>
+                          Loading {currentRoleFilter.toLowerCase()} accounts…
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {sortedUsers.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan="4"
-                            style={{ textAlign: "center", padding: "20px" }}
-                          >
-                            {searchQuery
-                              ? `No matching accounts found for "${searchQuery}".`
-                              : `No ${currentRoleFilter} accounts found.`}
+                    ) : sortedUsers.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan="4"
+                          style={{ textAlign: "center", padding: "20px" }}
+                        >
+                          {searchQuery
+                            ? `No matching accounts found for "${searchQuery}".`
+                            : `No ${currentRoleFilter} accounts found.`}
+                        </td>
+                      </tr>
+                    ) : (
+                      sortedUsers.map((user) => (
+                        <tr key={user.id}>
+                          <td>
+                            <strong>
+                              {user.role === "Teacher"
+                                ? user.fullName || "—"
+                                : user.guardianName || "—"}
+                            </strong>
+                          </td>
+                          <td>{user.username}</td>
+                          <td>
+                            <span
+                              className={`status-pill ${
+                                user.status === "Active"
+                                  ? "active-pill"
+                                  : "inactive-pill"
+                              }`}
+                            >
+                              {user.status}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="action-buttons-mu">
+                              <button
+                                className="btn-icon btn-view-action"
+                                onClick={() => openViewModal(user)}
+                                title="View credentials"
+                              >
+                                <i className="fas fa-eye"></i>
+                              </button>
+                              <button
+                                className={`btn-icon btn-toggle-action ${
+                                  user.status === "Active" ? "" : "activate"
+                                }`}
+                                onClick={() => toggle(user.id)}
+                                title={
+                                  user.status === "Active"
+                                    ? "Deactivate"
+                                    : "Activate"
+                                }
+                              >
+                                <i
+                                  className={`fas ${
+                                    user.status === "Active"
+                                      ? "fa-power-off"
+                                      : "fa-check"
+                                  }`}
+                                ></i>
+                              </button>
+                            </div>
                           </td>
                         </tr>
-                      ) : (
-                        sortedUsers.map((user) => (
-                          <tr key={user.id}>
-                            <td>
-                              <strong>
-                                {user.role === "Teacher"
-                                  ? user.fullName || "—"
-                                  : user.guardianName || "—"}
-                              </strong>
-                            </td>
-                            <td>{user.username}</td>
-                            <td>
-                              <span
-                                className={`status-pill ${
-                                  user.status === "Active"
-                                    ? "active-pill"
-                                    : "inactive-pill"
-                                }`}
-                              >
-                                {user.status}
-                              </span>
-                            </td>
-                            <td>
-                              <div className="action-buttons">
-                                <button
-                                  className="btn-icon btn-view-action"
-                                  onClick={() => openViewModal(user)}
-                                  title="View credentials"
-                                >
-                                  <i className="fas fa-eye"></i>
-                                </button>
-                                <button
-                                  className={`btn-icon btn-toggle-action ${
-                                    user.status === "Active" ? "" : "activate"
-                                  }`}
-                                  onClick={() => toggle(user.id)}
-                                  title={
-                                    user.status === "Active"
-                                      ? "Deactivate"
-                                      : "Activate"
-                                  }
-                                >
-                                  <i
-                                    className={`fas ${
-                                      user.status === "Active"
-                                        ? "fa-power-off"
-                                        : "fa-check"
-                                    }`}
-                                  ></i>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

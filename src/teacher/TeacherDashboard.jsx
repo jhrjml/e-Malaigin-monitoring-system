@@ -9,6 +9,7 @@ import {
   query,
   where,
 } from "firebase/firestore";
+import { getActiveSchoolYearLabel } from "../api/firebaseApi";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -346,6 +347,18 @@ function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
   const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // The admin-configured active school year label (e.g. "2026-2027"). Used
+  // to scope every Classwork query on this dashboard so a teacher assigned
+  // the same Grade/Section/Subject next school year doesn't see last
+  // year's leftover posts in the reminders feed or completion chart.
+  const [schoolYear, setSchoolYear] = useState("");
+
+  useEffect(() => {
+    getActiveSchoolYearLabel()
+      .then(setSchoolYear)
+      .catch((e) => console.error("Failed to load active school year:", e));
+  }, []);
+
   useEffect(() => {
     setSelectedMonth(defaultMonth);
   }, [defaultMonth]);
@@ -356,6 +369,10 @@ function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
       setLoading(false);
       return;
     }
+    // Wait for schoolYear to resolve at least once so this never fires an
+    // unscoped (all-years) query.
+    if (!schoolYear) return;
+
     let cancelled = false;
     setLoading(true);
 
@@ -371,6 +388,7 @@ function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
                 where("grade", "==", c.grade),
                 where("section", "==", c.section),
                 where("subject", "==", c.subject),
+                where("schoolYear", "==", schoolYear),
               ),
             ).then((snap) => snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
           ),
@@ -396,7 +414,7 @@ function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
     return () => {
       cancelled = true;
     };
-  }, [teacherId]);
+  }, [teacherId, schoolYear]);
 
   // Isolate the single absolute most recently created posting entry
   const latestPost = useMemo(() => reminders[0] || null, [reminders]);
@@ -419,7 +437,9 @@ function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
                 Grade {latestPost.grade} - {latestPost.section} (
                 {latestPost.subject})
               </strong>
-              : {latestPost.title} — <span>{latestPost.desc}</span>
+              : {latestPost.title}
+              <span className="th-latest-banner-dash"> — </span>
+              <span>{latestPost.desc}</span>
             </div>
           </div>
           <i className="fas fa-chevron-right th-latest-banner-arrow"></i>
@@ -449,7 +469,11 @@ function TeacherDashboardOverview({ teacherId, onOpenReminder }) {
           </div>
 
           <AttendanceChart teacherId={teacherId} monthId={selectedMonth} />
-          <ClassworkChart teacherId={teacherId} monthId={selectedMonth} />
+          <ClassworkChart
+            teacherId={teacherId}
+            monthId={selectedMonth}
+            schoolYear={schoolYear}
+          />
         </div>
       </div>
     </div>
@@ -627,7 +651,7 @@ function AttendanceChart({ teacherId, monthId }) {
       {
         label: "Present",
         data: perClass.map((c) => c.present),
-        backgroundColor: "#1D9E75",
+        backgroundColor: "#2ecc71",
         borderRadius: 4,
         barPercentage: 0.65,
         categoryPercentage: 0.8,
@@ -635,7 +659,7 @@ function AttendanceChart({ teacherId, monthId }) {
       {
         label: "Absent",
         data: perClass.map((c) => c.absent),
-        backgroundColor: "#E24B4A",
+        backgroundColor: "#e74c3c",
         borderRadius: 4,
         barPercentage: 0.65,
         categoryPercentage: 0.8,
@@ -697,14 +721,14 @@ function AttendanceChart({ teacherId, monthId }) {
             <span className="th-chart-legend-item">
               <span
                 className="th-chart-legend-dot"
-                style={{ background: "#1D9E75" }}
+                style={{ background: "#2ecc71" }}
               />
               Present
             </span>
             <span className="th-chart-legend-item">
               <span
                 className="th-chart-legend-dot"
-                style={{ background: "#E24B4A" }}
+                style={{ background: "#e74c3c" }}
               />
               Absent
             </span>
@@ -724,7 +748,7 @@ function AttendanceChart({ teacherId, monthId }) {
 // ════════════════════════════════════════════════════════════════════════════
 // CLASSWORK CHART
 // ════════════════════════════════════════════════════════════════════════════
-function ClassworkChart({ teacherId, monthId }) {
+function ClassworkChart({ teacherId, monthId, schoolYear }) {
   const [loading, setLoading] = useState(true);
   const [perClass, setPerClass] = useState([]);
 
@@ -735,6 +759,10 @@ function ClassworkChart({ teacherId, monthId }) {
       setLoading(false);
       return;
     }
+    // Wait for schoolYear to resolve at least once so this never fires an
+    // unscoped (all-years) query.
+    if (!schoolYear) return;
+
     let cancelled = false;
     setLoading(true);
 
@@ -750,6 +778,7 @@ function ClassworkChart({ teacherId, monthId }) {
                 where("grade", "==", c.grade),
                 where("section", "==", c.section),
                 where("subject", "==", c.subject),
+                where("schoolYear", "==", schoolYear),
               ),
             ).then((snap) =>
               snap.docs.map((d) => ({
@@ -788,7 +817,7 @@ function ClassworkChart({ teacherId, monthId }) {
     return () => {
       cancelled = true;
     };
-  }, [teacherId, monthId]);
+  }, [teacherId, monthId, schoolYear]);
 
   const chartData = {
     labels: perClass.map((c) => c.label),
@@ -796,7 +825,7 @@ function ClassworkChart({ teacherId, monthId }) {
       {
         label: "Submitted",
         data: perClass.map((c) => c.submitted),
-        backgroundColor: "#378ADD",
+        backgroundColor: "#1abc9c",
         borderRadius: 4,
         barPercentage: 0.65,
         categoryPercentage: 0.8,
@@ -804,7 +833,7 @@ function ClassworkChart({ teacherId, monthId }) {
       {
         label: "Missing",
         data: perClass.map((c) => c.missing),
-        backgroundColor: "#BA7517",
+        backgroundColor: "#e67e22",
         borderRadius: 4,
         barPercentage: 0.65,
         categoryPercentage: 0.8,
@@ -866,14 +895,14 @@ function ClassworkChart({ teacherId, monthId }) {
             <span className="th-chart-legend-item">
               <span
                 className="th-chart-legend-dot"
-                style={{ background: "#378ADD" }}
+                style={{ background: "#1abc9c" }}
               />
               Submitted
             </span>
             <span className="th-chart-legend-item">
               <span
                 className="th-chart-legend-dot"
-                style={{ background: "#BA7517" }}
+                style={{ background: "#e67e22" }}
               />
               Missing
             </span>
